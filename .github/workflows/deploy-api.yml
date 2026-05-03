@@ -1,0 +1,91 @@
+name: Deploy API to Cloud Run
+
+# 本番デプロイのトリガ:
+# - main へ push (apps/api or packages/* が変わった時)
+# - 手動 (workflow_dispatch)
+#
+# 認証は Workload Identity Federation を使う (鍵ファイル不要)。
+# 事前設定 (1回だけユーザーが行う):
+#   docs/setup-github-wif.md 参照 (Claude が後で書く)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'infra/cloudbuild.yaml'
+      - '.github/workflows/deploy-api.yml'
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "deploy target env"
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write   # WIF に必要
+
+env:
+  GCP_PROJECT_DEV: kazaguruma-dev-2026
+  GCP_PROJECT_PROD: kazaguruma-prod-2026
+  GCP_REGION: asia-northeast1
+  REPO: kazaguruma
+  SERVICE: kazaguruma-api
+  WIF_PROVIDER: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
+  WIF_SA: github-actions@kazaguruma-dev-2026.iam.gserviceaccount.com
+  RUNTIME_SA_NAME: kazaguruma-runtime
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target project
+        id: target
+        run: |
+          if [ "${{ github.event.inputs.env || 'dev' }}" = "prod" ]; then
+            echo "project=$GCP_PROJECT_PROD" >> $GITHUB_OUTPUT
+          else
+            echo "project=$GCP_PROJECT_DEV"  >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ steps.target.outputs.project }}
+
+      - name: Submit Cloud Build
+        run: |
+          gcloud builds submit \
+            --config infra/cloudbuild.yaml \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=mock \
+            --project=${{ steps.target.outputs.project }} \
+            .
+
+      - name: Output service URL
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }}-${{ github.event.inputs.env || 'dev' }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ steps.target.outputs.project }} \
+            --format='value(status.url)')
+          echo "🌬  Deployed to: $URL"
+          echo "$URL" > url.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-url-${{ github.event.inputs.env || 'dev' }}
+          path: url.txt

@@ -1,0 +1,27 @@
+{
+  "name": "@kazaguruma/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3000",
+    "build": "nuxt build",
+    "preview": "nuxt preview --port 3000",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "nuxt prepare && vue-tsc --noEmit",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@kazaguruma/shared": "workspace:*",
+    "@kazaguruma/seed": "workspace:*",
+    "@kazaguruma/repo": "workspace:*",
+    "nuxt": "^3.14.0",
+    "vue": "^3.5.0",
+    "vue-router": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "typescript": "^5.6.3",
+    "vue-tsc": "^2.1.0"
+  }
+}

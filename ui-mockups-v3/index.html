@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>風車 — UI 採用案</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@1,400&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #fbfaf6; color: #1a1410; font-family: 'Inter', system-ui, sans-serif; padding: 64px 32px; max-width: 720px; margin: 0 auto; line-height: 1.65; }
+  h1 { font-size: 44px; font-weight: 600; letter-spacing: -0.02em; }
+  h1 .accent { color: #e8742c; }
+  .meta { font-size: 12px; letter-spacing: 0.22em; color: #6b5d50; text-transform: uppercase; margin-bottom: 14px; }
+  p { margin-top: 18px; color: #4a3f35; }
+  a.case {
+    display: block; margin-top: 32px; padding: 24px;
+    background: white; border: 1.5px solid #2a2520;
+    border-radius: 8px; box-shadow: 3px 3px 0 #2a2520;
+    text-decoration: none; color: inherit;
+    transition: transform .15s ease, box-shadow .15s ease;
+  }
+  a.case:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #2a2520; }
+  a.case h3 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  a.case h3 .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #e8742c; margin-right: 8px; vertical-align: middle; }
+  a.case p { font-size: 13px; color: #5a4f43; margin: 4px 0 0; }
+  a.case .open { display: inline-block; margin-top: 14px; font-size: 12px; letter-spacing: 0.18em; color: #e8742c; border-bottom: 1px solid #e8742c; padding-bottom: 1px; text-transform: uppercase; }
+  .web-link { margin-top: 24px; font-size: 13px; color: #6b5d50; }
+  .web-link a { color: #1a1410; border-bottom: 1px solid #e2d9cb; padding-bottom: 1px; }
+</style>
+</head>
+<body>
+<div class="meta">UI 採用案 (2026-04-30 確定)</div>
+<h1>風<span class="accent">車</span> · Hand × Digital</h1>
+<p>v1 (21案) / v2 (10案) / v3 (13案) の探索を経て採用された 1 案。Excalidraw / FigJam の世界観 (手書き) と Linear / Asana の機能性 (デジタル) を融合。詳しい仕様は <code>memory/ui_direction.md</code>。</p>
+
+<a class="case" href="./cases/13-hand-digital.html">
+  <h3><span class="dot"></span>Hand × Digital</h3>
+  <p>32px グリッド方眼紙背景 / 黒3px影付きカード / Caveat + Inter + JetBrains Mono / 蛍光ペン強調 / ライブカーソル / Excalidraw的ツールバー。</p>
+  <span class="open">静的モックを開く</span>
+</a>
+
+<div class="web-link">
+  本物の Next.js 実装は <a href="http://localhost:3000/" target="_blank">http://localhost:3000/</a>  (RepoContainer データ接続済)
+</div>
+</body>
+</html>

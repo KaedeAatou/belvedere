@@ -1,0 +1,187 @@
+# Hackathon Compliance Tracker
+
+> このリポジトリの最終目的: **DevOps × AI Agent Hackathon 2026 への応募・受賞**
+> 一次情報: https://findy.notion.site/devops-ai-agent-hackathon-2026
+> 最終ピッチ: 2026-08-19 (渋谷ストリーム)
+> 最終チェック: 2026-05-04 (このファイルが古ければ Claude が再取得して更新する)
+>
+> **2026-05-01 Notion 更新検知**: Google Cloud クーポン (300ドル分) を申込者全員に配布開始 (5/7 以降登録メールアドレスへ送付)。Phase 1 GCP 立ち上げ予算が確保されたため、Cloud Run / Gemini 接続着手の障害が1段階下がった。
+
+---
+
+## ステータス凡例
+
+- 🟢 充足: 現コードで要件を満たしている
+- 🟡 計画: 設計・スキャフォールドはあるが未実装
+- 🔴 リスク: 充足の見通しが不明 / 行動が必要
+- ⚪ 未該当: 任意要件 / 採用していない
+
+---
+
+## A. 開発要件 (どちらも必須)
+
+### A-1. GCP アプリケーション実行プロダクトを1つ以上採用
+
+| 候補 | 採用 | 状態 | 根拠 |
+|---|---|---|---|
+| **Cloud Run** | ✅ 採用 | 🟡 計画 | `apps/api/Dockerfile` (Hono / Node 20 / pnpm workspace 対応マルチステージ), `infra/cloudbuild.yaml` (asia-northeast1 / Artifact Registry / 自動デプロイ), `.github/workflows/deploy-api.yml` (WIF 認証) 雛形済。GCPプロジェクト未作成 / `git init` 未実行のため未デプロイ。Phase 1 期限 2026-05-17 まで残 13 日 |
+| Cloud Functions | — | ⚪ | 縮退オプションとして保持 (`ROADMAP.md` 中止判断ライン参照) |
+| GKE | — | ⚪ | 個人参加では運用負荷大 |
+| App Engine | — | ⚪ | レガシー扱いのため不採用 |
+| Cloud TPU/GPU | — | ⚪ | 推論はサーバーレスで足りる想定 |
+
+**充足条件**: Cloud Run に `kazaguruma-api` がデプロイされ、`https://...run.app/health` が 200 を返す状態。
+**Phase 1 期限**: 2026-05-17 (`ROADMAP.md`)
+
+### A-2. GCP AI 技術を1つ以上採用
+
+| 候補 | 採用 | 状態 | 根拠 |
+|---|---|---|---|
+| **Gemini API** | ✅ 採用 | 🟡 計画 | `packages/llm/src/factory.ts` で `gemini` / `vertex` は明示的 throw (silent fallback しない signpost)。`mock` のみ実装。実装は GCP セットアップ後 |
+| **ADK (Agents Development Kit)** | ✅ 採用 | 🟡 計画 | `apps/orchestrator-py/pyproject.toml` に `google-adk>=0.5` / `google-genai>=0.3` 依存追加済 / `agents.py` に5儀式 (planner/refinement/daily/reviewer/retrospective) + Orchestrator の INSTRUCTION 雛形完備 / `build_agents(use_real_adk=True)` で `NotImplementedError` raise (silent fallback なし)。本物実装は `USE_REAL_ADK=true` 切替待ち |
+| Gemini Enterprise Agent Platform (旧 Vertex AI) | — | ⚪ | Notion 公式リスト (2026-05-01 確認) では「旧Vertex AI」表記。Gemini API + ADK で十分。観測やデータ管理で必要なら追加 |
+| Vector Search | 🟡 検討 | ⚪ | 過去ふりかえり検索で使う案あり (`AGENT_DESIGN.md`)。MVP外 |
+| Speech-to-Text / TTS | 🟡 検討 | ⚪ | WC-111 (ペアプロ音声→Gemini) で利用予定 |
+| Gemma / Imagen / Vision / NLP / Translation | — | ⚪ | 必要に応じて追加 |
+
+**充足条件**: 本物の Gemini 推論が `apps/orchestrator-py` 経由で1回でも走る (= ADK Runner で実際にトークンが生成される) こと。
+**Phase 1 期限**: 2026-05-17
+
+---
+
+## B. 審査5基準
+
+### B-1. AIエージェントが価値の中心になっているか 🔥 最重要
+
+| 観点 | 状態 | エビデンス / リスク |
+|---|---|---|
+| 単機能ではない (複数ツール組み合わせ) | 🟢 充足 (Mock) | `packages/agent/src/runtime.ts` で `thought → tool_call → tool_result → output` の反復ループ実装。Mock LLM が儀式別に複数 tool call sequence を返す |
+| 自律的な判断と実行 | 🟡 計画 | 自律性レベル L0-L4 を `AGENT_DESIGN.md §4` で設計。デフォルト Daily=L3 / Planner=L2 / Refinement=L2 / Reviewer=L2 / Retro=L2 (Refinement Agent は 2026-05 に追加した5番目の儀式 agent) |
+| 自律トリガ (時間/イベント/閾値) | 🟡 計画 | Cloud Scheduler + Pub/Sub で「儀式30分前」「障害発生」「停滞検出」などを起動条件に設計 |
+| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済 |
+| マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / Reviewer / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
+| ピッチ用デモ動画 | 🔴 未撮影 | 「自律的に動いた結果」を 90秒で見せる動画素材が無い。基準①の最大リスク |
+
+**リスク**: ピッチ時に「便利な要約Bot」と見えたら基準①敗北。デモシナリオ (`PITCH.md §4`) で90秒以内に "自律的に動いた結果" を見せられるかを2026-08-13 リハーサルで検証。
+
+### B-2. 設定した課題へのアプローチ力
+
+| 観点 | 状態 | エビデンス |
+|---|---|---|
+| 課題の妥当性 | 🟢 | 「儀式は回っているのにプロダクトが前進しない / なんちゃってアジャイル」 (`PRODUCT_BRIEF.md §2`) |
+| 対象ユーザーの明確さ | 🟢 | SM/EM/PO/Dev の4役割それぞれのペインを言語化 (`§3`) |
+| 提供価値のストーリー一貫性 | 🟢 | 「形骸化したスクラムを AI が品質と運営で底上げ」軸で貫通。比喩 (螺旋階段の眺望) は冒頭で明示 |
+| 新規性 | 🟡 | 既存ツール (Atlassian Intelligence / ScrumGenius) との差別化を `§6` に記載 |
+
+### B-3. ユーザビリティ
+
+| 観点 | 状態 | エビデンス |
+|---|---|---|
+| 直観的 UI | 🟢 充足 (Mock data) | `apps/web/` Nuxt 3 + Vue 3 SFC 17 ファイル実装済。Claude Designer から取り込んだ 5 画面 (`BacklogScreen.vue` / `PlanningScreen.vue` / `DailyScreen.vue` / `ReviewScreen.vue` / `RetroScreen.vue`) + Shell / RailPanel / AIPanel / DetailSheet / 6 primitives (Icon / TicketRow / StoryPoints / StatusDot / FlagPill / Avatar / TypeMark) |
+| 儀式別画面 (差別化軸) | 🟢 充足 | Jira の単一 Sprint Board に対し、Planning / Daily / Review / Retro + Backlog (Refinement 統合) の5枚を専用画面化。`useChecks.ts` で各儀式の AI Integrity Panel を描画 |
+| 階層の情報設計 | 🟢 | Goal › Story › Task の3階層、SP / valueImpact / status / flag を1画面に圧縮表示 |
+| ナビゲーション | 🟢 | Shell + RailPanel の2ペイン構成。AIPanel が常時 AI Integrity Signal を表示 |
+| 高密度 (Jira問題への対処) | 🟢 | TicketRow を圧縮グリッドに展開し、スクロール無しで全タスクが1画面に見える設計 |
+| コラボ表現 | 🟡 計画 | アバタースタックは表示あり (Avatar primitive) / ライブカーソルや Activity ログは UI 表示のみ実機能は未実装 |
+| アクセシビリティ | 🔴 未着手 | Phase 3 (`ROADMAP.md`) で a11y 監査予定 |
+
+**リスク**: 既に5画面 SFC 実装済。Nuxt 3 + Vue 3 strict TS 環境で `pnpm typecheck` 全通過 (2026-05-04 時点)。次の優先課題は (1) Cloud Run デプロイで実 URL を持つこと、(2) Mock LLM ではなく Gemini 経由でリアルタイムに AI Integrity Signal を生成できる API を繋ぐこと。
+
+### B-4. 実用性・体験価値の魅力
+
+| 観点 | 状態 | エビデンス |
+|---|---|---|
+| 体験の驚き | 🟡 計画 | 「儀式の前後で何かが片付いている」(`PRODUCT_BRIEF.md §7`) — デモで再現が必要 |
+| 実利用検証 | 🔴 未着手 | 自分のチームでのドッグフード予定 (Phase 3, 7/13〜) |
+| 数字で語れる効果 | 🔴 未着手 | ふりかえり健全性スコアの改善を測る計画あり / データ取得は本番デプロイ後 |
+
+**リスク**: ピッチで「実際に使ったら〇〇減りました」と言える数字が無いと基準④で苦戦。ドッグフード期間 (7/13〜7/27) を死守する。
+
+### B-5. 実装力
+
+| 観点 | 状態 | エビデンス |
+|---|---|---|
+| 技術選定の納得度 | 🟢 | `ARCHITECTURE.md` で案A/B/C比較 / Cloud Run + Gemini + Firestore の理由言語化 |
+| 拡張性 | 🟢 | LLMプロバイダ抽象 (`packages/llm/`) / Repository抽象 (`packages/repo/` の RepoContainer = tickets/sprints/projects/epics/stories/members/ceremonies/agentRuns/ceremonyHealth) / Tool factory (`buildTools(repo)`) ですべて差し替え式 |
+| 実運用への配慮 | 🟡 | Secret Manager / WIF / Cloud Logging / 課金アラート / OWASP リリースゲート (WC-110) を設計 |
+| コード品質 | 🟡 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 9 ワークスペース通過 (2026-05-04 確認) / **テスト未実装** (`pnpm test` 無し、捏造しない) |
+| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini / ADK / Firestore / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
+| 多階層モノレポ構成 | 🟢 | TS workspace 9 packages + Python uv workspace 1 (orchestrator-py)。shared / seed / repo / tools / llm / agent の依存方向が一方向 (循環なし) |
+
+---
+
+## C. 参加要件 (人の側) 🔥 アウト即失格
+
+| 観点 | 状態 | 根拠 / 確認手段 |
+|---|---|---|
+| 日本居住 | 🟢 | `memory/user_cloud_background.md` (日本居住者) |
+| 18歳以上 | 🟢 | (確認済) |
+| **個人の私的活動** として参加 | 🟡 必確認 | 会社業務として / 会社代表としては不可。GCPプロジェクト/GitHubリポジトリは個人アカウントで作ること |
+| 国家公務員等でない | 🟢 | 民間企業所属 |
+| 個人 Google アカウントで GCP 利用 | 🔴 未着手 | `docs/setup-gcp.md §0` で「会社アカウントではなく個人」と注記済。**GCP プロジェクト未作成、5/7 以降配布の Google Cloud 300ドルクーポン受領時に個人アカウントへ紐付ける** |
+| 個人 GitHub リポジトリで管理 | 🔴 リスク | **`git init` 未実行、リモート未設定**。`.github/workflows/deploy-api.yml` は WIF を前提にしているが、git リポジトリそのものが無いと CI が動かない。会社 GitHub Org に push しないよう注意 |
+| seed データから会社情報の露出 | 🟢 解決 (2026-05-04) | `packages/seed/src/members.ts` の会社メールを `@example.com` ダミードメインに差し替え済 |
+
+**ガード**: `docs/setup-gcp.md` §0 の警告 + `memory/hackathon_compliance.md` で Claude 側からも警告を出す。
+
+---
+
+## D. スケジュール要件
+
+| イベント | 日付 | 状態 |
+|---|---|---|
+| Google Cloud 300ドルクーポン配布開始 | 2026-05-07 以降 | 🟢 確認 (2026-05-01 Notion 更新)。申込済参加者には登録メールアドレスへ送付 |
+| チームビルディングイベント (個人参加者向け) | 2026-06-07 | 🟡 個人参加判断中 |
+| Boot Camp (Agentic AI Bootcamp 2026) | 2026-06-07〜 | 🟡 参加予定 |
+| 応募受付開始 | 公開待ち (Coming Soon) | 🔴 公開時刻 watch |
+| 中間提出 (あれば) | 公開待ち | 🔴 公開時刻 watch |
+| 最終ピッチ (10チームのみ招待) | 2026-08-19 (水) 渋谷ストリーム | 🔴 通過依存 |
+
+応募方法・スケジュール詳細は 2026-05-04 時点 Notion 上で依然「Coming Soon」状態。
+**監視必須**: 公開され次第ここを更新。
+
+### 自社マイルストーン (`ROADMAP.md`)
+
+| マイルストーン | 期限 | 残日数 (2026-05-04 時点) | 状態 |
+|---|---|---|---|
+| Phase 1: Cloud Run 初回デプロイ | 2026-05-17 | 13 日 | 🔴 GCP 未セットアップ / git 未初期化、要即着手 |
+| Phase 2: マルチエージェント完成 | 2026-07-06 | 63 日 | 🟡 Mock 実装は機能、実 ADK / Gemini 待ち |
+| Phase 3: ドッグフード | 2026-07-13 〜 27 | 70 日 | 🟡 |
+| Phase 4: ピッチ素材作成 | 2026-08-03 〜 13 | 91 日 | 🔴 デモ動画未着手 |
+
+---
+
+## E. 技術スタック差し戻し条件 (= ハッカソン要件違反)
+
+以下の判断は要件違反のため **絶対にしない**:
+
+- ❌ Gemini ではなく Anthropic Claude / OpenAI GPT を主LLMにする
+- ❌ Cloud Run ではなく Vercel / AWS Lambda / Render にデプロイする
+- ❌ 自律性を削って「ボタン押したら要約するだけ」のツールに縮退
+- ❌ 会社の Google Workspace アカウントで GCP プロジェクトを作る
+- ❌ チームビルディング後にチーム結成して、個人参加要件 (個人の私的活動) を破る運用にする
+
+---
+
+## F. 定期チェック運用
+
+このファイルは Single Source of Truth ではない (一次情報は Notion)。
+チェックの頻度・手段:
+
+| トリガ | 手段 | 担当 |
+|---|---|---|
+| ユーザーが思い立った時 | `/hackathon-check` Skill 実行 | ユーザー → Claude |
+| 大きな技術変更 (LLM変更 / インフラ変更等) | `hackathon-compliance-auditor` Subagent を Claude が自動呼出 | Claude |
+| 週次 (推奨) | スケジュール式実行 (`/loop` または `/schedule`) | ユーザー設定式 |
+| 毎週末 | 設計ドキュメント整合性チェックと同時に | `architecture-consistency-checker` Subagent |
+| 応募方法/スケジュール公開時 | Notion 再取得 → このファイル §D 更新 | Claude |
+
+---
+
+## G. 履歴
+
+| 日付 | 変更 |
+|---|---|
+| 2026-04-29 | 初版作成 |
+| 2026-04-30 | UI採用案を `ui-mockups-v3/cases/13-hand-digital.html` (Hand × Digital) に確定。B-3 ユーザビリティを更新 (高密度化 + コラボ表現追加) |
+| 2026-05-04 | 大規模変更を反映: ① Belvedere 再ブランド (旧 Kazaguruma / 風車) ② Project エンティティ追加 (Workspace > Project > Epic > Story > Task / `idPrefix` 可変、default `PRJ-belvedere-core`) ③ Refinement Agent 追加 (5番目の儀式 agent、SP > 8 / valueImpact 未設定 / priority × valueImpact ミスマッチ等を診断) ④ UI を Nuxt 3 + Vue 3 に切替、Claude Designer から 5 画面 SFC を取り込み (Backlog/Planning/Daily/Review/Retro + Shell/RailPanel/AIPanel/DetailSheet + 6 primitives = 17 SFC) ⑤ `.claude/rules/` で TS/Python/Vue/FastAPI のプロジェクト固有パターンを文書化 ⑥ memory ファイル整理 (`feedback_no_neologisms.md` / `product_name.md` / `project_ceremony_scheme.md` 等) ⑦ Notion 一次情報で Google Cloud 300ドルクーポン配布告知を確認 (2026-05-01 更新)。⑧ 新規リスク発見: git 未初期化 / seed の会社メール露出。 |
