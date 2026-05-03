@@ -1,0 +1,38 @@
+node_modules
+**/node_modules
+.pnpm-store
+dist
+**/dist
+.next
+**/.next
+.cache
+**/.cache
+
+# OS / editor
+.DS_Store
+.vscode
+.idea
+**/*.log
+
+# git / docs
+.git
+.github
+docs/
+ui-mockups/
+*.md
+!README.md
+
+# tests
+**/*.test.ts
+**/*.spec.ts
+
+# env / secrets
+.env*
+*.key
+*.pem
+service-account-*.json
+
+# Python (まだ使ってないが念のため)
+__pycache__/
+.venv/
+venv/

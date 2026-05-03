@@ -1,0 +1,71 @@
+# Cloud Build パイプライン
+# 用途: API コンテナをビルドして Artifact Registry に push、Cloud Run にデプロイ
+#
+# 起動方法:
+#   gcloud builds submit \
+#     --config infra/cloudbuild.yaml \
+#     --substitutions=_REGION=asia-northeast1,_ENV=dev,_SERVICE=kazaguruma-api,_REPO=kazaguruma \
+#     .
+#
+# あるいは GitHub 連携で push 時に自動起動
+
+substitutions:
+  _REGION: asia-northeast1
+  _REPO: kazaguruma
+  _SERVICE: kazaguruma-api
+  _ENV: dev
+  _RUNTIME_SA: kazaguruma-runtime
+  _LLM_PROVIDER: mock      # GCPセットアップ完了後に gemini に切替
+
+# image tag は SHORT_SHA を使う
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest"
+
+steps:
+  # ---- Build ----
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest"
+      - -f
+      - apps/api/Dockerfile
+      - .
+
+  # ---- Push ----
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api"]
+    waitFor: [build]
+
+  # ---- Deploy to Cloud Run ----
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}-${_ENV}"
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated   # MVP用。Phase 3 で IAP に
+      - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
+      - --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=memory,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
+      - --memory=512Mi
+      - --cpu=1
+      - --timeout=300s
+      - --concurrency=40
+      - --max-instances=3
+      - --min-instances=0
+    waitFor: [push]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s

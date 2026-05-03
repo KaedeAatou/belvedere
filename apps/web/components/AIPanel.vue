@@ -1,0 +1,65 @@
+<script setup lang="ts">
+import type { ScreenId, DemoTicket } from '~/composables/useDemoData';
+import { buildChecks, screenIntro } from '~/composables/useChecks';
+
+const props = defineProps<{
+  screen: ScreenId;
+  tickets: DemoTicket[];
+}>();
+const emit = defineEmits<{ jump: [id: string] }>();
+
+const checks = computed(() => buildChecks(props.screen, props.tickets));
+const intro = computed(() => screenIntro(props.screen));
+</script>
+
+<template>
+  <div class="ai-head">
+    <span class="ai-dot" />
+    <span class="ai-title">Integrity AI</span>
+    <span class="ai-sub">{{ checks.length }} signals</span>
+  </div>
+
+  <div class="ai-body">
+    <div class="ai-msg">
+      <span class="who">Belvedere</span>
+      <span class="body">{{ intro }}</span>
+    </div>
+
+    <div v-for="(c, i) in checks" :key="i" class="ai-card">
+      <div class="tag">{{ c.tag }}</div>
+      <div v-if="c.ref" class="ref">{{ c.ref }}</div>
+      <div class="msg">{{ c.msg }}</div>
+      <div v-if="c.actions" class="actions">
+        <button v-for="(a, j) in c.actions" :key="j" :class="a.primary && 'primary'">
+          {{ a.label }}
+        </button>
+        <button v-if="c.ref && c.ticketId" @click="emit('jump', c.ticketId)">Open</button>
+      </div>
+    </div>
+
+    <div class="ai-msg">
+      <span class="who">You</span>
+      <span class="body user">DOING長期化のチケットだけ抜き出して</span>
+    </div>
+    <div class="ai-msg">
+      <span class="who">Belvedere</span>
+      <span class="body">
+        BLV-202 / BLV-207 の2件です。それぞれ4日・10日DOINGに留まっています。
+        分割するか、ブロッカーを記録することを提案します。
+      </span>
+    </div>
+  </div>
+
+  <div class="ai-foot">
+    <div class="ai-input">
+      <textarea placeholder="Ask integrity AI…  例: スプリントゴールを SMART で評価して" />
+      <div class="row">
+        <button class="ibtn"><Icon name="mic" /></button>
+        <button class="ibtn"><Icon name="link" /></button>
+        <span class="spacer" />
+        <span class="kbd-key">⌘ ↵</span>
+        <button class="send">Send</button>
+      </div>
+    </div>
+  </div>
+</template>

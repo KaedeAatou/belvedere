@@ -1,0 +1,26 @@
+{
+  "name": "kazaguruma",
+  "version": "0.0.1",
+  "private": true,
+  "description": "風車 / Kazaguruma — Scrum facilitation AI agent (DevOps × AI Agent Hackathon 2026)",
+  "engines": {
+    "node": ">=20.10",
+    "pnpm": ">=9.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:cli": "pnpm --filter @kazaguruma/cli dev",
+    "demo": "pnpm --filter @kazaguruma/cli demo",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "ui:serve": "cd ui-mockups && python3 -m http.server 8765",
+    "format": "prettier --write '**/*.{ts,tsx,js,jsx,json,md}'"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "tsx": "^4.19.2",
+    "prettier": "^3.3.3",
+    "@types/node": "^22.7.4"
+  }
+}

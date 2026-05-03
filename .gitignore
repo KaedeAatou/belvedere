@@ -1,0 +1,43 @@
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.nuxt/
+.output/
+.data/
+.turbo/
+.cache/
+*.tsbuildinfo
+
+# env / secrets
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+service-account-*.json
+
+# OS / editor
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/
+!.vscode/settings.json
+
+# Python (uv / mypy / ruff)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+
+# Tooling logs
+*.log
+/tmp/
+/.claude/local/
+/.claude/.last-hackathon-check

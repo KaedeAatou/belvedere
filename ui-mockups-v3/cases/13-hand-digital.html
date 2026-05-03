@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>風車 — Hand × Digital</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600;700&family=Architects+Daughter&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --canvas: #fbfaf6;       /* Excalidraw の紙白 */
+    --canvas-grid: #ebe6da;
+    --ink: #1a1410;
+    --ink-soft: #5a5048;
+    --hand: #2a2520;          /* 手書きインク */
+    --hand-blue: #2c5fa8;
+    --hand-orange: #e8742c;
+    --hand-red: #c83d2c;
+    --hand-green: #3a8c4a;
+    --highlight: #fef0bf;     /* 蛍光ペン */
+    --tag-bg: #f3ece0;
+    --shadow: rgba(20, 15, 5, 0.12);
+    --shadow-soft: rgba(20, 15, 5, 0.06);
+  }
+  html, body { background: var(--canvas); color: var(--ink); font-family: 'Inter', system-ui, sans-serif; -webkit-font-smoothing: antialiased; line-height: 1.55; }
+  body {
+    background-image:
+      linear-gradient(var(--canvas-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--canvas-grid) 1px, transparent 1px);
+    background-size: 32px 32px, 32px 32px;
+    min-height: 100vh;
+    padding: 22px 32px 60px;
+  }
+
+  /* ---- ヘッダ (デジタル風 + 手書きアクセント) ---- */
+  header {
+    display: grid; grid-template-columns: auto 1fr auto auto; gap: 18px;
+    align-items: center; padding-bottom: 16px; margin-bottom: 22px;
+    border-bottom: 1px dashed var(--hand);
+    position: relative;
+  }
+  .logo {
+    width: 36px; height: 36px;
+    color: var(--hand-orange);
+  }
+  .logo svg { width: 100%; height: 100%; filter: url(#rough); }
+  .brand {
+    display: flex; align-items: baseline; gap: 14px;
+  }
+  .brand h1 {
+    font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+    color: var(--hand);
+  }
+  .brand h1 .accent { color: var(--hand-orange); }
+  .brand .sub {
+    font-family: 'Caveat', cursive; font-size: 22px;
+    color: var(--hand-blue);
+    transform: rotate(-2deg); display: inline-block;
+  }
+  .breadcrumb {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--ink-soft);
+    letter-spacing: 0.04em;
+  }
+  .breadcrumb b { color: var(--ink); }
+  .header-actions {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .avatar-stack { display: flex; }
+  .avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 2px solid white; margin-left: -8px;
+    background: var(--hand-orange);
+    display: grid; place-items: center;
+    font-size: 11px; font-weight: 600; color: white;
+    box-shadow: 0 1px 3px var(--shadow);
+  }
+  .avatar:nth-child(1) { background: var(--hand-orange); margin-left: 0; }
+  .avatar:nth-child(2) { background: var(--hand-blue); }
+  .avatar:nth-child(3) { background: var(--hand-green); }
+  .avatar:nth-child(4) { background: var(--hand-red); }
+  .avatar:nth-child(5) { background: #6b5d50; font-size: 10px; }
+  .btn {
+    padding: 6px 14px; border: 1.5px solid var(--hand);
+    border-radius: 8px; font-size: 13px; font-weight: 500;
+    background: white; color: var(--hand);
+    cursor: pointer;
+    box-shadow: 2px 2px 0 var(--hand);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    font-family: inherit;
+  }
+  .btn:hover { transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--hand); }
+  .btn.primary {
+    background: var(--hand-orange); color: white; border-color: var(--hand);
+  }
+  .btn.primary:hover { background: var(--hand-red); }
+
+  /* ---- ツールバー (Excalidraw風) ---- */
+  .toolbar {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px;
+    background: white;
+    border: 1.5px solid var(--hand);
+    border-radius: 10px;
+    box-shadow: 2px 2px 0 var(--hand);
+    margin-bottom: 22px;
+    font-size: 13px;
+  }
+  .tool {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 6px; cursor: pointer;
+    color: var(--ink-soft); font-weight: 500;
+  }
+  .tool:hover { background: var(--canvas); }
+  .tool.active { background: var(--hand); color: white; }
+  .tool .kbd {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; padding: 2px 5px;
+    background: rgba(255,255,255,0.18); border-radius: 3px;
+    color: inherit; opacity: 0.7;
+  }
+  .tool.active .kbd { background: rgba(255,255,255,0.18); }
+  .tool:not(.active) .kbd { background: var(--canvas); }
+  .toolbar .sep { width: 1px; height: 18px; background: var(--canvas-grid); margin: 0 4px; }
+  .toolbar .grow { flex: 1; }
+  .toolbar input.search {
+    border: none; background: var(--canvas); padding: 6px 12px;
+    border-radius: 6px; min-width: 240px; font-size: 13px; color: var(--ink);
+    font-family: inherit;
+  }
+  .toolbar input.search:focus { outline: 2px solid var(--hand-orange); }
+
+  /* ---- フィルタチップ (デジタル風カラー + 手書きフォント混在) ---- */
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 18px; align-items: center; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 11px; border-radius: 999px;
+    font-size: 12px; font-weight: 500;
+    background: var(--tag-bg);
+    color: var(--ink);
+    border: 1.2px solid var(--canvas-grid);
+    cursor: pointer;
+  }
+  .chip.active {
+    background: var(--hand-orange); color: white; border-color: var(--hand);
+    box-shadow: 1.5px 1.5px 0 var(--hand);
+  }
+  .chip .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .chips .label-hand {
+    font-family: 'Caveat', cursive;
+    font-size: 17px; color: var(--hand-blue);
+    transform: rotate(-1deg); display: inline-block;
+    margin-left: 8px;
+  }
+
+  /* ---- メイン: 9ストーリー grid ---- */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+  }
+  .story-card {
+    background: white;
+    border: 1.5px solid var(--hand);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 3px 3px 0 var(--hand);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    position: relative;
+    min-height: 260px;
+    display: flex; flex-direction: column;
+  }
+  .story-card:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 5px 5px 0 var(--hand);
+  }
+  .story-card .header-line {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 4px;
+  }
+  .story-card .meta-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-soft);
+    letter-spacing: 0.06em;
+  }
+  .story-card .ceremony-pill {
+    display: inline-block;
+    font-family: 'Caveat', cursive;
+    font-size: 16px;
+    padding: 1px 10px;
+    border: 1.5px solid currentColor;
+    border-radius: 999px;
+    transform: rotate(-1.5deg);
+    line-height: 1.1;
+  }
+  .story-card[data-c="planning"] .ceremony-pill { color: var(--hand-blue); }
+  .story-card[data-c="daily"] .ceremony-pill    { color: var(--hand-green); }
+  .story-card[data-c="review"] .ceremony-pill   { color: var(--hand-orange); }
+  .story-card[data-c="retro"] .ceremony-pill    { color: var(--hand-red); }
+  .story-card h3 {
+    font-size: 16px; font-weight: 600; line-height: 1.35;
+    color: var(--hand); margin: 6px 0 4px;
+  }
+  /* 蛍光ペン */
+  .story-card h3 .hl {
+    background: linear-gradient(180deg, transparent 50%, var(--highlight) 50%);
+    padding: 0 2px;
+  }
+  .story-card .role {
+    font-family: 'Caveat', cursive; font-size: 17px;
+    color: var(--ink-soft); line-height: 1.25; margin-bottom: 12px;
+  }
+  .story-card .role b { color: var(--hand); font-weight: 600; }
+
+  /* ---- タスクリスト (デジタル) ---- */
+  .tasks { flex: 1; }
+  .task {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px; align-items: center;
+    padding: 7px 0;
+    border-top: 1px dashed var(--canvas-grid);
+    font-size: 13px;
+  }
+  .task:first-child { border-top: none; }
+  .task .status-icon {
+    width: 14px; height: 14px;
+    flex-shrink: 0;
+  }
+  .task .status-icon.todo {
+    border: 1.8px solid var(--hand);
+    border-radius: 50%;
+  }
+  .task .status-icon.in-progress {
+    border: 1.8px solid var(--hand-orange);
+    border-radius: 50%;
+    background: conic-gradient(var(--hand-orange) 0 60%, transparent 60%);
+  }
+  .task .status-icon.review {
+    border: 1.8px solid var(--hand-green);
+    border-radius: 50%;
+    background: conic-gradient(var(--hand-green) 0 85%, transparent 85%);
+  }
+  .task .status-icon.done {
+    background: var(--hand-green);
+    border-radius: 50%;
+    position: relative;
+  }
+  .task .status-icon.done::after {
+    content: '✓'; position: absolute; top: -3px; left: 1px;
+    font-size: 12px; color: white; font-weight: 800;
+  }
+  .task .status-icon.backlog {
+    border: 1.8px dashed var(--ink-soft);
+    border-radius: 50%;
+    opacity: 0.4;
+  }
+  .task .title { line-height: 1.25; }
+  .task .title .id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-soft); margin-right: 6px;
+  }
+  .task.done .title { opacity: 0.5; text-decoration: line-through; }
+  .task .meta {
+    display: flex; align-items: center; gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; color: var(--ink-soft);
+  }
+  .task .pri-bar {
+    width: 3px; height: 14px; border-radius: 2px; background: var(--ink-soft);
+  }
+  .task .pri-bar.urgent { background: var(--hand-red); }
+  .task .pri-bar.high { background: var(--hand-orange); }
+  .task .pri-bar.medium { background: var(--hand-blue); }
+  .task .pri-bar.low { background: var(--hand-green); }
+  .task .assignee {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--tag-bg);
+    display: grid; place-items: center;
+    font-size: 9px; font-weight: 600; color: var(--ink-soft);
+    border: 1.5px solid var(--canvas-grid);
+  }
+
+  /* ---- 手書きアノテーション (一部のカードに重ねる) ---- */
+  .annotation {
+    position: absolute;
+    font-family: 'Caveat', cursive;
+    color: var(--hand-red);
+    font-size: 18px;
+    line-height: 1; pointer-events: none;
+    z-index: 5;
+  }
+  .arrow-svg { position: absolute; pointer-events: none; }
+
+  /* ---- フッタ: 統計 + コラボカーソル ---- */
+  .footer {
+    display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 18px;
+    margin-top: 22px;
+  }
+  .stat-card, .chart-card, .activity-card {
+    background: white;
+    border: 1.5px solid var(--hand);
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 3px 3px 0 var(--hand);
+  }
+  .stat-card h4, .chart-card h4, .activity-card h4 {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--hand);
+    margin-bottom: 10px;
+  }
+
+  /* sparkline */
+  .sparkline {
+    width: 100%; height: 40px;
+  }
+
+  /* mini bar */
+  .mini-bars {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    align-items: end; height: 60px;
+  }
+  .mini-bars .b {
+    background: var(--hand-orange);
+    border: 1.5px solid var(--hand);
+    border-bottom: none;
+    position: relative;
+  }
+  .mini-bars .b.b1 { background: var(--hand-blue); }
+  .mini-bars .b.b2 { background: var(--hand-green); }
+  .mini-bars .b.b3 { background: var(--hand-orange); }
+  .mini-bars .b.b4 { background: var(--hand-red); }
+  .mini-bars .b .v {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; font-weight: 600; color: var(--hand);
+  }
+  .mini-bars .lbls { display: contents; }
+  .mini-bars-row { display: flex; margin-top: 6px; }
+  .mini-bars-row span {
+    flex: 1; text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; color: var(--ink-soft); letter-spacing: 0.06em;
+  }
+  /* annotation arrow on chart */
+  .chart-card .annotate {
+    font-family: 'Caveat', cursive; font-size: 14px;
+    color: var(--hand-red);
+    margin-top: 8px;
+  }
+
+  .activity-card .row {
+    display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center;
+    padding: 5px 0; font-size: 12px;
+    border-top: 1px dashed var(--canvas-grid);
+  }
+  .activity-card .row:first-of-type { border-top: none; }
+  .activity-card .row .who { font-weight: 600; color: var(--hand); }
+  .activity-card .row time { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-soft); }
+
+  /* live cursors (collab feel) */
+  .cursor {
+    position: fixed; pointer-events: none; z-index: 100;
+    transition: top 4s ease, left 4s ease;
+  }
+  .cursor svg { width: 18px; height: 18px; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2)); }
+  .cursor .label {
+    position: absolute; top: 14px; left: 14px;
+    background: var(--hand-blue); color: white;
+    padding: 2px 6px; border-radius: 4px;
+    font-size: 10px; font-weight: 600; white-space: nowrap;
+  }
+  .cursor.c1 { top: 24%; left: 38%; }
+  .cursor.c2 { top: 62%; left: 70%; }
+  .cursor.c1 .label { background: var(--hand-blue); }
+  .cursor.c2 .label { background: var(--hand-green); }
+  .cursor.c1 svg { color: var(--hand-blue); }
+  .cursor.c2 svg { color: var(--hand-green); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute">
+  <filter id="rough">
+    <feTurbulence baseFrequency="0.04" numOctaves="2" seed="4" />
+    <feDisplacementMap in="SourceGraphic" scale="1.6"/>
+  </filter>
+</svg>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 100 100">
+      <g transform="translate(50,50)" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M0,0 L0,-38 Q12,-26 12,-10 Q6,-3 0,0 Z"/>
+        <path d="M0,0 L38,0 Q26,12 10,12 Q3,6 0,0 Z"/>
+        <path d="M0,0 L0,38 Q-12,26 -12,10 Q-6,3 0,0 Z"/>
+        <path d="M0,0 L-38,0 Q-26,-12 -10,-12 Q-3,-6 0,0 Z"/>
+        <circle r="3" fill="currentColor"/>
+      </g>
+    </svg>
+  </div>
+  <div class="brand">
+    <h1>風<span class="accent">車</span></h1>
+    <span class="sub">— hand × digital canvas</span>
+    <span class="breadcrumb">workspace / <b>kazaguruma</b> / sprint 13</span>
+  </div>
+  <div class="header-actions">
+    <div class="avatar-stack">
+      <div class="avatar">加</div>
+      <div class="avatar">大</div>
+      <div class="avatar">林</div>
+      <div class="avatar">平</div>
+      <div class="avatar">+1</div>
+    </div>
+  </div>
+  <div class="header-actions">
+    <button class="btn">Share</button>
+    <button class="btn primary">+ New task</button>
+  </div>
+</header>
+
+<!-- Toolbar (Excalidraw風) -->
+<div class="toolbar">
+  <span class="tool active">⚏ Board <span class="kbd">B</span></span>
+  <span class="tool">≡ List <span class="kbd">L</span></span>
+  <span class="tool">⊞ Table <span class="kbd">T</span></span>
+  <span class="tool">📅 Timeline</span>
+  <span class="sep"></span>
+  <span class="tool">✎ Annotate</span>
+  <span class="tool">🖍 Highlight</span>
+  <span class="tool">→ Connect</span>
+  <span class="tool">★ Sticky</span>
+  <span class="grow"></span>
+  <input class="search" placeholder="🔍 Search tasks…  ⌘K">
+  <span class="tool">↶ Undo <span class="kbd">⌘Z</span></span>
+  <span class="tool">↷ Redo</span>
+</div>
+
+<!-- Filter chips -->
+<div class="chips">
+  <span class="chip active">All <strong>12</strong></span>
+  <span class="chip"><span class="dot" style="background:var(--hand-blue)"></span>Planning 3</span>
+  <span class="chip"><span class="dot" style="background:var(--hand-green)"></span>Daily 4</span>
+  <span class="chip"><span class="dot" style="background:var(--hand-orange)"></span>Review 2</span>
+  <span class="chip"><span class="dot" style="background:var(--hand-red)"></span>Retro 3</span>
+  <span class="chip">Sprint 13</span>
+  <span class="chip">My tasks</span>
+  <span class="label-hand">↑ filter or grab a marker →</span>
+</div>
+
+<!-- Story grid -->
+<div class="grid">
+
+  <!-- US-101 -->
+  <div class="story-card" data-c="planning">
+    <div class="header-line">
+      <span class="meta-id">US-101 · 11pt</span>
+      <span class="ceremony-pill">Planning</span>
+    </div>
+    <h3>顧客の声を<span class="hl">スプリント計画</span>に流す</h3>
+    <div class="role">As a <b>PO</b>, I want VOC in planning</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon in-progress"></span>
+        <div class="title"><span class="id">WC-105</span>風向きインジケータ常設化</div>
+        <div class="meta"><span class="pri-bar urgent"></span><span class="assignee">加</span>8pt</div>
+      </div>
+      <div class="task">
+        <span class="status-icon todo"></span>
+        <div class="title"><span class="id">WC-101</span>議事録テンプレ刷新</div>
+        <div class="meta"><span class="pri-bar high"></span><span class="assignee">加</span>3pt</div>
+      </div>
+    </div>
+    <span class="annotation" style="top: 10px; right: -12px; transform: rotate(8deg);">★ key!</span>
+  </div>
+
+  <!-- US-102 -->
+  <div class="story-card" data-c="planning">
+    <div class="header-line">
+      <span class="meta-id">US-102 · 8pt</span>
+      <span class="ceremony-pill">Planning</span>
+    </div>
+    <h3>形骸化兆候の早期検出</h3>
+    <div class="role">As an <b>SM</b>, anti-pattern alerts</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon todo"></span>
+        <div class="title"><span class="id">WC-109</span>なんちゃってアジャイル検出 v2</div>
+        <div class="meta"><span class="pri-bar high"></span><span class="assignee">上</span>8pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-201 -->
+  <div class="story-card" data-c="daily">
+    <div class="header-line">
+      <span class="meta-id">US-201 · 10pt</span>
+      <span class="ceremony-pill">Daily</span>
+    </div>
+    <h3>デイリー運営をAIに任せる</h3>
+    <div class="role">As an <b>SM</b>, AI runs daily</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon in-progress"></span>
+        <div class="title"><span class="id">WC-102</span>要約Bot Slack常駐</div>
+        <div class="meta"><span class="pri-bar medium"></span><span class="assignee">大</span>5pt</div>
+      </div>
+      <div class="task">
+        <span class="status-icon in-progress"></span>
+        <div class="title"><span class="id">WC-111</span>ペアプロ音声 Gemini要約</div>
+        <div class="meta"><span class="pri-bar low"></span><span class="assignee">加</span>5pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-202 -->
+  <div class="story-card" data-c="daily">
+    <div class="header-line">
+      <span class="meta-id">US-202 · 13pt</span>
+      <span class="ceremony-pill">Daily</span>
+    </div>
+    <h3>PRレビューLLM の<span class="hl">誤検出を減らす</span></h3>
+    <div class="role">As a <b>Dev</b>, trust review LLM</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon in-progress"></span>
+        <div class="title"><span class="id">WC-106</span>PRレビューLLMチューニング</div>
+        <div class="meta"><span class="pri-bar high"></span><span class="assignee">林</span>13pt</div>
+      </div>
+    </div>
+    <span class="annotation" style="bottom: 16px; right: 14px; color: var(--hand-blue); transform: rotate(-4deg);">⚠ 3日停滞</span>
+  </div>
+
+  <!-- US-203 -->
+  <div class="story-card" data-c="daily">
+    <div class="header-line">
+      <span class="meta-id">US-203 · 5pt</span>
+      <span class="ceremony-pill">Daily</span>
+    </div>
+    <h3>パイプライン責務分離</h3>
+    <div class="role">As an <b>SRE</b>, CB / CD split</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon backlog"></span>
+        <div class="title"><span class="id">WC-108</span>Cloud Build → Deploy 分離</div>
+        <div class="meta"><span class="pri-bar low"></span><span class="assignee">平</span>5pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-301 -->
+  <div class="story-card" data-c="review">
+    <div class="header-line">
+      <span class="meta-id">US-301 · 8pt</span>
+      <span class="ceremony-pill">Review</span>
+    </div>
+    <h3>デモを即時に立ち上げる</h3>
+    <div class="role">As a <b>Stakeholder</b>, want preview</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon review"></span>
+        <div class="title"><span class="id">WC-103</span>デモ環境 Cloud Run 統一</div>
+        <div class="meta"><span class="pri-bar high"></span><span class="assignee">平</span>8pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-302 -->
+  <div class="story-card" data-c="review">
+    <div class="header-line">
+      <span class="meta-id">US-302 · 8pt</span>
+      <span class="ceremony-pill">Review</span>
+    </div>
+    <h3>リリースゲートでセキュリティ</h3>
+    <div class="role">As an <b>SRE</b>, OWASP gate</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon backlog"></span>
+        <div class="title"><span class="id">WC-110</span>OWASP Top 10 自動チェック</div>
+        <div class="meta"><span class="pri-bar medium"></span><span class="assignee">林</span>8pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-401 -->
+  <div class="story-card" data-c="retro">
+    <div class="header-line">
+      <span class="meta-id">US-401 · 5pt</span>
+      <span class="ceremony-pill">Retro</span>
+    </div>
+    <h3>Try を翌スプリントへ繋げる</h3>
+    <div class="role">As an <b>SM</b>, auto-carry</div>
+    <div class="tasks">
+      <div class="task">
+        <span class="status-icon todo"></span>
+        <div class="title"><span class="id">WC-104</span>Try を WIP に自動転記</div>
+        <div class="meta"><span class="pri-bar medium"></span><span class="assignee">上</span>5pt</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- US-402 -->
+  <div class="story-card" data-c="retro">
+    <div class="header-line">
+      <span class="meta-id">US-402 · 16pt</span>
+      <span class="ceremony-pill">Retro</span>
+    </div>
+    <h3>儀式の<span class="hl">健全性を計測</span>・公開</h3>
+    <div class="role">As an <b>EM</b>, wing health</div>
+    <div class="tasks">
+      <div class="task done">
+        <span class="status-icon done"></span>
+        <div class="title"><span class="id">WC-107</span>ベロシティ 3SP 移動平均</div>
+        <div class="meta"><span class="pri-bar medium"></span><span class="assignee">大</span>3pt</div>
+      </div>
+      <div class="task">
+        <span class="status-icon todo"></span>
+        <div class="title"><span class="id">WC-112</span>4翼ダッシュボード公開</div>
+        <div class="meta"><span class="pri-bar high"></span><span class="assignee">大</span>13pt</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer: stats + collab -->
+<div class="footer">
+
+  <div class="stat-card">
+    <h4>Sprint 13 Burndown</h4>
+    <svg class="sparkline" viewBox="0 0 400 50" preserveAspectRatio="none">
+      <!-- ideal line (digital) -->
+      <line x1="0" y1="5" x2="400" y2="48" stroke="#cfc7b8" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <!-- actual line (hand-drawn) -->
+      <path d="M0,5 Q40,8 80,12 T160,18 Q190,22 220,26 T300,28 L400,32"
+            stroke="#e8742c" stroke-width="2.5" fill="none" stroke-linecap="round"
+            filter="url(#rough)"/>
+      <!-- today marker -->
+      <line x1="172" y1="0" x2="172" y2="50" stroke="#c83d2c" stroke-width="1.5" stroke-dasharray="2 2"/>
+      <text x="174" y="11" font-family="Caveat" font-size="13" fill="#c83d2c">today</text>
+    </svg>
+    <div style="display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: var(--ink-soft);">
+      <span>Day 0 / 30pt</span>
+      <span>Day 6</span>
+      <span>Day 14 / 0pt</span>
+    </div>
+    <div style="font-family: 'Caveat'; font-size: 16px; color: var(--hand-blue); margin-top: 8px;">
+      ↗ ideal線にぴったり乗ってる、いい感じ！
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h4>4 Wing Health</h4>
+    <div class="mini-bars">
+      <div class="b b1" style="height: 78%"><span class="v">78</span></div>
+      <div class="b b2" style="height: 65%"><span class="v">65</span></div>
+      <div class="b b3" style="height: 82%"><span class="v">82</span></div>
+      <div class="b b4" style="height: 70%"><span class="v">70</span></div>
+    </div>
+    <div class="mini-bars-row"><span>PLAN</span><span>DAILY</span><span>REVIEW</span><span>RETRO</span></div>
+    <div class="annotate">↗ Daily が -8 で要注意</div>
+  </div>
+
+  <div class="activity-card">
+    <h4>Live Activity</h4>
+    <div class="row"><span class="who">大久保</span><span>WC-102 を更新</span><time>2m</time></div>
+    <div class="row"><span class="who">林</span><span>WC-106 にコメント</span><time>14m</time></div>
+    <div class="row"><span class="who" style="color:var(--hand-orange)">Daily Agent</span><span>停滞警告 → 林 へ</span><time>32m</time></div>
+    <div class="row"><span class="who">加賀谷</span><span>WC-101 を作成</span><time>1h</time></div>
+    <div class="row"><span class="who" style="color:var(--hand-orange)">Planner Agent</span><span>議題を3件提案</span><time>2h</time></div>
+  </div>
+
+</div>
+
+<!-- live cursors (collab) -->
+<div class="cursor c1">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5,2 L5,18 L9,14 L11,21 L14,20 L11,13 L17,13 Z" stroke="white" stroke-width="1"/></svg>
+  <span class="label">大久保</span>
+</div>
+<div class="cursor c2">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5,2 L5,18 L9,14 L11,21 L14,20 L11,13 L17,13 Z" stroke="white" stroke-width="1"/></svg>
+  <span class="label">林</span>
+</div>
+
+<script>
+// gentle cursor wander
+const c1 = document.querySelector('.cursor.c1');
+const c2 = document.querySelector('.cursor.c2');
+function wander(el, baseTop, baseLeft) {
+  setInterval(() => {
+    el.style.top = (baseTop + (Math.random()*8-4)) + '%';
+    el.style.left = (baseLeft + (Math.random()*8-4)) + '%';
+  }, 4200);
+}
+wander(c1, 24, 38);
+wander(c2, 62, 70);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "@kazaguruma/cli",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "demo": "tsx src/index.ts demo",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kazaguruma/shared": "workspace:*",
+    "@kazaguruma/seed": "workspace:*",
+    "@kazaguruma/repo": "workspace:*",
+    "@kazaguruma/llm": "workspace:*",
+    "@kazaguruma/agent": "workspace:*",
+    "@kazaguruma/tools": "workspace:*"
+  }
+}

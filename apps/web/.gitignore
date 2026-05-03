@@ -1,0 +1,12 @@
+# Nuxt
+.nuxt
+.output
+.data
+dist
+
+# Logs
+*.log
+
+# Local env
+.env
+.env.local
