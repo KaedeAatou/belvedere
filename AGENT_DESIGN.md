@@ -1,7 +1,8 @@
 # Belvedere — Agent Design
 
 > 審査基準①「AIエージェントが価値の中心になっているか」に対する答え。
-> 2026-04-30 改訂: 「風 (WindEvent)」概念を廃止し、Agent の役割を「チケット品質補助 + 4儀式運営補助」に絞った。
+> 2026-04-30 改訂: 「風 (WindEvent)」概念を廃止。
+> 2026-05-03 改訂: **Refinement Agent (5番目) を追加** + Project エンティティ + valueImpact 軸 を導入。Agent の役割を「チケット品質補助 + 5儀式運営補助」に拡張。
 
 ---
 
@@ -19,23 +20,24 @@
 ## 1. エージェント体系
 
 ```
-                  ┌───────────────────────┐
-                  │  Orchestrator (中心ハブ)│  ← 軽量ルーティング
-                  └───────────┬───────────┘
-                              │
-        ┌────────────┬────────┼────────┬─────────────┐
-        ▼            ▼        ▼        ▼             ▼
-  ┌──────────┐ ┌──────────┐ ┌─────────┐ ┌─────────────┐
-  │ Planner  │ │  Daily   │ │Reviewer │ │Retrospective│
-  └──────────┘ └──────────┘ └─────────┘ └─────────────┘
-        ▲            ▲           ▲             ▲
-        │            │           │             │
-        └────────────┴────── Tool Server ──────┘
-                              │
-                ┌─────────────┼─────────────┐
-                ▼             ▼             ▼
-            Slack         GitHub        Calendar
-           Firestore      Sentry        Cloud Run
+                       ┌───────────────────────┐
+                       │  Orchestrator (中心ハブ)│  ← 軽量ルーティング (gemini-2.5-flash)
+                       └───────────┬───────────┘
+                                   │
+        ┌────────────┬─────────────┼─────────────┬─────────────┐
+        ▼            ▼             ▼             ▼             ▼
+  ┌──────────┐ ┌──────────┐ ┌─────────────┐ ┌─────────┐ ┌─────────────┐
+  │ Planner  │ │  Daily   │ │ Refinement  │ │Reviewer │ │Retrospective│
+  │ (FLOOR01)│ │ (FLOOR02)│ │ (FLOOR03)   │ │(FLOOR04)│ │ (FLOOR05)   │
+  └──────────┘ └──────────┘ └─────────────┘ └─────────┘ └─────────────┘
+        ▲            ▲             ▲             ▲             ▲
+        │            │             │             │             │
+        └────────────┴────────── Tool Server ────┴─────────────┘
+                                   │
+                ┌──────────────────┼──────────────────┐
+                ▼                  ▼                  ▼
+            Slack             GitHub             Calendar
+           Firestore          Sentry             Cloud Run
 ```
 
 ---
@@ -75,7 +77,29 @@
 | 主な Tool | `slack.thread.fetch`, `github.activity`, `firestore.update`, `ticket.quality.check` |
 | 自律性 | L3 (要約は自動投稿、メンションは L2) |
 
-### 2-3. Reviewer Agent
+### 2-3. Refinement Agent (2026-05-03 追加)
+
+| 項目 | 内容 |
+|---|---|
+| 役割 | Backlog Refinement 運営支援。次スプリント以降の候補 Story を **5観点で診断** |
+| 起動 | Refinement 30分前 / 手動 / `topic.ticket.created` (新規 Story 起票時) |
+| 入力 | 次スプリント候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story |
+| 出力 | 形骸化シグナル一覧 (5観点) + 修正提案 |
+| LLM | gemini-2.5-pro |
+| 主な Tool | `project.list`, `epic.list`, `ticket.list`, `backlog.refinement.check` (5観点を一括診断する専用 Tool) |
+| 自律性 | L2 (提案 → 人が承認後に反映) |
+
+**5観点診断の中身** (`packages/tools/src/index.ts:160-222` で実装):
+1. **Story 粒度過大**: `estimatePt > 8` → 分割候補を提案 (例: BLV-106 SP=13 → ①Eval set拡充 / ②few-shot rubric / ③コスト計測)
+2. **依存関係未整理**: `parentTicketId` (US- 紐付け) も `blockedBy` も空 → 整理を促す
+3. **valueImpact 未設定**: プロダクトゴール貢献度が空 → PO に確認推奨
+4. **priority × valueImpact ミスマッチ**:
+   - `priority=urgent ∧ valueImpact=low` → 緊急度の根拠を再確認
+   - `priority=low ∧ valueImpact=high` → 引き上げ推奨
+   - `priority=medium ∧ valueImpact=high` → ゴール直結なのに優先度低の可能性
+5. **SP 見積バラつき異常**: 同 Epic 配下の SP の変動係数 (CV = stddev/mean) が 0.6 超 → 再見積推奨
+
+### 2-4. Reviewer Agent
 
 | 項目 | 内容 |
 |---|---|
@@ -87,7 +111,7 @@
 | 主な Tool | `cloudrun.previewUrl`, `github.pr.diff`, `slack.notify` |
 | 自律性 | L2 |
 
-### 2-4. Retrospective Agent
+### 2-5. Retrospective Agent
 
 | 項目 | 内容 |
 |---|---|
@@ -107,8 +131,10 @@
 |---|---|---|
 | `ticket.list` | チケット一覧取得 | SA |
 | `ticket.quality.check` | DoD/SP/US紐付け診断 | SA |
+| `backlog.refinement.check` | Refinement 5観点診断 (粒度/依存/valueImpact/ミスマッチ/SP分散) | SA |
 | `sprint.get` | スプリント情報取得 | SA |
-| `epic.list` | Epic 一覧取得 | SA |
+| `project.list` | Project 一覧取得 | SA |
+| `epic.list` | Epic 一覧取得 (projectId 絞り込み可) | SA |
 | `member.list` | チームメンバ一覧 | SA |
 | `slack.message.post` | Slack 投稿 | Bot token |
 | `slack.thread.fetch` | スレッド取得 | Bot token |
@@ -135,7 +161,7 @@
 | L3 | 自律実行 + 通知 | 勝手に実行し、結果を通知 | デイリーBot要約、デモ環境生成 |
 | L4 | 自律実行 + ロールバック可能 | 勝手にやるが取り消せる | 健全性スコア更新 |
 
-デフォルト: Daily=L3, Planner=L2, Reviewer=L2, Retrospective=L2。
+デフォルト: **Daily=L3, Planner=L2, Refinement=L2, Reviewer=L2, Retrospective=L2** (5 ロール分)。
 
 ---
 

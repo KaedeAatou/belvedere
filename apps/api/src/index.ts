@@ -56,7 +56,7 @@ app.get('/epics/:id', async (c) => {
 app.get('/members', async (c) => c.json(await repo.members.list()));
 
 // ------- Agent invocation -------
-const VALID_AGENTS: ReadonlyArray<AgentName> = ['orchestrator', 'planner', 'daily', 'reviewer', 'retrospective'];
+const VALID_AGENTS: ReadonlyArray<AgentName> = ['orchestrator', 'planner', 'daily', 'refinement', 'reviewer', 'retrospective'];
 
 app.post('/agents/:name', async (c) => {
   const name = c.req.param('name') as AgentName;

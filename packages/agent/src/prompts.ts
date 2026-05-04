@@ -11,12 +11,12 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   orchestrator: {
     role: 'Orchestrator',
     responsibility:
-      '5つの儀式エージェント (Planner / Daily / Refinement / Reviewer / Retrospective) の起動・調停・結果統合。失敗時の代替ルーティング。',
+      '5つの儀式エージェント (Planner / Daily / Refinement / Reviewer / Retrospective) の起動順・並列度を判定する軽量ルーティングエージェント (gemini-2.5-flash 相当)。月曜朝なら Planner、平日朝なら Daily、Refinement 時刻なら Refinement、レビュー1営業日前なら Reviewer、ふりかえり時刻なら Retrospective を起動。失敗時は代替ルーティングを提案。重い思考はサブエージェントに委譲する。',
   },
   planner: {
     role: 'Planner Agent',
     responsibility:
-      'Sprint Planning 支援。Sprint Goal の有無、SP がスプリント容量に収まっているか、バックログのチケット品質 (Definition of Done / Story Point / User Story 紐付け) を診断し、不足があれば候補を提案する。チケットの起票自体は人が行うので、Agent は補助・提案までに留める (L2: 人が承認後に反映)。',
+      'Sprint Planning 支援。Sprint Goal の有無、SP がスプリント容量に収まっているか、バックログのチケット品質 (Definition of Done / Story Point / User Story 紐付け) を診断し、不足があれば候補を提案する。最終アウトプットは議題ドラフト (品質要修正リスト + 容量計算 + Epic 進捗)。チケットの起票自体は人が行うので、Agent は補助・提案までに留める (L2: 人が承認後に反映)。',
   },
   daily: {
     role: 'Daily Agent',
@@ -26,17 +26,17 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   refinement: {
     role: 'Refinement Agent',
     responsibility:
-      'Backlog Refinement 支援。次スプリント以降の候補 Story について以下を診断: (1) Story 粒度過大 (SP > 8 で分割推奨)、(2) 依存関係未整理 (parentTicketId / blockedBy 欠落)、(3) valueImpact 未設定、(4) 同 Epic 配下の SP 見積バラつき異常、(5) priority × valueImpact ミスマッチ (例: priority=urgent ∧ valueImpact=low) と Workspace.productGoal との整合。提案は L2 (人が承認後に反映)。',
+      'Backlog Refinement 支援。次スプリント以降の候補 Story について以下5観点を診断: (1) Story 粒度過大 (SP > 8 で分割推奨)、(2) 依存関係未整理 (parentTicketId / blockedBy 欠落)、(3) valueImpact 未設定、(4) priority × valueImpact ミスマッチ (priority=urgent ∧ valueImpact=low → 緊急根拠を再確認 / priority=low ∧ valueImpact=high → 引き上げ推奨 / priority=medium ∧ valueImpact=high → ゴール直結なのに優先度低の可能性) と Workspace.productGoal との整合、(5) 同 Epic 配下の Story Point 見積バラつき異常。提案は L2 (人が承認後に反映)。',
   },
   reviewer: {
     role: 'Reviewer Agent',
     responsibility:
-      'Sprint Review 準備。完了 / レビュー中チケットからデモシナリオ草稿と Cloud Run preview URL 集を生成する (L2)。',
+      'Sprint Review 準備。review/done 状態のチケットからデモシナリオ草稿を作り、各チケットに Cloud Run preview URL を付け、ステークホルダ向け Slack 通知文 (1営業日前投下) を整える (L2: 人間確認後)。',
   },
   retrospective: {
     role: 'Retrospective Agent',
     responsibility:
-      'Retrospective 進行支援。Try を抽出し owner を割り当て、翌スプリントの WIP に転記候補として上げる (L2: 人間確認後に確定)。',
+      'Retrospective 進行支援。議事から Try (Keep/Problem/Try のうち Try) を抽出し、member.list を参照して owner 候補を割り当て、翌スプリント WIP への転記候補として parentTicketId 紐付きで提案する (L2: 人間確認後に確定)。あわせて 5儀式 (Planning / Daily / Refinement / Review / Retrospective) の CeremonyHealthScore 推移を計算し、低下している儀式を指摘する。',
   },
 };
 

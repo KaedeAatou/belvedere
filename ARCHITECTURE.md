@@ -39,11 +39,12 @@ graph TB
     end
 
     subgraph Backend["Backend Services (Cloud Run)"]
-        ORC["orchestrator<br/>(オーケストレータ)"]
-        AG_P["agent-planner"]
-        AG_D["agent-daily"]
-        AG_R["agent-reviewer"]
-        AG_X["agent-retrospective"]
+        ORC["orchestrator<br/>(gemini-2.5-flash)"]
+        AG_P["agent-planner<br/>FLOOR 01"]
+        AG_D["agent-daily<br/>FLOOR 02"]
+        AG_F["agent-refinement<br/>FLOOR 03 (5観点診断)"]
+        AG_R["agent-reviewer<br/>FLOOR 04"]
+        AG_X["agent-retrospective<br/>FLOOR 05"]
         TOOL["tool-server<br/>Slack/GitHub/Calendar"]
     end
 
@@ -72,15 +73,15 @@ graph TB
 
     U1 --> LB --> IAP --> WEB
     WEB --> ORC
-    ORC --> AG_P & AG_D & AG_R & AG_X
-    AG_P & AG_D & AG_R & AG_X --> GEM
-    AG_P & AG_D & AG_R & AG_X --> TOOL
+    ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
+    AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
+    AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
     TOOL --> U2 & U3
-    AG_P & AG_D & AG_R & AG_X --> FS
-    AG_P & AG_D & AG_R & AG_X --> VS
+    AG_P & AG_D & AG_F & AG_R & AG_X --> FS
+    AG_P & AG_D & AG_F & AG_R & AG_X --> VS
     SCHED -.儀式30分前.-> ORC
     PUBSUB --> ORC
-    ORC -.fan-out.-> AG_P & AG_D & AG_R & AG_X
+    ORC -.fan-out.-> AG_P & AG_D & AG_F & AG_R & AG_X
     Backend --> LOG & TR & ER
     Backend --> SM
     Backend --> GCS
@@ -173,17 +174,19 @@ ai-agent-hackathon/
 ├── apps/
 │   ├── web/              # Nuxt 3 (Vue 3 SSR / Nitro=node-server) — Cloud Run
 │   ├── orchestrator/     # Orchestrator (Cloud Run)
-│   └── agents/
+│   └── agents/           # (Phase 2 で分離予定 / 現状は packages/agent + apps/orchestrator-py で集約)
 │       ├── planner/
 │       ├── daily/
+│       ├── refinement/   # 2026-05-03 追加
 │       ├── reviewer/
 │       └── retrospective/
 ├── packages/
-│   ├── shared/           # 型・スキーマ・定数
+│   ├── shared/           # 型・スキーマ・定数 (Project / Ritual / ValueImpact など)
 │   ├── llm/              # LLMプロバイダ抽象 (mock/gemini/vertex)
-│   ├── agent/            # Agent runtime (Tool呼び出しループ)
-│   ├── tools/            # Slack/GitHub/Calendar クライアント
-│   └── seed/             # ダミーデータ (WC-101..112)
+│   ├── agent/            # Agent runtime (Tool呼び出しループ + 6 ロール prompts)
+│   ├── tools/            # Slack/GitHub/Calendar/backlog.refinement.check
+│   ├── repo/             # Repository 抽象 (memory/firestore)
+│   └── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / members 等)
 ├── infra/
 │   ├── cloudbuild.yaml
 │   ├── clouddeploy.yaml
