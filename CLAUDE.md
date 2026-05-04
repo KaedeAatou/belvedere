@@ -92,8 +92,13 @@ infra/        ← Cloud Build パイプライン
 
 ## Project automation (`.claude/`)
 
-- **Hooks**: `seed-guard.sh` (PreToolUse, `packages/seed/src/*` 編集 block / 迂回は `CLAUDE_FORCE_SEED_EDIT=1` または Bash + heredoc) / `ts-typecheck.sh` (PostToolUse, `.ts`/`.tsx` 編集後 `pnpm typecheck`) / `hackathon-check-reminder.sh` (SessionStart, 7日経過リマインダ)
-- **Skills**: `agent-prompt-sync` / `gcp-setup` / `hackathon-check`
+- **Hooks**:
+  - `seed-guard.sh` (PreToolUse, `packages/seed/src/*` 編集 block / 迂回は `CLAUDE_FORCE_SEED_EDIT=1` または Bash + heredoc)
+  - `ts-typecheck.sh` (PostToolUse, `.ts`/`.tsx` 編集後 `pnpm typecheck`)
+  - **`eraser-arch-watcher.sh`** (PostToolUse, アーキ関連 md 編集時にマーカー作成 → `.claude/.eraser-sync-pending`)
+  - **`eraser-sync-reminder.sh`** (UserPromptSubmit, マーカーがあれば次のターンで Claude に Eraser 同期を自動実行させる)
+  - `hackathon-check-reminder.sh` (SessionStart, 7日経過リマインダ)
+- **Skills**: `agent-prompt-sync` / `gcp-setup` / `hackathon-check` / `eraser-arch-sync`
 - **Subagents**: `mock-llm-reviewer` / `architecture-consistency-checker` / `hackathon-compliance-auditor` / `prompt-quality-reviewer`
 
 ## 意図的未実装 (バグではない)

@@ -1,15 +1,16 @@
 # Belvedere — Product Brief
 
 > 1人1分で読める版。審査基準①〜⑤ に沿って組み立てた。
-> 2026-04-30: 「風 (WindEvent)」概念を廃止し、AI Agent の役割を「チケット品質補助 + 4儀式運営補助」に絞った。
+> 2026-04-30: 「風 (WindEvent)」概念を廃止。
+> 2026-05-03: Refinement Agent (5番目) を追加 + Project エンティティ + valueImpact (priority と独立した high/medium/low 軸) を導入。
 
 ---
 
 ## 1. 一言で
 
-**Belvedere** は、形骸化したスクラム儀式を **AIが「チケット品質」と「儀式運営」の両面から底上げする** プロジェクト管理サービス。
-チケットを書くのは **人間** (PO / SM / Dev)、AI Agent は **完了定義 (DoD)・User Story紐付け・ストーリーポイント** の不足を検出し提案する。
-4つのスクラム儀式 (Planning / Daily / Review / Retrospective) では議題ドラフト・要約・Try転記など面倒を引き受ける。
+**Belvedere** は、形骸化したスクラム儀式を **AIが「チケット品質」と「儀式運営」の両面から底上げする** プロジェクト管理サービス。比喩: 螺旋階段を上った先の眺望 (Belvedere)。
+チケットを書くのは **人間** (PO / SM / Dev)、AI Agent は **完了定義 (DoD)・User Story紐付け・ストーリーポイント・valueImpact** の不足を検出し提案する。
+**5つのスクラム儀式** (Planning / Daily / Refinement / Review / Retrospective) では議題ドラフト・要約・粒度診断・Try転記など面倒を引き受ける。
 
 ## 2. 解く課題
 
@@ -53,7 +54,14 @@ Jiraを使っているチームで広く起きる症状:
 | 静的なルール | 過去ふりかえりやチームの判断履歴から **学習** (ベクトル検索) |
 | ユーザー起点 | チケット保存 / Slack投稿 / 儀式時刻 を **トリガに自分から動く** |
 
-ADK (Agent Development Kit) で **Planner / Daily / Reviewer / Retrospective + Orchestrator** のマルチエージェント構成。
+ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**。各儀式に専用画面 + 専用 Agent。
+
+特に **Refinement Agent** は次スプリント候補の **5観点診断**:
+1. Story 粒度過大 (SP > 8 → 分割推奨)
+2. 依存関係未整理 (parentTicketId / blockedBy 欠落)
+3. valueImpact 未設定
+4. priority × valueImpact ミスマッチ (例: priority=urgent ∧ valueImpact=low)
+5. 同 Epic 配下の SP 見積バラつき異常
 
 ## 6. 競合・既存ツールとの差
 
@@ -81,15 +89,19 @@ ADK (Agent Development Kit) で **Planner / Daily / Reviewer / Retrospective + O
    │ Web画面 / Slack            ├─▶ チケット保存 イベント受信
    ▼                           ├─▶ Slack 監視
 [Belvedere Orchestrator]   ──────  ├─▶ GitHub PR 監視
-   │                           ├─▶ Calendar 監視 (儀式時刻)
-   ├─▶ Planner Agent           └─▶ 障害観測 (Sentry)
-   ├─▶ Daily Agent
-   ├─▶ Reviewer Agent
-   └─▶ Retrospective Agent
+   │  (gemini-2.5-flash)       ├─▶ Calendar 監視 (儀式時刻)
+   │                           └─▶ 障害観測 (Sentry)
+   ├─▶ Planner Agent       (Sprint Planning 支援)
+   ├─▶ Daily Agent         (Daily Scrum 支援)
+   ├─▶ Refinement Agent    (Backlog Refinement 5観点診断)
+   ├─▶ Reviewer Agent      (Sprint Review 準備)
+   └─▶ Retrospective Agent (Retrospective Try 抽出)
         │
-        ▼ 統一データレイヤ (Epic / Story / Task / Ceremony / HealthScore)
+        ▼ 統一データレイヤ (Workspace > Project > Epic > UserStory > Task / Ceremony / CeremonyHealthScore)
+        │  (Project ごとに idPrefix 自由設定 / 例: BV for Belvedere Core)
         │
-        └─▶ Web UI (採用UI v3/13 — Hand×Digital)
+        └─▶ Web UI (Nuxt 3 + Vue 3 SSR / Cloud Run / Claude Design)
+              5 画面: Backlog (Refinement 統合) / Planning / Daily / Review / Retrospective
 ```
 
 GCPスタック (必須要件):
