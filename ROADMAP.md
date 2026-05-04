@@ -44,29 +44,34 @@ gantt
 
 ## マイルストーン (4週間 = 1フェーズ で区切る)
 
-### Phase 0 / 4/29 〜 5/12 — **「ローカルでエージェントが動く」**
+### Phase 0 / 4/29 〜 5/12 — **「ローカルでエージェントが動く」** ✅ ほぼ完了 (2026-05-04)
 
-ゴール: GCPアカウントが無くても、`pnpm dev` で起動して mock LLM でエージェントが Slack 風モックを巡回する状態。
+ゴール: GCPアカウントが無くても、`pnpm dev` で起動して mock LLM でエージェントが動作する状態。
 
-- [x] UI 20案 (4/28 - 4/29)
-- [ ] PRODUCT_BRIEF / ARCHITECTURE / DATA_MODEL / AGENT_DESIGN 確定 (5/2)
-- [ ] monorepo scaffold + Docker (5/2)
-- [ ] LLM プロバイダ抽象 (mock / gemini / vertex) (5/4)
-- [ ] Mock Agent runtime (Tool呼び出しループ) (5/8)
-- [ ] Web UI 最小版 (採用UI案を移植) (5/10)
-- [ ] Slack / GitHub のローカルモック (5/12)
+- [x] UI スタディ (4/28-30、Claude Design に切替 5/3)
+- [x] PRODUCT_BRIEF / ARCHITECTURE / DATA_MODEL / AGENT_DESIGN 確定 (Belvedere 化 + Refinement Agent + Project エンティティ + valueImpact 反映済 / 2026-05-04)
+- [x] monorepo scaffold (TypeScript pnpm workspace 9 packages + Python uv)
+- [x] LLM プロバイダ抽象 (mock 実装 / gemini / vertex は GCP 接続待ちで throw)
+- [x] Mock Agent runtime (Tool呼び出しループ + 5 ロール + Orchestrator)
+- [x] Web UI 最小版 (Nuxt 3 + Vue 3 SSR / Claude Design 由来 5 画面 + AI Panel + Detail Sheet 完成)
+- [x] git init + 個人 GitHub push (KaedeAatou/belvedere private)
+- [x] Eraser アーキ図 + 自動同期 hook
+- [ ] Slack / GitHub のローカルモック (Phase 1 と並行)
 
 検証イベント: 5/10 自分で1回スプリントを回してドッグフード
 
-### Phase 1 / 5/13 〜 6/9 — **「GCPと繋がる」**
+### Phase 1 / 5/13 〜 6/9 — **「GCPと繋がる」** 🟡 着手目前 (Phase 1 期限 5/17、残 13 日)
 
-ゴール: Cloud Run にデプロイ済み、Gemini 経由で実LLMが動く。Boot Camp 開始までに最小デモ可能。
+ゴール: Cloud Run にデプロイ済み、Vertex AI 経由で実 Gemini が動く。Boot Camp 開始までに最小デモ可能。
 
-- [ ] GCP セットアップ (アカウント / プロジェクト / API / SA) ← **ユーザー必須作業**
-- [ ] Vertex AI / Gemini API 接続
-- [ ] Firestore データ層
-- [ ] Cloud Build → Cloud Run の CI
-- [ ] Secret Manager で API key 管理
+- [ ] **GCP セットアップ** (個人アカウント `mygolanglearn@gmail.com` でプロジェクト作成 / API 有効化 / SA) ← **ユーザー必須作業 / 5/7 の 300 ドルクーポン受領後**
+- [ ] **Cloud Run 初回デプロイ** (Mock LLM のままでも 5/17 までに `/health` 200) ← Phase 1 ハードル
+- [ ] Vertex AI / Gemini API 接続 (`packages/llm/src/gemini.ts` 実装、現状 throw)
+- [ ] Python 側 `USE_REAL_ADK=true` 経路実装 (`apps/orchestrator-py/src/orchestrator/agents.py`)
+- [ ] Firestore データ層 (`packages/repo/src/firestore.ts` 実装、現状 throw)
+- [ ] Cloud Build → Cloud Run CI (WIF 経由、`KaedeAatou/belvedere` から)
+- [ ] Secret Manager で Gemini API key 管理
+- [ ] **ピッチデモ動画 1本** (5/末まで、Mock LLM ベースで OK)
 - [ ] (任意) Slack App 本物化
 - [ ] Boot Camp 参加 (6/7〜)
 

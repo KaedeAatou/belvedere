@@ -116,22 +116,34 @@ LLM_PROVIDER=vertex pnpm demo          # 〃
 
 ---
 
-## 進捗状況 (2026-05-01 現在)
+## 進捗状況 (2026-05-04 現在 / Phase 0 完了 → Phase 1 着手目前)
 
-- [x] プロダクト・アーキ・データ・エージェント設計ドキュメント
-- [x] ローカル動作の最小スキャフォールド (Mock LLM で5ロールが動作)
-- [x] Repository パターン (memory実装 / Firestore差替可能)
+### ✅ Phase 0 完了
+- [x] プロダクト・アーキ・データ・エージェント設計ドキュメント (5 儀式 / Project / valueImpact 反映済)
+- [x] ローカル動作の最小スキャフォールド (Mock LLM で5ロール + Orchestrator 動作)
+- [x] Repository パターン (memory 実装 / Firestore は GCP 接続後)
 - [x] API サーバ (Hono on Cloud Run想定) + Dockerfile + Cloud Build
-- [x] Python Orchestrator (FastAPI + ADK 雛形)
+- [x] Python Orchestrator (FastAPI + ADK 雛形 / 5 ロール INSTRUCTION)
 - [x] GitHub Actions CI / Cloud Run デプロイ (WIF想定)
-- [x] GCPセットアップ手順書 (ユーザー向け)
+- [x] GCPセットアップ手順書 (ユーザー向け `docs/setup-gcp.md`)
 - [x] Belvedere 再ブランド + Project エンティティ + Refinement Agent (5ロール目)
-- [ ] **次にユーザーがやること**: GCPプロジェクト作成 (`docs/setup-gcp.md`)
-- [ ] UI 再設計 (Claude Design)
-- [ ] 儀式別画面 5枚の実装
-- [ ] Vertex AI / Gemini API 接続
-- [ ] 初回デプロイ
-- [ ] マルチエージェント本格実装 (ADK完成)
+- [x] **Nuxt 3 + Vue 3 SSR** + Claude Design 由来 5 画面 + AI Integrity Panel
+- [x] **個人 GitHub repo** (KaedeAatou/belvedere private) + 個人 Google アカウント設定
+- [x] **Eraser アーキ図** (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) + 自動同期 hook
+- [x] **週次 hackathon-check routine** (毎週月曜 09:00 JST 自動実行)
+
+### 🟡 Phase 1 (期限 5/17、残 13 日)
+- [ ] **次にユーザーがやること**: GCPプロジェクト作成 (5/7 の 300 ドルクーポン受領後 / `docs/setup-gcp.md` / `/gcp-setup` skill 経由)
+- [ ] **次にユーザーがやること**: ピッチデモ動画 1本 (5/末まで / Mock LLM ベース可)
+- [ ] Vertex AI / Gemini API 接続 (`packages/llm/src/gemini.ts`)
+- [ ] Python `USE_REAL_ADK=true` 経路実装
+- [ ] Firestore 実装 (`packages/repo/src/firestore.ts`)
+- [ ] Cloud Run 初回デプロイ
+
+### Phase 2 (6/10 〜)
+- [ ] マルチエージェント本格実装 (ADK 完成)
+- [ ] UI demo data (BLV-xxx) と seed (WC-xxx) の統合
+- [ ] CeremonyHealthScore 計算ロジック
 
 ---
 
