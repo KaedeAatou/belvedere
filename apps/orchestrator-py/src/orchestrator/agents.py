@@ -12,13 +12,13 @@ ADK のドキュメント: https://google.github.io/adk-docs/
 
 from __future__ import annotations
 
+from typing import Any
+
 # NOTE: ADK は GCP セットアップ後に有効化する。それまではこのファイルは
 # import されないようにし、main.py からは graceful skip される。
 #
 # from google.adk.agents import Agent
 # from google.adk.tools import FunctionTool
-
-from typing import Any
 
 # ============= 儀式エージェント定義 (ADK 形式 / 雛形) =============
 #
@@ -33,11 +33,14 @@ from typing import Any
 COMMON_RULES = """
 共通ルール:
 - 出力は日本語
-- 根拠は EP-xxx (Epic) / US-xxx (User Story) / WC-xxx (Task) で引用すること (デフォルト Project=Belvedere Core, idPrefix=BV)
+- 根拠は EP-xxx (Epic) / US-xxx (User Story) / WC-xxx (Task) で引用すること
+  (デフォルト Project=Belvedere Core, idPrefix=BV)
 - 他 Project を扱う場合は ${idPrefix}-${number} 形式に従う
 - チケット起票は人間が行う。Agent は提案のみ (重要書込前は L2 で人間確認)
 - 不確実な判断は human.ask で人間に投げる
-- スクラム / プロダクトマネジメントの既存業界語を使う (Sprint Goal / Definition of Done / Velocity / Story Point / WSJF / Business Value)。勝手な造語を作らない
+- スクラム / プロダクトマネジメントの既存業界語を使う
+  (Sprint Goal / Definition of Done / Velocity / Story Point / WSJF / Business Value)。
+  勝手な造語を作らない
 """
 
 PLANNER_INSTRUCTION = f"""
@@ -51,7 +54,8 @@ PLANNER_INSTRUCTION = f"""
 
 REFINEMENT_INSTRUCTION = f"""
 あなたは Belvedere の Refinement Agent です。
-責務: Backlog Refinement の運営支援。次スプリント以降の候補 Story を以下の5観点で診断し、提案を返す。
+責務: Backlog Refinement の運営支援。
+次スプリント以降の候補 Story を以下の5観点で診断し、提案を返す。
 
 (1) Story 粒度過大: estimatePt > 8 のものを分割候補とともに提示
 (2) 依存関係未整理: blockedBy / parentTicketId (US-紐付け) のいずれも欠落しているものを警告
@@ -91,7 +95,8 @@ RETROSPECTIVE_INSTRUCTION = f"""
 - 議事から Try を抽出 (Keep / Problem / Try のうち Try)
 - owner の候補を提案 (member.list で確認)
 - 翌スプリント WIP への転記は L2 (人間確認後)
-- 5儀式 (Planning / Daily / Refinement / Review / Retrospective) の CeremonyHealthScore 推移を計算し、低下している儀式を指摘
+- 5儀式 (Planning / Daily / Refinement / Review / Retrospective) の
+  CeremonyHealthScore 推移を計算し、低下している儀式を指摘
 {COMMON_RULES}
 """
 
@@ -99,7 +104,8 @@ ORCHESTRATOR_INSTRUCTION = f"""
 あなたは Belvedere の Orchestrator です。
 責務: 5儀式エージェントの起動順・並列度を判定するルーティングエージェント。
 - 軽量モデル (gemini-2.5-flash) を使い、判定のみ
-- 月曜朝なら Planner、平日朝なら Daily、Refinement 時刻なら Refinement、レビュー1営業日前なら Reviewer、ふりかえり時刻なら Retrospective を起動
+- 月曜朝なら Planner、平日朝なら Daily、Refinement 時刻なら Refinement、
+  レビュー1営業日前なら Reviewer、ふりかえり時刻なら Retrospective を起動
 - 失敗時は代替ルーティングを提案
 - 重い思考はサブエージェントに委譲する
 {COMMON_RULES}
@@ -133,4 +139,6 @@ def build_agents(use_real_adk: bool = False) -> dict[str, Any]:
     #                       instruction=PLANNER_INSTRUCTION, tools=[...]),
     #     ...
     # }
-    raise NotImplementedError("ADK実装は GCP セットアップ後に有効化します (docs/setup-gcp.md 参照)。")
+    raise NotImplementedError(
+        "ADK実装は GCP セットアップ後に有効化します (docs/setup-gcp.md 参照)。"
+    )
