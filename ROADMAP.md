@@ -65,6 +65,7 @@ gantt
 ゴール: Cloud Run にデプロイ済み、Vertex AI 経由で実 Gemini が動く。Boot Camp 開始までに最小デモ可能。
 
 - [ ] **GCP セットアップ** (個人アカウント `mygolanglearn@gmail.com` でプロジェクト作成 / API 有効化 / SA) ← **ユーザー必須作業 / 5/7 の 300 ドルクーポン受領後**
+- [ ] **`.github/workflows/deploy-api.yml` の 2 点修正** (GCP セットアップ完了後に 1 回だけ): (a) `on:` に `push: branches: [main]` を戻す / (b) `WIF_PROVIDER` 内 `PROJECT_NUMBER` を実プロジェクト番号に置換
 - [ ] **Cloud Run 初回デプロイ** (Mock LLM のままでも 5/17 までに `/health` 200) ← Phase 1 ハードル
 - [ ] Vertex AI / Gemini API 接続 (`packages/llm/src/gemini.ts` 実装、現状 throw)
 - [ ] Python 側 `USE_REAL_ADK=true` 経路実装 (`apps/orchestrator-py/src/orchestrator/agents.py`)

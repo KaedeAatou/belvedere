@@ -1,22 +1,21 @@
 name: Deploy API to Cloud Run
 
-# 本番デプロイのトリガ:
-# - main へ push (apps/api or packages/* が変わった時)
+# 本番デプロイのトリガ (現在: 手動のみ):
 # - 手動 (workflow_dispatch)
 #
+# 🔴 Phase 1 着手時 (GCP セットアップ完了後) に以下 2 点を **戻す**:
+#   1. 下記 `on:` に `push: branches: [main] paths: [...]` を再追加
+#      (template は git log で旧 commit を参照)
+#   2. env の WIF_PROVIDER 内 `PROJECT_NUMBER` を実数に置換
+#      (例: `projects/123456789/locations/global/...`)
+#      置換しないと auth ステップで invalid_request エラーで即失敗する。
+#
+# それまでは push トリガ無効 (毎 push 通知抑制)。
+#
 # 認証は Workload Identity Federation を使う (鍵ファイル不要)。
-# 事前設定 (1回だけユーザーが行う):
-#   docs/setup-github-wif.md 参照 (Claude が後で書く)
+# 事前設定 (1回だけユーザーが行う): docs/setup-github-wif.md 参照
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'apps/api/**'
-      - 'packages/**'
-      - 'pnpm-lock.yaml'
-      - 'infra/cloudbuild.yaml'
-      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
     inputs:
       env:
