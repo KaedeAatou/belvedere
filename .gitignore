@@ -41,3 +41,4 @@ venv/
 /tmp/
 /.claude/local/
 /.claude/.last-hackathon-check
+/.claude/.eraser-sync-pending
