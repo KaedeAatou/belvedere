@@ -16,10 +16,11 @@ substitutions:
   _ENV: dev
   _RUNTIME_SA: belvedere-runtime
   _LLM_PROVIDER: mock      # GCPセットアップ完了後に gemini に切替
+  _TAG: latest             # CI から GITHUB_SHA::7 を渡す。SHORT_SHA は gcloud builds submit 経由では空のため _TAG で代替
 
-# image tag は SHORT_SHA を使う
+# image tag は _TAG (= short SHA) を使う
 images:
-  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${_TAG}"
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest"
 
 steps:
@@ -29,7 +30,7 @@ steps:
     args:
       - build
       - -t
-      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}"
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${_TAG}"
       - -t
       - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:latest"
       - -f
@@ -50,7 +51,7 @@ steps:
       - run
       - deploy
       - "${_SERVICE}-${_ENV}"
-      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${_TAG}
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated   # Phase 1-A 初回デプロイ専用 (/health 200 確認用)。Phase 1-B (5/18-22) で Firebase Auth 導入時に削除して --no-allow-unauthenticated + IAP / Firebase Auth 検証ミドルウェアに切替
