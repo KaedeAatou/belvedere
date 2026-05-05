@@ -89,6 +89,10 @@ apps/
 
 > 新しい top-level `*.md` を勝手に作らない。既存を更新する。
 
+## Git commit (must)
+
+`git commit` 前に必ず **`belvedere-commit`** skill を呼ぶ。フォーマット強制 (1 行目 `[<種別>]<要約>` / 2 行目 空 / 3 行目以降 変更理由)。詳細: `.claude/skills/belvedere-commit/`。`commit-commands:commit` plugin は使わない。
+
 ## 自動化の可視化
 
 `! ./.claude/status.sh` で hooks / subagents / skills の一覧 + 色 + 起動回数 + 直近発火履歴を表示。
