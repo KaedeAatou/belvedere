@@ -16,14 +16,16 @@
 
 ## 1. 変数を決める
 
+命名規則: GCP 側のリソースは `belvedere-` プレフィックスで統一 (GitHub 側の `KaedeAatou` 系と境界を明示するため)。
+
 ```bash
 export PROJECT=belvedere-dev-atrium
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
-export POOL_ID=github
-export PROVIDER_ID=github
-export GH_OWNER=YOUR_GITHUB_USERNAME    # ← あなたのGitHubアカウント
-export GH_REPO=ai-agent-hackathon       # ← リポジトリ名
-export SA_NAME=github-actions
+export POOL_ID=belvedere-ci-pool          # GCP の WIF Pool 名
+export PROVIDER_ID=belvedere-ci-github    # GCP の WIF Provider 名 (GitHub Actions 用 OIDC)
+export GH_OWNER=KaedeAatou                # GitHub 側のアカウント (個人 HN)
+export GH_REPO=belvedere                  # GitHub 側のリポジトリ名
+export SA_NAME=belvedere-deployer         # GCP のデプロイ用 SA 名 (GitHub Actions が演じる相手)
 export SA_EMAIL=${SA_NAME}@${PROJECT}.iam.gserviceaccount.com
 ```
 
@@ -33,7 +35,7 @@ export SA_EMAIL=${SA_NAME}@${PROJECT}.iam.gserviceaccount.com
 gcloud iam workload-identity-pools create $POOL_ID \
   --project=$PROJECT \
   --location=global \
-  --display-name="GitHub Actions Pool"
+  --display-name="Belvedere CI/CD Pool"
 ```
 
 ## 3. Provider 作成 (GitHub OIDC)
@@ -43,22 +45,22 @@ gcloud iam workload-identity-pools providers create-oidc $PROVIDER_ID \
   --project=$PROJECT \
   --location=global \
   --workload-identity-pool=$POOL_ID \
-  --display-name="GitHub Actions Provider" \
+  --display-name="GitHub Actions OIDC Provider" \
   --attribute-condition="assertion.repository_owner == '$GH_OWNER'" \
   --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 ```
 
-`attribute-condition` で「自分のorgのリポジトリからのリクエストのみ受け付ける」制限を入れている。
+`attribute-condition` で「自分のアカウントのリポジトリからのリクエストのみ受け付ける」制限を入れている (= `KaedeAatou` 以外を弾く)。
 
 ## 4. デプロイ用サービスアカウント作成
 
 ```bash
 gcloud iam service-accounts create $SA_NAME \
   --project=$PROJECT \
-  --display-name="GitHub Actions Deployer"
+  --display-name="Belvedere CI/CD Deployer (演じる相手は GitHub Actions)"
 
-# Cloud Build / Cloud Run / Artifact Registry に必要な権限
+# Cloud Build / Cloud Run / Artifact Registry に必要な権限 6 つ
 for ROLE in \
   roles/cloudbuild.builds.editor \
   roles/run.admin \
@@ -89,11 +91,11 @@ gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL \
 
 ```yaml
 env:
-  WIF_PROVIDER: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
-  WIF_SA: github-actions@belvedere-dev-atrium.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
 ```
 
-`PROJECT_NUMBER` を §1 で取得した値に置換。
+`PROJECT_NUMBER` を §1 で取得した値に置換 (例: `876087923874`)。
 
 ```bash
 echo $PROJECT_NUMBER
