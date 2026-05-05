@@ -72,9 +72,10 @@ jobs:
 
       - name: Submit Cloud Build
         run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
           gcloud builds submit \
             --config infra/cloudbuild.yaml \
-            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=mock \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=mock,_TAG=$SHORT_SHA \
             --project=${{ steps.target.outputs.project }} \
             .
 
