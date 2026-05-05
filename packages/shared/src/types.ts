@@ -79,9 +79,39 @@ export interface Ticket {
   parentTicketId?: string;
   /** 依存先チケット ID (このチケットを進めるために先行で完了が必要) */
   blockedBy?: string[];
+  /** Sprint Review 録画から自動抽出された指摘の場合、出典の ReviewRecording.id */
+  sourceRecordingId?: string;
+  /** 録画内の発言タイムスタンプ (秒) — UI から動画の該当箇所にジャンプする用 */
+  sourceTimestampSec?: number;
+  /** 抽出元の発言テキスト (Reviewer Agent が文字起こし → 抜粋) */
+  sourceQuote?: string;
+  /** 発言者の Member.userId */
+  sourceSpeakerId?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: AgentSource;
+}
+
+// === ReviewRecording (Sprint Review 録画 / 2026-05-04 追加) ===
+/**
+ * Sprint Review の録画動画。Reviewer Agent が Gemini Multimodal で動画を読み取り、
+ * 発言から指摘を抽出 → Ticket 候補 (sourceRecordingId 紐付き) を生成する。
+ */
+export interface ReviewRecording {
+  id: string;
+  workspaceId: string;
+  projectId?: string;
+  sprintId: string;
+  /** Cloud Storage URL (gs://belvedere-{env}-review-recordings/...) */
+  videoUrl: string;
+  /** 動画長 (秒) */
+  durationSec?: number;
+  uploadedAt: string;
+  uploadedBy: string;
+  /** この動画から Reviewer Agent が生成した Ticket ID 一覧 */
+  extractedTicketIds?: string[];
+  /** 抽出処理のステータス */
+  extractionStatus?: 'pending' | 'running' | 'succeeded' | 'failed';
 }
 
 // === Ceremony ===
@@ -132,6 +162,17 @@ export interface Epic {
   status: 'planned' | 'active' | 'completed' | 'cancelled';
   /** プロダクトゴールへの貢献度 (Epic レベルでも持てる) */
   valueImpact?: ValueImpact;
+  /**
+   * なぜこの Epic が必要か (戦略意図 / Why)。
+   * 開発者がチケット画面から 1 クリックで辿れるべき情報。
+   * 空のままだと配下のチケットが「何のために?」を見失う形骸化サイン。
+   * Refinement Agent の第6観点「戦略整合性」がこれを使ってドリフトを検出する。
+   */
+  rationale?: string;
+  /** 達成判定の数値指標 (例: "DoD 充足率 60→90%", "デモ環境セットアップ 3h→10min") */
+  successMetric?: string;
+  /** 上位戦略テーマ (任意、SAFe Strategic Theme に相当) */
+  strategicTheme?: string;
   createdAt: string;
 }
 

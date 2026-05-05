@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // Belvedere — CLI demo
 // 使い方:
-//   pnpm --filter @kazaguruma/cli dev demo                          # Plannerデモを実行
-//   pnpm --filter @kazaguruma/cli dev plan       "Sprint 13の議題を作って"
-//   pnpm --filter @kazaguruma/cli dev daily      "..."
-//   pnpm --filter @kazaguruma/cli dev refinement "..."
-//   pnpm --filter @kazaguruma/cli dev review     "..."
-//   pnpm --filter @kazaguruma/cli dev retro      "..."
+//   pnpm --filter @belvedere/cli dev demo                          # Plannerデモを実行
+//   pnpm --filter @belvedere/cli dev plan       "Sprint 13の議題を作って"
+//   pnpm --filter @belvedere/cli dev daily      "..."
+//   pnpm --filter @belvedere/cli dev refinement "..."
+//   pnpm --filter @belvedere/cli dev review     "..."
+//   pnpm --filter @belvedere/cli dev retro      "..."
 
-import { runAgent, buildSystemPrompt, buildRegistry } from '@kazaguruma/agent';
-import { createLLMProvider } from '@kazaguruma/llm';
-import { buildTools } from '@kazaguruma/tools';
-import { createRepoContainer } from '@kazaguruma/repo';
-import type { AgentName } from '@kazaguruma/shared';
+import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
+import { createLLMProvider } from '@belvedere/llm';
+import { buildTools } from '@belvedere/tools';
+import { createRepoContainer } from '@belvedere/repo';
+import type { AgentName } from '@belvedere/shared';
 
 type Cmd = 'demo' | 'plan' | 'daily' | 'refinement' | 'review' | 'retro' | 'help';
 
@@ -108,11 +108,11 @@ async function main(): Promise<void> {
 Belvedere — CLI
 
   pnpm demo                                       Plannerのデモ実行 (デフォルト)
-  pnpm --filter @kazaguruma/cli dev plan       "プロンプト"
-  pnpm --filter @kazaguruma/cli dev daily      "プロンプト"
-  pnpm --filter @kazaguruma/cli dev refinement "プロンプト"
-  pnpm --filter @kazaguruma/cli dev review     "プロンプト"
-  pnpm --filter @kazaguruma/cli dev retro      "プロンプト"
+  pnpm --filter @belvedere/cli dev plan       "プロンプト"
+  pnpm --filter @belvedere/cli dev daily      "プロンプト"
+  pnpm --filter @belvedere/cli dev refinement "プロンプト"
+  pnpm --filter @belvedere/cli dev review     "プロンプト"
+  pnpm --filter @belvedere/cli dev retro      "プロンプト"
 
 env:
   LLM_PROVIDER=mock     (デフォルト)。gemini/vertex は GCP 接続後に実装。

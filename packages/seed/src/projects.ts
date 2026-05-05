@@ -1,4 +1,4 @@
-import type { Project } from '@kazaguruma/shared';
+import type { Project } from '@belvedere/shared';
 
 const NOW = '2026-05-01T03:00:00+09:00';
 

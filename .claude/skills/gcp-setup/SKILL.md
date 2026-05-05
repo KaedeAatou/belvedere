@@ -2,6 +2,7 @@
 name: gcp-setup
 description: docs/setup-gcp.md の14ステップを対話的に進めるための手引き。ユーザーは AWS実務経験あり / GCP未経験のため、各ステップで AWS の対応サービスを併記すること。billing有効化やプロジェクト作成など破壊的でないがコスト発生する操作はユーザーの明示的なYesを取ってから流す。
 disable-model-invocation: true
+color: yellow
 ---
 
 # GCP Setup Walkthrough
@@ -38,7 +39,7 @@ disable-model-invocation: true
 
 ユーザーが「GCPできた」と言えるのは:
 - §1〜§8 が完了
-- `gcloud config list` で project が `belvedere-dev-2026` (or 類似)
+- `gcloud config list` で project が `belvedere-dev-atrium` (or 類似)
 - `gcloud services list --enabled --project=$PROJECT | grep run` で Cloud Run が enable
 
 完了したら、Claude (このスキル外) で以下を進める:

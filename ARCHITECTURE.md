@@ -210,8 +210,8 @@ ai-agent-hackathon/
 
 ## 6. 環境分離
 
-- `kazaguruma-dev` プロジェクト: ローカル開発+ステージング兼用
-- `kazaguruma-prod` プロジェクト: 本番 (ピッチデモ用)
+- `belvedere-dev` プロジェクト: ローカル開発+ステージング兼用
+- `belvedere-prod` プロジェクト: 本番 (ピッチデモ用)
 - 認可: Workload Identity Federation で GitHub Actions ↔ GCP (鍵をリポジトリに置かない)
 
 ---
@@ -228,16 +228,21 @@ ai-agent-hackathon/
 ## 8. セキュリティ (審査基準⑤ + WC-110対応)
 
 - Secret Manager で API key / Slack token 管理 (リポジトリには絶対置かない)
-- IAP or Firebase Auth で Web 認証
-- OWASP Top 10 自動チェック (release gate, GitHub Actions)
-- Cloud Armor で WAF
-- 監査: Cloud Audit Logs を BigQuery にエクスポート (任意)
+- **Firebase Auth (個人 Google) で Web / API / MCP HTTP 認証** (`ROADMAP.md` Phase 1-B、5/18-22 着手) — IAP は本番ドメイン取得後に検討 (Phase 4)
+- Firestore セキュリティルールで個人 Google アカウントだけが read/write できるよう制限 (個人参加要件のエビデンス)
+- MCP HTTP は OAuth 2.1 (個人 Google アカウント、`ROADMAP.md` Phase 1-D)
+- WIF (Workload Identity Federation) で GitHub Actions ↔ GCP デプロイ時の鍵レス認証 (= ユーザー認証ではなく CI 認証)
+- OWASP Top 10 自動チェック (release gate, GitHub Actions、Phase 4)
+- Cloud Armor で WAF (Phase 4 / 任意)
+- 監査: Cloud Audit Logs を BigQuery にエクスポート (Phase 4 / 任意)
+
+**現状 (2026-05-05)**: 認証コードは未実装 (`apps/web` / `apps/api` / `apps/mcp-server` すべて認証ミドルウェアなし)。`infra/cloudbuild.yaml` も `--allow-unauthenticated` で公開状態 = Phase 1-A の初回デプロイ専用設定。Phase 1-B 完了時点で `--no-allow-unauthenticated` + Firebase Auth 検証ミドルウェアに切替。
 
 ---
 
 ## 9. Open Questions (ユーザーに後で確認)
 
-1. ドメイン名: kazaguruma.app / kazaguruma.dev / 取らないか
+1. ドメイン名: belvedere.app / belvedere.dev / 取らないか
 2. Slack App は本物を作るか、当面はモックのままか
 3. チーム化する場合、フロントorバックどちらを任せたいか
 4. ハッカソン提出時にリポジトリPublicが必須か (応募方法 Coming Soon)

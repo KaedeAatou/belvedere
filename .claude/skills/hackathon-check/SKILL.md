@@ -1,6 +1,7 @@
 ---
 name: hackathon-check
 description: ハッカソン要件 (DevOps × AI Agent Hackathon 2026) を満たしているかチェックする。公式 Notion を再取得してプロジェクト現状と突き合わせ、HACKATHON_COMPLIANCE.md を更新し、🔴 リスクがあれば警告する。
+color: red
 ---
 
 # /hackathon-check

@@ -18,7 +18,7 @@ export default defineNuxtConfig({
 
   // workspace パッケージを Nitro バンドルに含める (.js extension なし問題回避)
   build: {
-    transpile: ['@kazaguruma/shared', '@kazaguruma/seed', '@kazaguruma/repo'],
+    transpile: ['@belvedere/shared', '@belvedere/seed', '@belvedere/repo'],
   },
 
   // components/ サブディレクトリの prefix を無効化

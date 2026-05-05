@@ -1,5 +1,5 @@
-import type { AgentName, AgentRun, AgentStep } from '@kazaguruma/shared';
-import type { LLMMessage, LLMProvider, LLMRequest } from '@kazaguruma/llm';
+import type { AgentName, AgentRun, AgentStep } from '@belvedere/shared';
+import type { LLMMessage, LLMProvider, LLMRequest } from '@belvedere/llm';
 import { specsOf, type ToolRegistry } from './tool';
 
 export interface AgentRuntimeOpts {

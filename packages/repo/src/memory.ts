@@ -12,8 +12,8 @@ import type {
   UserStory,
   Project,
   Ritual,
-} from '@kazaguruma/shared';
-import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@kazaguruma/seed';
+} from '@belvedere/shared';
+import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
 import type {
   TicketRepository,
   SprintRepository,
@@ -70,6 +70,7 @@ class MemEpicRepo implements EpicRepository {
     return xs;
   }
   async get(id: string): Promise<Epic | null> { return this.store.get(id) ?? null; }
+  async upsert(e: Epic): Promise<void> { this.store.set(e.id, { ...e }); }
 }
 
 class MemUserStoryRepo implements UserStoryRepository {

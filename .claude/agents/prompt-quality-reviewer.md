@@ -2,6 +2,7 @@
 name: prompt-quality-reviewer
 description: Belvedere プロジェクトのエージェントプロンプト (packages/agent/src/prompts.ts / apps/orchestrator-py/src/orchestrator/agents.py) を docs/PROMPTING_GUIDE.md (Anthropic Prompting 101 ベース) のチェックリストで監査する。プロンプト変更時に呼び出して 10点構造フレームワーク + 8章技法を満たしているか判定し、不足があれば具体的な追加項目を提案する。
 tools: Read, Grep, Glob, Edit
+color: blue
 ---
 
 # Prompt Quality Reviewer

@@ -1,5 +1,5 @@
-import type { AgentTool } from '@kazaguruma/agent';
-import type { RepoContainer } from '@kazaguruma/repo';
+import type { AgentTool } from '@belvedere/agent';
+import type { RepoContainer } from '@belvedere/repo';
 
 /**
  * Tool ファクトリ。RepoContainer を注入してすべての Tool を作る。
@@ -140,7 +140,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     spec: {
       name: 'backlog.refinement.check',
       description:
-        'バックログ候補チケット群をリファインメント観点で診断する。粒度過大 / 依存関係未整理 / valueImpact 未設定 / priority↔valueImpact ミスマッチ / SP 見積バラつき異常 を検出。',
+        'バックログ候補チケット群をリファインメント 6 観点で診断する。粒度過大 / 依存関係未整理 / valueImpact 未設定 / priority↔valueImpact ミスマッチ / SP 見積バラつき異常 / Epic.rationale 欠落 (戦略意図ドリフト) を検出。',
       parameters: {
         type: 'object',
         properties: {
@@ -221,8 +221,23 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
         }
       }
 
+      // 第6観点: 戦略整合性 — Epic.rationale (戦略意図 / Why) が空のものを警告
+      const epics = await repo.epics.list({
+        ...(projectId !== undefined && { projectId }),
+      });
+      for (const e of epics) {
+        if (!e.rationale || e.rationale.trim().length === 0) {
+          findings.push({
+            ticketId: e.id,
+            signal: 'strategic_intent_missing',
+            detail: `Epic ${e.id} (${e.name}) に rationale (戦略意図 / Why) が未設定。配下のチケットが「何のために?」を見失う形骸化サイン。`,
+          });
+        }
+      }
+
       return {
         scanned: tickets.length,
+        scannedEpics: epics.length,
         findingCount: findings.length,
         findings,
       };
@@ -276,6 +291,65 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     },
   };
 
+  // Sprint Review 録画 → 指摘抽出 → Ticket 候補 (Phase 2 で Gemini Multimodal 接続予定、現状はモック)
+  const videoExtractIssuesTool: AgentTool<{ recordingId: string }, unknown> = {
+    spec: {
+      name: 'video.extractIssues',
+      description:
+        'Sprint Review 録画動画 (ReviewRecording) を Multimodal LLM で読み取り、ステークホルダの指摘を抽出して Ticket 起票候補に変換する。各候補に sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId を紐付ける。',
+      parameters: {
+        type: 'object',
+        properties: {
+          recordingId: { type: 'string', description: 'ReviewRecording.id' },
+        },
+        required: ['recordingId'],
+      },
+    },
+    async invoke({ recordingId }) {
+      // Phase 2 で Gemini 2.5 Pro Multimodal に接続予定。現状はモック応答。
+      return {
+        recordingId,
+        extractedCount: 3,
+        candidates: [
+          {
+            sourceTimestampSec: 755,
+            sourceQuote: 'この緑のボタン、目立たないから色を変えてほしい',
+            sourceSpeakerId: 'tanaka',
+            suggestedTitle: 'レビュー指摘: 主要 CTA ボタンの視認性改善',
+            suggestedDoD: [
+              'ボタンの色を Hoshino 暖オレンジ系に統一',
+              'WCAG AA コントラスト 4.5:1 以上確保',
+              'a11y チェックリスト通過',
+            ],
+            suggestedSP: 2,
+            suggestedValueImpact: 'medium',
+          },
+          {
+            sourceTimestampSec: 1122,
+            sourceQuote: '一覧の並び順、自分でカスタマイズできるようにしてほしい',
+            sourceSpeakerId: 'tanaka',
+            suggestedTitle: 'レビュー指摘: チケット一覧の並び順カスタマイズ',
+            suggestedDoD: ['priority / valueImpact / updatedAt の3軸でソート可能', 'ユーザー設定を localStorage に永続化'],
+            suggestedSP: 5,
+            suggestedValueImpact: 'medium',
+          },
+          {
+            sourceTimestampSec: 1480,
+            sourceQuote: 'AI が提案した DoD、出典も一緒に見せてくれる?',
+            sourceSpeakerId: 'okubo',
+            suggestedTitle: 'レビュー指摘: AI 提案に出典 (US/Epic/過去類似) を併記',
+            suggestedDoD: [
+              'AIPanel に source citation 行を追加',
+              '出典をクリックで該当 Epic/Story にジャンプ',
+            ],
+            suggestedSP: 3,
+            suggestedValueImpact: 'high',
+          },
+        ],
+      };
+    },
+  };
+
   return [
     ticketListTool,
     sprintGetTool,
@@ -286,5 +360,6 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     memberListTool,
     slackPostTool,
     humanAskTool,
+    videoExtractIssuesTool,
   ];
 }

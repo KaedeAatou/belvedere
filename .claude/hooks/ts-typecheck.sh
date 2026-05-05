@@ -18,6 +18,8 @@ except Exception:
     print('')
 ")
 
+LOG="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/.hooks.log"
+
 # 対象判定
 is_ts_or_tsx() {
   case "$1" in
@@ -43,17 +45,21 @@ if ! is_in_pkg_or_apps "$FILE_PATH"; then exit 0; fi
 if is_test_file "$FILE_PATH"; then exit 0; fi
 
 REPO_ROOT="/Users/kagayayuuki/Projects/ai-agent-hackathon"
-LOG=/tmp/kaza-typecheck.log
+TYPECHECK_OUT=/tmp/kaza-typecheck.log
+
+printf '\033[34m🔍 [ts-typecheck]\033[0m running for %s ...\n' "${FILE_PATH##*/}" >&2
 
 cd "$REPO_ROOT" || exit 0
 
-if pnpm typecheck >"$LOG" 2>&1; then
-  echo "[ts-typecheck] ✅ OK after $(basename "$FILE_PATH")"
+if pnpm typecheck >"$TYPECHECK_OUT" 2>&1; then
+  echo "$(date -u +%FT%TZ) [ts-typecheck] OK file=${FILE_PATH##*/}" >> "$LOG"
+  printf '\033[32m🔍 [ts-typecheck]\033[0m ✅ OK after %s\n' "${FILE_PATH##*/}" >&2
 else
+  echo "$(date -u +%FT%TZ) [ts-typecheck] FAILED file=${FILE_PATH##*/}" >> "$LOG"
   {
-    echo "[ts-typecheck] ❌ FAILED after $(basename "$FILE_PATH")"
+    printf '\033[31m🔍 [ts-typecheck]\033[0m ❌ FAILED after %s\n' "${FILE_PATH##*/}"
     echo "----- last 30 lines -----"
-    tail -30 "$LOG"
+    tail -30 "$TYPECHECK_OUT"
   } >&2
   exit 2
 fi

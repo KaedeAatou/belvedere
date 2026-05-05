@@ -1,4 +1,4 @@
-# 風車 Orchestrator (Python / FastAPI / ADK)
+# Belvedere Orchestrator (Python / FastAPI / ADK)
 
 ADKでマルチエージェント本実装を行う Python サービス。
 TS 側 (`apps/api`) が「ハーネスとAPIゲートウェイ」、こちらが「本物のADKマルチエージェント」を担当する想定。
@@ -33,7 +33,7 @@ curl -X POST http://localhost:8081/agents/planner/invoke \
 1. `gcloud auth application-default login`
 2. 環境変数:
    ```bash
-   export GOOGLE_CLOUD_PROJECT=kazaguruma-dev-2026
+   export GOOGLE_CLOUD_PROJECT=belvedere-dev-atrium
    export GOOGLE_CLOUD_LOCATION=asia-northeast1
    export GOOGLE_GENAI_USE_VERTEXAI=true
    export USE_REAL_ADK=true

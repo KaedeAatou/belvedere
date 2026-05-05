@@ -1,5 +1,5 @@
 {
-  "name": "@kazaguruma/web",
+  "name": "@belvedere/web",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "postinstall": "nuxt prepare"
   },
   "dependencies": {
-    "@kazaguruma/shared": "workspace:*",
-    "@kazaguruma/seed": "workspace:*",
-    "@kazaguruma/repo": "workspace:*",
+    "@belvedere/shared": "workspace:*",
+    "@belvedere/seed": "workspace:*",
+    "@belvedere/repo": "workspace:*",
     "nuxt": "^3.14.0",
     "vue": "^3.5.0",
     "vue-router": "^4.4.0"

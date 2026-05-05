@@ -2,6 +2,7 @@
 name: hackathon-compliance-auditor
 description: Belvedere プロジェクトが DevOps × AI Agent Hackathon 2026 の応募要件を満たしているか定期的に監査する。HACKATHON_COMPLIANCE.md と公式 Notion ページ (memory/hackathon_url.md の取得手順) を突き合わせ、🔴/🟡/🟢 ステータスを更新し、要件違反リスクや見落としを早期に検出する。
 tools: Read, Grep, Glob, Bash, Edit, WebFetch
+color: red
 ---
 
 # Hackathon Compliance Auditor

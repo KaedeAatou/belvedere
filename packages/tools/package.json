@@ -1,5 +1,5 @@
 {
-  "name": "@kazaguruma/tools",
+  "name": "@belvedere/tools",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kazaguruma/shared": "workspace:*",
-    "@kazaguruma/repo": "workspace:*",
-    "@kazaguruma/agent": "workspace:*"
+    "@belvedere/shared": "workspace:*",
+    "@belvedere/repo": "workspace:*",
+    "@belvedere/agent": "workspace:*"
   }
 }

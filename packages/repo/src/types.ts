@@ -13,7 +13,7 @@ import type {
   Project,
   Status,
   Ritual,
-} from '@kazaguruma/shared';
+} from '@belvedere/shared';
 
 export interface TicketQuery {
   projectId?: string;
@@ -45,6 +45,7 @@ export interface ProjectRepository {
 export interface EpicRepository {
   list(opts?: { projectId?: string }): Promise<Epic[]>;
   get(id: string): Promise<Epic | null>;
+  upsert(e: Epic): Promise<void>;
 }
 
 export interface UserStoryRepository {

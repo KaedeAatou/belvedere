@@ -29,14 +29,14 @@ permissions:
   id-token: write   # WIF に必要
 
 env:
-  GCP_PROJECT_DEV: kazaguruma-dev-2026
-  GCP_PROJECT_PROD: kazaguruma-prod-2026
+  GCP_PROJECT_DEV: belvedere-dev-atrium
+  GCP_PROJECT_PROD: belvedere-prod-atrium
   GCP_REGION: asia-northeast1
-  REPO: kazaguruma
-  SERVICE: kazaguruma-api
+  REPO: belvedere
+  SERVICE: belvedere-api
   WIF_PROVIDER: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
-  WIF_SA: github-actions@kazaguruma-dev-2026.iam.gserviceaccount.com
-  RUNTIME_SA_NAME: kazaguruma-runtime
+  WIF_SA: github-actions@belvedere-dev-atrium.iam.gserviceaccount.com
+  RUNTIME_SA_NAME: belvedere-runtime
 
 jobs:
   deploy:

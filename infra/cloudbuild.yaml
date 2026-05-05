@@ -4,17 +4,17 @@
 # 起動方法:
 #   gcloud builds submit \
 #     --config infra/cloudbuild.yaml \
-#     --substitutions=_REGION=asia-northeast1,_ENV=dev,_SERVICE=kazaguruma-api,_REPO=kazaguruma \
+#     --substitutions=_REGION=asia-northeast1,_ENV=dev,_SERVICE=belvedere-api,_REPO=belvedere \
 #     .
 #
 # あるいは GitHub 連携で push 時に自動起動
 
 substitutions:
   _REGION: asia-northeast1
-  _REPO: kazaguruma
-  _SERVICE: kazaguruma-api
+  _REPO: belvedere
+  _SERVICE: belvedere-api
   _ENV: dev
-  _RUNTIME_SA: kazaguruma-runtime
+  _RUNTIME_SA: belvedere-runtime
   _LLM_PROVIDER: mock      # GCPセットアップ完了後に gemini に切替
 
 # image tag は SHORT_SHA を使う
@@ -53,7 +53,7 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${SHORT_SHA}
       - --region=${_REGION}
       - --platform=managed
-      - --allow-unauthenticated   # MVP用。Phase 3 で IAP に
+      - --allow-unauthenticated   # Phase 1-A 初回デプロイ専用 (/health 200 確認用)。Phase 1-B (5/18-22) で Firebase Auth 導入時に削除して --no-allow-unauthenticated + IAP / Firebase Auth 検証ミドルウェアに切替
       - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
       - --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=memory,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
       - --memory=512Mi
