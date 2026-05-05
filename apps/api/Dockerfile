@@ -1,4 +1,4 @@
-# 風車 API — Cloud Run 用 Dockerfile
+# Belvedere API — Cloud Run 用 Dockerfile
 # pnpm workspace を考慮したマルチステージビルド (tsx で実行、TS無変換)
 
 # ---------- Stage 1: deps ----------
@@ -18,7 +18,7 @@ COPY packages/agent/package.json ./packages/agent/
 COPY packages/tools/package.json ./packages/tools/
 
 # api に必要な範囲だけインストール
-RUN pnpm install --frozen-lockfile --filter @kazaguruma/api...
+RUN pnpm install --frozen-lockfile --filter @belvedere/api...
 
 # ---------- Stage 2: runtime ----------
 FROM node:20-alpine AS runtime
@@ -45,4 +45,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # ヘルスチェックは Cloud Run 側で /health を叩く
-CMD ["pnpm", "--filter", "@kazaguruma/api", "start"]
+CMD ["pnpm", "--filter", "@belvedere/api", "start"]
