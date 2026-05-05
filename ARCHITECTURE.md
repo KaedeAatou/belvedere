@@ -31,7 +31,7 @@ graph TB
 
     subgraph Edge["Edge / Gateway"]
         LB[Cloud Load Balancer<br/>= ALB]
-        IAP[Identity-Aware Proxy<br/>= Cognito + ALB Authorizer]
+        IAP["Identity-Aware Proxy<br/>(Phase 4 計画 / 現状は Firebase Auth)"]
     end
 
     subgraph Frontend["Frontend (Cloud Run)"]
@@ -42,10 +42,16 @@ graph TB
         ORC["orchestrator<br/>(gemini-2.5-flash)"]
         AG_P["agent-planner<br/>FLOOR 01"]
         AG_D["agent-daily<br/>FLOOR 02"]
-        AG_F["agent-refinement<br/>FLOOR 03 (5観点診断)"]
-        AG_R["agent-reviewer<br/>FLOOR 04"]
+        AG_F["agent-refinement<br/>FLOOR 03 (6観点診断)"]
+        AG_R["agent-reviewer<br/>FLOOR 04 ⭐Multimodal"]
         AG_X["agent-retrospective<br/>FLOOR 05"]
         TOOL["tool-server<br/>Slack/GitHub/Calendar"]
+        MCP["mcp-server (FLOOR M)<br/>stdio + HTTP / 11 Tools"]
+    end
+
+    subgraph AIClients["AI Agent Clients (MCP)"]
+        CC["Claude Code"]
+        CUR["Cursor / 他 MCP クライアント"]
     end
 
     subgraph AI["AI Layer"]
@@ -73,12 +79,17 @@ graph TB
 
     U1 --> LB --> IAP --> WEB
     WEB --> ORC
+    CC & CUR --> MCP
+    MCP --> ORC
+    MCP --> FS
     ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
     AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
     AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
     TOOL --> U2 & U3
     AG_P & AG_D & AG_F & AG_R & AG_X --> FS
     AG_P & AG_D & AG_F & AG_R & AG_X --> VS
+    AG_R -.動画 Multimodal.-> GEM
+    AG_R -.録画取得.-> GCS
     SCHED -.儀式30分前.-> ORC
     PUBSUB --> ORC
     ORC -.fan-out.-> AG_P & AG_D & AG_F & AG_R & AG_X
@@ -167,51 +178,54 @@ sequenceDiagram
 
 ---
 
-## 5. リポジトリ構成
+## 5. リポジトリ構成 (2026-05-06 現状)
 
 ```
 ai-agent-hackathon/
 ├── apps/
 │   ├── web/              # Nuxt 3 (Vue 3 SSR / Nitro=node-server) — Cloud Run
-│   ├── orchestrator/     # Orchestrator (Cloud Run)
-│   └── agents/           # (Phase 2 で分離予定 / 現状は packages/agent + apps/orchestrator-py で集約)
-│       ├── planner/
-│       ├── daily/
-│       ├── refinement/   # 2026-05-03 追加
-│       ├── reviewer/
-│       └── retrospective/
+│   ├── api/              # Hono on Cloud Run (TS) — Phase 1 で deploy
+│   ├── cli/              # Mock LLM CLI demo (5 + Orchestrator ロール)
+│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — Phase 3 で実 Gemini 接続
+│   └── mcp-server/       # MCP server (stdio Phase 0 完成 / HTTP Phase 1-D で Cloud Run)
+│       └── 11 Tools: read 6 + invoke_agent 1 + CRUD 4
 ├── packages/
-│   ├── shared/           # 型・スキーマ・定数 (Project / Ritual / ValueImpact など)
-│   ├── llm/              # LLMプロバイダ抽象 (mock/gemini/vertex)
-│   ├── agent/            # Agent runtime (Tool呼び出しループ + 6 ロール prompts)
-│   ├── tools/            # Slack/GitHub/Calendar/backlog.refinement.check
-│   ├── repo/             # Repository 抽象 (memory/firestore)
-│   └── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / members 等)
+│   ├── shared/           # 型・スキーマ・定数 (Project / Ritual / ValueImpact / Epic.rationale 等)
+│   ├── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / 5 members)
+│   ├── repo/             # Repository 抽象 (memory ✅ / firestore は Phase 1-B で実装)
+│   ├── llm/              # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3 で実装)
+│   ├── tools/            # buildTools(repo) factory (10 Tools + video.extractIssues)
+│   └── agent/            # Agent runtime (Tool 呼び出しループ + 6 ロール prompts)
 ├── infra/
-│   ├── cloudbuild.yaml
-│   ├── clouddeploy.yaml
-│   └── terraform/        # (任意) IaC
-├── scripts/
-│   ├── setup-gcp.sh      # ユーザーが流すだけ
-│   └── deploy.sh
+│   └── cloudbuild.yaml   # Cloud Build パイプライン (--allow-unauthenticated は Phase 1-A だけ)
+├── .github/workflows/
+│   ├── ci.yml            # TS typecheck + Python lint+type
+│   └── deploy-api.yml    # WIF 経由 Cloud Run デプロイ (Phase 1 終盤で push トリガ復活)
 ├── docs/
-│   ├── setup-gcp.md
-│   ├── runbook.md
-│   └── adr/              # 意思決定記録
-├── ui-mockups/           # 既存20案
-├── PRODUCT_BRIEF.md
-├── ARCHITECTURE.md       # この文書
-├── ROADMAP.md
-├── PROJECT_PLAN.md
-└── README.md
+│   ├── setup-gcp.md      # GCP 11 ステップ (Step 1-10 完了 / 5/6)
+│   ├── setup-mcp.md      # Claude Code から MCP 接続手順
+│   └── setup-github-wif.md  # WIF 設定 (Phase 1 終盤)
+│   └── PROMPTING_GUIDE.md
+├── memory/               # ユーザー固有記憶 (auto-load via MEMORY.md)
+├── ui-mockups-v3/        # 採用 UI mockup (Hand × Digital)
+├── .claude/              # rules / hooks / skills / agents (Claude Code オートメーション)
+│   ├── rules/            # paths-based auto-load ルール
+│   ├── hooks/            # 9 hooks (seed-guard / ts-typecheck / eraser-* / hackathon-* / usage-*)
+│   ├── skills/           # 4 skills (agent-prompt-sync / eraser-arch-sync / gcp-setup / hackathon-check)
+│   ├── agents/           # 4 subagents (architecture / hackathon / mock-llm / prompt-quality reviewers)
+│   └── status.sh         # オートメーション可視化スクリプト
+├── PRODUCT_BRIEF.md / ARCHITECTURE.md / DATA_MODEL.md / AGENT_DESIGN.md
+├── ROADMAP.md / PITCH.md / PROJECT_PLAN.md / HACKATHON_COMPLIANCE.md
+├── CLAUDE.md / README.md
+└── package.json / pnpm-workspace.yaml / tsconfig.base.json
 ```
 
 ---
 
 ## 6. 環境分離
 
-- `belvedere-dev` プロジェクト: ローカル開発+ステージング兼用
-- `belvedere-prod` プロジェクト: 本番 (ピッチデモ用)
+- `belvedere-dev-atrium` プロジェクト: ローカル開発+ステージング兼用 (初号機コードネーム = atrium)
+- `belvedere-prod-atrium` プロジェクト: 本番 (ピッチデモ用)
 - 認可: Workload Identity Federation で GitHub Actions ↔ GCP (鍵をリポジトリに置かない)
 
 ---
@@ -220,7 +234,7 @@ ai-agent-hackathon/
 
 - Cloud Logging: 構造化JSONログ。Trace IDをエージェント間で伝搬
 - Cloud Trace: OpenTelemetryでエージェント間呼び出しを追跡
-- 課金アラート: $50/月 で警告 (個人参加レンジ)
+- 課金アラート: $10/月 で 50% / 90% / 100% メール通知 (Belvedere の月額想定 $5-10 にフィット、暴走早期検知)
 - Gemini APIコスト: 1リクエスト100ms想定 / 1日1000リクエスト程度に収まる設計
 
 ---

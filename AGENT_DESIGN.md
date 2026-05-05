@@ -147,7 +147,7 @@
 |---|---|---|
 | `ticket.list` | チケット一覧取得 | SA |
 | `ticket.quality.check` | DoD/SP/US紐付け診断 | SA |
-| `backlog.refinement.check` | Refinement 5観点診断 (粒度/依存/valueImpact/ミスマッチ/SP分散) | SA |
+| `backlog.refinement.check` | Refinement 6観点診断 (粒度/依存/valueImpact/ミスマッチ/SP分散/戦略整合性) | SA |
 | `sprint.get` | スプリント情報取得 | SA |
 | `project.list` | Project 一覧取得 | SA |
 | `epic.list` | Epic 一覧取得 (projectId 絞り込み可) | SA |
