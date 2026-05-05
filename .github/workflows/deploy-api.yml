@@ -1,21 +1,24 @@
 name: Deploy API to Cloud Run
 
-# 本番デプロイのトリガ (現在: 手動のみ):
-# - 手動 (workflow_dispatch)
+# トリガ:
+# - push to main (apps/api / packages / infra 配下が変わった時のみ)
+# - 手動 (workflow_dispatch / dev or prod 切替)
 #
-# 🔴 Phase 1 着手時 (GCP セットアップ完了後) に以下 2 点を **戻す**:
-#   1. 下記 `on:` に `push: branches: [main] paths: [...]` を再追加
-#      (template は git log で旧 commit を参照)
-#   2. env の WIF_PROVIDER 内 `PROJECT_NUMBER` を実数に置換
-#      (例: `projects/123456789/locations/global/...`)
-#      置換しないと auth ステップで invalid_request エラーで即失敗する。
+# 認証は Workload Identity Federation 経由 (鍵ファイル不要)。
+# 事前設定: docs/setup-github-wif.md
 #
-# それまでは push トリガ無効 (毎 push 通知抑制)。
-#
-# 認証は Workload Identity Federation を使う (鍵ファイル不要)。
-# 事前設定 (1回だけユーザーが行う): docs/setup-github-wif.md 参照
+# 注意: 現在の WIF_PROVIDER / WIF_SA は dev project (belvedere-dev-atrium) 用。
+# prod project (belvedere-prod-atrium) でも同じ手順 (Pool / Provider / SA + 6 ロール) を
+# 別途実施し、env=prod 時に切替えるロジックを追加するのは Phase 2 以降。
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-api.yml'
   workflow_dispatch:
     inputs:
       env:
@@ -34,8 +37,8 @@ env:
   GCP_REGION: asia-northeast1
   REPO: belvedere
   SERVICE: belvedere-api
-  WIF_PROVIDER: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
-  WIF_SA: github-actions@belvedere-dev-atrium.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
   RUNTIME_SA_NAME: belvedere-runtime
 
 jobs:
