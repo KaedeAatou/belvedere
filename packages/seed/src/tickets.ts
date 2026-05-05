@@ -1,4 +1,4 @@
-import type { Ticket } from '@kazaguruma/shared';
+import type { Ticket } from '@belvedere/shared';
 import { DEFAULT_PROJECT_ID } from './projects';
 
 const NOW = '2026-04-29T03:00:00+09:00';

@@ -3,6 +3,8 @@
 > 1人1分で読める版。審査基準①〜⑤ に沿って組み立てた。
 > 2026-04-30: 「風 (WindEvent)」概念を廃止。
 > 2026-05-03: Refinement Agent (5番目) を追加 + Project エンティティ + valueImpact (priority と独立した high/medium/low 軸) を導入。
+> 2026-05-04: Reviewer Agent に **「Sprint Review 録画 → 指摘抽出 → Ticket 起票候補」** 機能を追加 (Gemini 2.5 Pro Multimodal で動画を直接読み取り)。これによりレビュー会で口頭で消える指摘を救う経路を確立。
+> 2026-05-05: **MCP (Model Context Protocol) サーバ追加** — Belvedere は単独 SaaS ではなく **Claude Code / Cursor / 他 AI Agent クライアントから直接呼べる** 開発支援エージェント。Phase 0 で stdio + 11 Tools (read 6 + invoke 1 + CRUD 4) 動作確認済 (smoke test 14/14 pass)、Phase 1 で HTTP + Cloud Run + OAuth。
 
 ---
 
@@ -20,8 +22,9 @@ Jiraを使っているチームで広く起きる症状:
 
 - **チケットの書き忘れ**: DoDが空、SP未定、User Story紐付けなしのまま「とりあえず作っちゃった」が溜まる
 - **儀式の形骸化**: デイリーが進捗報告会、レビューが社内デモ、ふりかえりが付箋大会で終わる
-- **言いっぱなし**: ふりかえりで Try が出るが翌スプリントに繋がらない
-- **疲弊**: スクラムマスターが議事・要約・転記で週8時間消費
+- **言いっぱなし (双子)**: ふりかえりで Try が出るが翌スプリントに繋がらない / **レビュー会の指摘も口頭で消えてチケットにならない**
+- **戦略の不在**: 戦略があるから開発するはずだが、開発者は **何のためにこのチケットをやっているか** を見失っている (Epic に Why が書かれていない / 書かれていても深い階層に埋もれて読まれない)
+- **疲弊**: スクラムマスターが議事・要約・転記・録画書き起こしで週8時間消費
 
 > Jira等のチケット管理SaaS は「データの倉庫」を提供するだけで、**書き方の品質** や **儀式の運営** までは助けてくれない。
 
@@ -53,15 +56,22 @@ Jiraを使っているチームで広く起きる症状:
 | 1機能 = 1ボタン | チケット品質チェック → User Story候補抽出 → 過去類似タスクからSP推定 を **連鎖** |
 | 静的なルール | 過去ふりかえりやチームの判断履歴から **学習** (ベクトル検索) |
 | ユーザー起点 | チケット保存 / Slack投稿 / 儀式時刻 を **トリガに自分から動く** |
+| テキストのみ扱う | Sprint Review **録画動画** から指摘を抽出して Ticket 起票候補に変換 (**Gemini Multimodal**) |
+| 単独 SaaS に閉じる | **MCP** で Claude Code / Cursor / 他 AI Agent から直接呼べる ── 「Belvedere の開発自体を Belvedere で管理する」究極のドッグフードが可能 |
 
 ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**。各儀式に専用画面 + 専用 Agent。
 
-特に **Refinement Agent** は次スプリント候補の **5観点診断**:
+特に **Refinement Agent** は次スプリント候補の **6観点診断**:
 1. Story 粒度過大 (SP > 8 → 分割推奨)
 2. 依存関係未整理 (parentTicketId / blockedBy 欠落)
 3. valueImpact 未設定
 4. priority × valueImpact ミスマッチ (例: priority=urgent ∧ valueImpact=low)
 5. 同 Epic 配下の SP 見積バラつき異常
+6. **戦略整合性 (Epic.rationale 欠落 / チケット ↔ rationale ドリフト)** — 開発者が「何のために?」を見失う形骸化サインを検出
+
+**Reviewer Agent** は Sprint Review の前後を支援:
+- *会前*: review/done チケットからデモシナリオ草稿 + Cloud Run preview URL 集
+- *会後*: **録画動画を Gemini Multimodal が直接読む** → ステークホルダ発言から指摘を検出 → 各指摘に `sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId` を紐付けた Ticket 起票候補を生成 (人が Apply で確定)
 
 ## 6. 競合・既存ツールとの差
 
@@ -106,11 +116,12 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
 
 GCPスタック (必須要件):
 - **実行**: Cloud Run (各エージェントを独立サービスに)
-- **AI**: Gemini API + ADK (マルチエージェント構成)
-- **データ**: Firestore + Cloud Storage
-- **イベント**: Pub/Sub (チケット保存・儀式時刻のトリガ)
+- **AI**: Gemini API + ADK (マルチエージェント構成、**Multimodal で動画直接入力**)
+- **データ**: Firestore + Cloud Storage (Sprint Review 録画 / エージェントログ)
+- **イベント**: Pub/Sub (チケット保存・儀式時刻・録画アップロードのトリガ)
 - **観測**: Cloud Logging + Cloud Trace
 - **CI/CD**: Cloud Build + Cloud Deploy
+- **AI Agent エコシステム連携**: MCP server (stdio + HTTP / Cloud Run) — Claude Code / Cursor から Belvedere の Agent を直接呼べる
 
 ## 9. ピッチで使うフレーズ
 

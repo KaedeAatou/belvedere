@@ -1,3 +1,3 @@
-"""風車 Orchestrator (Python)."""
+"""Belvedere Orchestrator (Python)."""
 
 __version__ = "0.0.1"

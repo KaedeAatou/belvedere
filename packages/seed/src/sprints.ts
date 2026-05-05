@@ -1,4 +1,4 @@
-import type { Sprint } from '@kazaguruma/shared';
+import type { Sprint } from '@belvedere/shared';
 
 export const seedSprints: Sprint[] = [
   {

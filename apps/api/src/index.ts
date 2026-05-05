@@ -1,4 +1,4 @@
-// 風車 / Kazaguruma API (Cloud Run 想定)
+// Belvedere API (Cloud Run 想定)
 // 最小エンドポイント:
 //   GET  /              ping
 //   GET  /health        health check
@@ -10,11 +10,11 @@
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
-import { runAgent, buildSystemPrompt, buildRegistry } from '@kazaguruma/agent';
-import { createLLMProvider } from '@kazaguruma/llm';
-import { createRepoContainer } from '@kazaguruma/repo';
-import { buildTools } from '@kazaguruma/tools';
-import type { AgentName } from '@kazaguruma/shared';
+import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
+import { createLLMProvider } from '@belvedere/llm';
+import { createRepoContainer } from '@belvedere/repo';
+import { buildTools } from '@belvedere/tools';
+import type { AgentName } from '@belvedere/shared';
 
 const app = new Hono();
 
@@ -23,7 +23,7 @@ const llm = createLLMProvider(process.env.LLM_PROVIDER);
 const tools = buildRegistry(buildTools(repo));
 
 // ------- Health / Root -------
-app.get('/', (c) => c.json({ name: 'kazaguruma-api', version: '0.0.1' }));
+app.get('/', (c) => c.json({ name: 'belvedere-api', version: '0.0.1' }));
 app.get('/health', (c) => c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND ?? 'memory' }));
 
 // ------- Read-only data endpoints -------
@@ -84,7 +84,7 @@ app.post('/agents/:name', async (c) => {
 // ------- Server boot -------
 const port = Number(process.env.PORT ?? 8080);
 serve({ fetch: app.fetch, port }, (info) => {
-  console.log(`[kazaguruma-api] listening on http://0.0.0.0:${info.port}`);
+  console.log(`[belvedere-api] listening on http://0.0.0.0:${info.port}`);
   console.log(`  llm provider: ${llm.name}`);
   console.log(`  repo backend: ${process.env.REPO_BACKEND ?? 'memory'}`);
 });

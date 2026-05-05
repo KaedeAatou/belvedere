@@ -30,7 +30,7 @@
 | App Engine | — | ⚪ | レガシー扱いのため不採用 |
 | Cloud TPU/GPU | — | ⚪ | 推論はサーバーレスで足りる想定 |
 
-**充足条件**: Cloud Run に `kazaguruma-api` がデプロイされ、`https://...run.app/health` が 200 を返す状態。
+**充足条件**: Cloud Run に `belvedere-api` がデプロイされ、`https://...run.app/health` が 200 を返す状態。
 **Phase 1 期限**: 2026-05-17 (`ROADMAP.md`)
 
 ### A-2. GCP AI 技術を1つ以上採用
@@ -40,8 +40,9 @@
 | **Gemini API** | ✅ 採用 | 🟡 計画 | `packages/llm/src/factory.ts` で `gemini` / `vertex` は明示的 throw (silent fallback しない signpost)。`mock` のみ実装。実装は GCP セットアップ後 |
 | **ADK (Agents Development Kit)** | ✅ 採用 | 🟡 計画 | `apps/orchestrator-py/pyproject.toml` に `google-adk>=0.5` / `google-genai>=0.3` 依存追加済 / `agents.py` に5儀式 (planner/refinement/daily/reviewer/retrospective) + Orchestrator の INSTRUCTION 雛形完備 / `build_agents(use_real_adk=True)` で `NotImplementedError` raise (silent fallback なし)。本物実装は `USE_REAL_ADK=true` 切替待ち |
 | Gemini Enterprise Agent Platform (旧 Vertex AI) | — | ⚪ | Notion 公式リスト (2026-05-01 確認) では「旧Vertex AI」表記。Gemini API + ADK で十分。観測やデータ管理で必要なら追加 |
-| Vector Search | 🟡 検討 | ⚪ | 過去ふりかえり検索で使う案あり (`AGENT_DESIGN.md`)。MVP外 |
-| Speech-to-Text / TTS | 🟡 検討 | ⚪ | WC-111 (ペアプロ音声→Gemini) で利用予定 |
+| Vector Search | 🟡 検討 | ⚪ | 過去ふりかえり検索で使う案あり (`AGENT_DESIGN.md`)。Phase 2 後半で検討 |
+| **Gemini 2.5 Pro Multimodal (動画入力)** | ✅ 採用 (2026-05-04) | 🟡 計画 | **Reviewer Agent が Sprint Review 録画から指摘を抽出して Ticket 起票候補を生成** (`AGENT_DESIGN.md §2-4`)。Speech-to-Text を経由せず動画を直接入力。ピッチキラーシーン (デモ #5) |
+| Speech-to-Text / TTS | — | ⚪ 不採用 (2026-05-04) | Gemini Multimodal が音声 + 映像を統合処理するため不要。WC-111 (ペアプロ音声) の用途は別途要再検討 |
 | Gemma / Imagen / Vision / NLP / Translation | — | ⚪ | 必要に応じて追加 |
 
 **充足条件**: 本物の Gemini 推論が `apps/orchestrator-py` 経由で1回でも走る (= ADK Runner で実際にトークンが生成される) こと。
@@ -58,8 +59,8 @@
 | 単機能ではない (複数ツール組み合わせ) | 🟢 充足 (Mock) | `packages/agent/src/runtime.ts` で `thought → tool_call → tool_result → output` の反復ループ実装。Mock LLM が儀式別に複数 tool call sequence を返す |
 | 自律的な判断と実行 | 🟡 計画 | 自律性レベル L0-L4 を `AGENT_DESIGN.md §4` で設計。デフォルト Daily=L3 / Planner=L2 / Refinement=L2 / Reviewer=L2 / Retro=L2 (Refinement Agent は 2026-05 に追加した5番目の儀式 agent) |
 | 自律トリガ (時間/イベント/閾値) | 🟡 計画 | Cloud Scheduler + Pub/Sub で「儀式30分前」「障害発生」「停滞検出」などを起動条件に設計 |
-| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済 |
-| マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / Reviewer / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
+| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済。**Multimodal 軸 (動画→チケット) は Gemini 2.5 Pro の独擅場**で「他 LLM でなく Gemini である必然性」が明確 |
+| マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / **Reviewer (Multimodal対応)** / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
 | ピッチ用デモ動画 | 🔴 未撮影 | 「自律的に動いた結果」を 90秒で見せる動画素材が無い。基準①の最大リスク |
 
 **リスク**: ピッチ時に「便利な要約Bot」と見えたら基準①敗北。デモシナリオ (`PITCH.md §4`) で90秒以内に "自律的に動いた結果" を見せられるかを2026-08-13 リハーサルで検証。
@@ -105,7 +106,7 @@
 | 拡張性 | 🟢 | LLMプロバイダ抽象 (`packages/llm/`) / Repository抽象 (`packages/repo/` の RepoContainer = tickets/sprints/projects/epics/stories/members/ceremonies/agentRuns/ceremonyHealth) / Tool factory (`buildTools(repo)`) ですべて差し替え式 |
 | 実運用への配慮 | 🟡 | Secret Manager / WIF / Cloud Logging / 課金アラート / OWASP リリースゲート (WC-110) を設計 |
 | コード品質 | 🟡 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 9 ワークスペース通過 (2026-05-04 確認) / **テスト未実装** (`pnpm test` 無し、捏造しない) |
-| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini / ADK / Firestore / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
+| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini (テキスト + Multimodal) / ADK / Firestore / **Cloud Storage (Sprint Review 録画)** / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
 | 多階層モノレポ構成 | 🟢 | TS workspace 9 packages + Python uv workspace 1 (orchestrator-py)。shared / seed / repo / tools / llm / agent の依存方向が一方向 (循環なし) |
 
 ---
@@ -140,14 +141,15 @@
 応募方法・スケジュール詳細は 2026-05-04 時点 Notion 上で依然「Coming Soon」状態。
 **監視必須**: 公開され次第ここを更新。
 
-### 自社マイルストーン (`ROADMAP.md`)
+### 自社マイルストーン (`ROADMAP.md` / 2026-05-05 4段階構成へ再編)
 
-| マイルストーン | 期限 | 残日数 (2026-05-04 時点) | 状態 |
-|---|---|---|---|
-| Phase 1: Cloud Run 初回デプロイ | 2026-05-17 | 13 日 | 🔴 GCP 未セットアップ / git 未初期化、要即着手 |
-| Phase 2: マルチエージェント完成 | 2026-07-06 | 63 日 | 🟡 Mock 実装は機能、実 ADK / Gemini 待ち |
-| Phase 3: ドッグフード | 2026-07-13 〜 27 | 70 日 | 🟡 |
-| Phase 4: ピッチ素材作成 | 2026-08-03 〜 13 | 91 日 | 🔴 デモ動画未着手 |
+| マイルストーン | 期限 | 状態 |
+|---|---|---|
+| Phase 0: ローカル基盤 (Mock LLM / Web UI / MCP CRUD) | 2026-05-12 | ✅ 完了 |
+| Phase 1: 手動 Belvedere SaaS (Cloud Run + Firestore + Firebase Auth + UI CRUD + MCP Cloud Run) | 2026-06-09 | 🔴 GCP 未セットアップ、要即着手 |
+| Phase 2: Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + Mock Agent + AI Panel) | 2026-06-30 | 🟡 配線設計済、Phase 1 完了後着手 |
+| Phase 3: Agent 本実装 (Gemini + ADK + Multimodal + RAG + GitHub 連携) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち |
+| Phase 4: 仕上げ + ピッチ (a11y / OWASP / 動画 / リハ) | 2026-08-19 | 🔴 ピッチ素材未着手 |
 
 ---
 
@@ -185,3 +187,8 @@
 | 2026-04-29 | 初版作成 |
 | 2026-04-30 | UI採用案を `ui-mockups-v3/cases/13-hand-digital.html` (Hand × Digital) に確定。B-3 ユーザビリティを更新 (高密度化 + コラボ表現追加) |
 | 2026-05-04 | 大規模変更を反映: ① Belvedere 再ブランド (旧 Kazaguruma / 風車) ② Project エンティティ追加 (Workspace > Project > Epic > Story > Task / `idPrefix` 可変、default `PRJ-belvedere-core`) ③ Refinement Agent 追加 (5番目の儀式 agent、SP > 8 / valueImpact 未設定 / priority × valueImpact ミスマッチ等を診断) ④ UI を Nuxt 3 + Vue 3 に切替、Claude Designer から 5 画面 SFC を取り込み (Backlog/Planning/Daily/Review/Retro + Shell/RailPanel/AIPanel/DetailSheet + 6 primitives = 17 SFC) ⑤ `.claude/rules/` で TS/Python/Vue/FastAPI のプロジェクト固有パターンを文書化 ⑥ memory ファイル整理 (`feedback_no_neologisms.md` / `product_name.md` / `project_ceremony_scheme.md` 等) ⑦ Notion 一次情報で Google Cloud 300ドルクーポン配布告知を確認 (2026-05-01 更新)。⑧ 新規リスク発見: git 未初期化 / seed の会社メール露出。 |
+| 2026-05-04 (夜) | **Reviewer Agent に Multimodal 機能を追加**: ① Sprint Review 録画 → 指摘抽出 → Ticket 起票候補のフロー (Gemini 2.5 Pro Multimodal で動画直接入力) ② `ReviewRecording` エンティティ + Ticket に `sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId` 追加 ③ `video.extractIssues` Tool 新設 (Mock 実装で 3 候補返す) ④ Speech-to-Text 不採用判定 (Multimodal が代替) ⑤ PITCH §4 デモ #5 を Multimodal キラーシーン (20秒) に差し替え ⑥ §5 差別化表に Multimodal 軸追加 (= 「Gemini である必然性」への直接回答) ⑦ Phase 2 ROADMAP に 5 日タスク追加。Cloud Storage の用途を Sprint Review 録画に変更。 |
+| 2026-05-05 | **Refinement Agent に第 6 観点「戦略整合性」追加**: ① Epic に `rationale` (戦略意図 / Why) + `successMetric` (達成判定の数値指標) + `strategicTheme` (上位戦略テーマ) を追加 (TS / Pydantic 同期) ② `backlog.refinement.check` Tool に `strategic_intent_missing` シグナルを実装 (Epic.rationale 欠落の検出ロジックは本物。CLI で seed の EP-3 の意図的 rationale 欠落を検出することを確認済) ③ 5 → 6 観点に prompts.ts / agents.py 同期更新 ④ seed/epics.ts 全 4 Epic に rationale / successMetric / strategicTheme 追加 (EP-3 のみ意図的に rationale 空のまま = デモ用形骸化サンプル) ⑤ PRODUCT_BRIEF §2 に「戦略の不在」課題追加、PITCH §2 / デモ #4 に EP-3 rationale 欠落シーン組込み。「戦略があるから開発するはずだが、開発者は Why を見失っている」課題への直接対応。 |
+| 2026-05-05 (夜) | **ユーザー GitHub 連携を Phase 3 へ後ろ倒し**: Eraser 図の混乱 (1 個の GitHub アイコンが「ユーザーチームのリポジトリ」と「Belvedere ソース KaedeAatou/belvedere」の両方を表していた問題) を整理。① 図を 2 つに分離 (`UserGitHub` / `BelvedereSource`) + 「Belvedere 開発者」アイコン追加 + 凡例で明文化 ② AGENT_DESIGN §3 から `github.issues.list` (Planner 用) を削除 (用途不要と判断) ③ 残る 2 Tool (`github.activity` / `github.pr.diff`) は Phase 3 実装と明示 ④ ROADMAP Phase 3 に 2 日工数のタスク追加。MVP / ピッチでは GitHub 連携には触れない方針。 |
+| 2026-05-05 (深夜) | **MCP (Model Context Protocol) サーバ実装 (Phase 0)**: ① `apps/mcp-server/` 新設 (TypeScript / `@modelcontextprotocol/sdk@^1.0.4`) ② stdio mode + 読み取り 6 Tool (`belvedere_ticket_list / ticket_get / epic_list / member_list / quality_check / refinement_check`) + `belvedere_invoke_agent` (5 儀式 + Orchestrator) + CRUD 系 4 個 (Phase 0 で前倒し本実装、`EpicRepository.upsert` 追加) ③ Smoke test 14/14 pass / typecheck 全 11 ワークスペース緑 ④ `docs/setup-mcp.md` 新設で Claude Code から `claude mcp add belvedere stdio "..."` で接続する手順を文書化 ⑤ B-1 / B-4 / B-5 で「単独 SaaS でなく AI Agent エコシステム統合」「自分自身が Claude Code + MCP で Belvedere をドッグフード」を主張可能に。書込承認は MCP server 側に dryRun を持たず、ホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (L2 規範をホスト側で実現)。 |
+| 2026-05-05 (朝) | **ROADMAP を 4 段階構成に再編 + MCP CRUD を Phase 1 に前倒し本実装**: ① ユーザー意図「Agent 開発前にまず Jira 風 SaaS を作る経験」「Belvedere をドッグフードしながら Agent 開発」を反映 ② Phase 1 = 手動 SaaS (Cloud Run + Firestore + Firebase Auth + UI CRUD + MCP Cloud Run ホスト) / Phase 2 = Mock Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + AI Panel) / Phase 3 = Agent 本実装 (Gemini + ADK + Multimodal + RAG) / Phase 4 = 仕上げ ③ MCP CRUD 4 Tool を本実装 (`belvedere_ticket_create / update / status_change / epic_update`)、`EpicRepository.upsert` 追加、smoke test 14/14 pass ④ Phase 1 期限を 5/17 (Cloud Run /health 200) → 6/9 (手動 SaaS 完成) に延長 ⑤ 中間提出 (推定 6/30) は Phase 1 + Phase 2 (Mock 配線) で勝負可能、Gemini 接続は Phase 3 (~7/27) で。ハッカソン要件 Cloud Run は Phase 1 で達成、Gemini + ADK は Phase 3 で達成。 |

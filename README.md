@@ -32,6 +32,7 @@
 | [PITCH.md](./PITCH.md) | 3分ピッチの台本 |
 | [HACKATHON_COMPLIANCE.md](./HACKATHON_COMPLIANCE.md) | ハッカソン要件↔現状の対応 |
 | [docs/setup-gcp.md](./docs/setup-gcp.md) | ユーザー作業のGCPセットアップ手順 |
+| [docs/setup-mcp.md](./docs/setup-mcp.md) | MCP server を Claude Code / Cursor から接続する手順 |
 
 ---
 
@@ -43,7 +44,8 @@ ai-agent-hackathon/
 │   ├── web/                 # Nuxt 3 + Vue 3 SSR (UI再設計中・ガラのみ / Cloud Run 想定)
 │   ├── cli/                 # Mock LLM で動く CLI デモ (5ロール)
 │   ├── api/                 # Hono サーバ (Cloud Run想定 / TS)
-│   └── orchestrator-py/     # FastAPI + ADK 雛形 (Python)
+│   ├── orchestrator-py/     # FastAPI + ADK 雛形 (Python)
+│   └── mcp-server/          # MCP (Model Context Protocol) サーバ (Claude Code 接続用)
 ├── packages/
 │   ├── shared/              # 型定義 / 定数 (Project / Epic / UserStory / Ticket / CeremonyHealthScore など)
 │   ├── seed/                # 不変デモfixture (1 project, 4 epics, 12 tickets, 3 sprints, 5 members)
@@ -57,12 +59,10 @@ ai-agent-hackathon/
 ├── docs/
 │   ├── setup-gcp.md         # ユーザー作業のGCPセットアップ手順
 │   └── setup-github-wif.md  # Workload Identity Federation設定
-├── package.json             # pnpm workspace ルート (内部パッケージ名は @kazaguruma/* のまま、再ブランド過渡期)
+├── package.json             # pnpm workspace ルート (内部パッケージ名 @belvedere/* で統一)
 ├── pnpm-workspace.yaml
 └── tsconfig.base.json
 ```
-
-> 内部パッケージ名 `@kazaguruma/*` は当面据え置き。ハッカソン時間枠を考慮し、再ブランド (Belvedere) はドキュメント・UI・ピッチ層で先行する。
 
 ---
 
@@ -84,17 +84,17 @@ pnpm typecheck
 
 ```bash
 pnpm demo                                                       # Plannerデモ
-pnpm --filter @kazaguruma/cli dev plan       "Sprint 13 議題"
-pnpm --filter @kazaguruma/cli dev daily      "本日のスタンドアップ要約"
-pnpm --filter @kazaguruma/cli dev refinement "次スプリント候補のリファインメント診断"
-pnpm --filter @kazaguruma/cli dev review     "デモシナリオ草稿"
-pnpm --filter @kazaguruma/cli dev retro      "Sprint 12 のTry抽出"
+pnpm --filter @belvedere/cli dev plan       "Sprint 13 議題"
+pnpm --filter @belvedere/cli dev daily      "本日のスタンドアップ要約"
+pnpm --filter @belvedere/cli dev refinement "次スプリント候補のリファインメント診断"
+pnpm --filter @belvedere/cli dev review     "デモシナリオ草稿"
+pnpm --filter @belvedere/cli dev retro      "Sprint 12 のTry抽出"
 ```
 
 ### API サーバ (Hono / Cloud Run想定)
 
 ```bash
-pnpm --filter @kazaguruma/api dev
+pnpm --filter @belvedere/api dev
 # → http://localhost:8080/health, /tickets, /sprints/:id, /epics, POST /agents/:name
 ```
 
@@ -131,19 +131,31 @@ LLM_PROVIDER=vertex pnpm demo          # 〃
 - [x] **個人 GitHub repo** (KaedeAatou/belvedere private) + 個人 Google アカウント設定
 - [x] **Eraser アーキ図** (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) + 自動同期 hook
 - [x] **週次 hackathon-check routine** (毎週月曜 09:00 JST 自動実行)
+- [x] **MCP server (stdio + CRUD 本実装)** (`apps/mcp-server/`): 11 Tools (6 read + 1 invoke + 4 CRUD)、Smoke 14/14 pass、`docs/setup-mcp.md` で Claude Code から接続可能
 
-### 🟡 Phase 1 (期限 5/17、残 13 日)
-- [ ] **次にユーザーがやること**: GCPプロジェクト作成 (5/7 の 300 ドルクーポン受領後 / `docs/setup-gcp.md` / `/gcp-setup` skill 経由)
-- [ ] **次にユーザーがやること**: ピッチデモ動画 1本 (5/末まで / Mock LLM ベース可)
-- [ ] Vertex AI / Gemini API 接続 (`packages/llm/src/gemini.ts`)
-- [ ] Python `USE_REAL_ADK=true` 経路実装
+### 🟡 Phase 1: 手動 Belvedere SaaS (期限 2026-06-09)
+ゴール: Agent なしで Jira 風 SaaS が Cloud Run 上で動く。MCP も Cloud Run にホストして Claude Code から本番 Belvedere を操作。
+- [ ] **次にユーザーがやること**: GCP プロジェクト作成 (5/7 の 300 ドルクーポン受領後 / `/gcp-setup` skill 経由)
+- [ ] Cloud Run 初回デプロイ (5/17 までに `/health` 200)
 - [ ] Firestore 実装 (`packages/repo/src/firestore.ts`)
-- [ ] Cloud Run 初回デプロイ
+- [ ] Firebase Auth (個人 Google) で UI / API / MCP 保護
+- [ ] Web UI で チケット CRUD / Sprint 切替 / Epic 編集
+- [ ] MCP server を Cloud Run へ (HTTP transport + OAuth 2.1)
+- [ ] ピッチデモ動画 1 本 (5/末まで / Mock UI 範囲で)
 
-### Phase 2 (6/10 〜)
-- [ ] マルチエージェント本格実装 (ADK 完成)
-- [ ] UI demo data (BLV-xxx) と seed (WC-xxx) の統合
-- [ ] CeremonyHealthScore 計算ロジック
+### Phase 2: Agent トリガ可視化 Mock (6/10 〜 6/30)
+- [ ] Pub/Sub + Cloud Scheduler 配線
+- [ ] AI Integrity Panel が Mock 応答を即時表示
+- [ ] Live Activity 履歴画面
+- [ ] Slack Bot Mock (or 実 Slack 投稿)
+- [ ] 応募提出 / 中間提出
+
+### Phase 3: Agent 本実装 (7/1 〜 7/27)
+- [ ] Vertex AI Gemini 接続 (`packages/llm/src/gemini.ts`)
+- [ ] Python `USE_REAL_ADK=true` 実装
+- [ ] **Reviewer Multimodal**: 録画 → 指摘抽出 → Ticket 起票 (ピッチキラーシーン)
+- [ ] Vector Search + RAG (Refinement / Retrospective)
+- [ ] CeremonyHealthScore 計算 + GitHub 連携
 
 ---
 

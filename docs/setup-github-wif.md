@@ -17,7 +17,7 @@
 ## 1. 変数を決める
 
 ```bash
-export PROJECT=kazaguruma-dev-2026
+export PROJECT=belvedere-dev-atrium
 export PROJECT_NUMBER=$(gcloud projects describe $PROJECT --format='value(projectNumber)')
 export POOL_ID=github
 export PROVIDER_ID=github
@@ -90,7 +90,7 @@ gcloud iam service-accounts add-iam-policy-binding $SA_EMAIL \
 ```yaml
 env:
   WIF_PROVIDER: projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github/providers/github
-  WIF_SA: github-actions@kazaguruma-dev-2026.iam.gserviceaccount.com
+  WIF_SA: github-actions@belvedere-dev-atrium.iam.gserviceaccount.com
 ```
 
 `PROJECT_NUMBER` を §1 で取得した値に置換。

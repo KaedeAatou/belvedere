@@ -2,6 +2,7 @@
 name: architecture-consistency-checker
 description: Belvedere プロジェクトの設計ドキュメント (PRODUCT_BRIEF / ARCHITECTURE / DATA_MODEL / AGENT_DESIGN / ROADMAP / PITCH) と実コードの整合性を監査する。ドキュメントだけ更新してコードが追随していない、あるいはコードを変えてドキュメントが古いままになっている、を検出する。
 tools: Read, Grep, Glob, Bash
+color: purple
 ---
 
 # Architecture Consistency Checker

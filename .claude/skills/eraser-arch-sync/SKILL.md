@@ -1,6 +1,7 @@
 ---
 name: eraser-arch-sync
 description: Belvedere の Eraser アーキテクチャ図 (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) を `ARCHITECTURE.md` の Mermaid 図と整合する形で同期更新する。儀式数・Agent 構成・GCP サービス選択・データ層に変更があった時に呼び出す
+color: purple
 ---
 
 # /eraser-arch-sync
@@ -69,7 +70,7 @@ Orchestrator [icon: gcp-cloud-run, label: "Orchestrator (gemini-2.5-flash)"]
 Planner       [icon: gcp-cloud-run, label: "Planner Agent (FLOOR 01)"]
 Daily         [icon: gcp-cloud-run, label: "Daily Agent (FLOOR 02)"]
 Refinement    [icon: gcp-cloud-run, label: "Refinement Agent (FLOOR 03)\n5観点診断"]
-Reviewer      [icon: gcp-cloud-run, label: "Reviewer Agent (FLOOR 04)"]
+Reviewer      [icon: gcp-cloud-run, label: "Reviewer Agent (FLOOR 04)\n録画→指摘抽出 (Multimodal)"]
 Retrospective [icon: gcp-cloud-run, label: "Retrospective Agent (FLOOR 05)"]
 
 // Tool Server
@@ -82,7 +83,7 @@ VectorSearch [icon: gcp-vertex-ai, label: "Vector Search"]
 
 // Data Layer
 Firestore [icon: gcp-firestore]
-CloudStorage [icon: gcp-cloud-storage]
+CloudStorage [icon: gcp-cloud-storage, label: "Cloud Storage\nSprint Review 録画"]
 SecretManager [icon: gcp-secret-manager]
 
 // Async / Schedule
@@ -99,8 +100,10 @@ Orchestrator > Planner, Daily, Refinement, Reviewer, Retrospective
 {Planner, Daily, Refinement, Reviewer, Retrospective} > Gemini, ADK, ToolServer
 ToolServer > Slack, GitHub
 {Planner, Daily, Refinement, Reviewer, Retrospective} > Firestore, VectorSearch
+Reviewer --> CloudStorage: 録画取得
+Reviewer --> Gemini: Multimodal (動画+音声)
 Scheduler --> Orchestrator: 儀式30分前
-PubSub --> Orchestrator
+PubSub --> Orchestrator: review_recording.uploaded
 ```
 
 ### Step 4. 同期実行
@@ -141,4 +144,4 @@ PubSub --> Orchestrator
 | Eraser MCP が `authenticate` で失敗 | https://claude.ai/customize/connectors で Eraser を connect し直す |
 | DSL が Eraser 側でパースエラー | アイコン名 (`gcp-cloud-run` など) が古い可能性。Eraser ドキュメントで最新のアイコン名を確認 |
 | 図のレイアウトが崩れる | Eraser はレイアウト自動調整。Layout > Re-layout で修正 |
-| 旧 Kazaguruma 表記が残っている | 即修正。会社情報・廃止語は絶対残さない |
+| 旧 Belvedere 表記が残っている | 即修正。会社情報・廃止語は絶対残さない |

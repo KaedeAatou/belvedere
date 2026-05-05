@@ -3,7 +3,7 @@
 ## Project-specific patterns
 
 - `components: [{ path: '~/components', pathPrefix: false }]` - サブディレクトリ prefix 無効化 (`components/screens/BacklogScreen.vue` を `<BacklogScreen />` で参照)
-- `build.transpile: ['@kazaguruma/shared', '@kazaguruma/seed', '@kazaguruma/repo']` - workspace パッケージを Nitro バンドルに含める (`.js` 拡張子なし import を解決するため必須)
+- `build.transpile: ['@belvedere/shared', '@belvedere/seed', '@belvedere/repo']` - workspace パッケージを Nitro バンドルに含める (`.js` 拡張子なし import を解決するため必須)
 - `nitro: { preset: 'node-server' }` - Cloud Run デプロイ用、`node .output/server/index.mjs` で起動
 - `compatibilityDate: '2026-05-01'` - Nuxt 互換日付固定
 - `app.head.link` で Google Fonts を読み込み - Noto Sans JP / Mohave / Albert Sans (Hoshino タイポグラフィ)
@@ -11,7 +11,7 @@
 - `tsconfig.json` は `{ "extends": "./.nuxt/tsconfig.json" }` のみ - Nuxt 自動生成の typeconfig を継承
 - `pnpm typecheck` 内で `nuxt prepare && vue-tsc --noEmit` - typecheck 前に `.nuxt/` 再生成
 - `apps/web/.nuxt/` / `apps/web/.output/` - 生成物 (gitignore 対象)
-- `pnpm --filter @kazaguruma/web dev` で `:3000` 起動 / SSR enabled
+- `pnpm --filter @belvedere/web dev` で `:3000` 起動 / SSR enabled
 - 内部 import は `~/components/...` / `~/composables/...` (`~` alias は project root)
 
 ## Layout caveats

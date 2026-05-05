@@ -3,6 +3,9 @@
 > 審査基準①「AIエージェントが価値の中心になっているか」に対する答え。
 > 2026-04-30 改訂: 「風 (WindEvent)」概念を廃止。
 > 2026-05-03 改訂: **Refinement Agent (5番目) を追加** + Project エンティティ + valueImpact 軸 を導入。Agent の役割を「チケット品質補助 + 5儀式運営補助」に拡張。
+> 2026-05-04 改訂: **Reviewer Agent に「Sprint Review 録画 → 指摘抽出 → Ticket 起票候補」機能を追加** (Gemini 2.5 Pro Multimodal で動画を直接読み取り)。これに伴い `ReviewRecording` エンティティ + `video.extractIssues` Tool を新設。「議事録音声 → Speech-to-Text」経由は廃止 (Gemini Multimodal が音声・映像を統合処理するため)。
+> 2026-05-05 改訂: **Refinement Agent の診断観点を 5 → 6 に拡張**。第 6 観点「戦略整合性 (Strategic Intent Drift)」を追加 — Epic に `rationale` / `successMetric` / `strategicTheme` を新設し、rationale 欠落の Epic を「配下チケットが Why を見失う形骸化サイン」として警告する。「戦略があるから開発するはずだが、その戦略が開発者に伝わっていない」課題への直接対応。
+> 2026-05-05 (夜) 改訂: **MCP (Model Context Protocol) サーバ追加** — `apps/mcp-server` で Belvedere の Tool / Agent を MCP 形式で外部公開。Phase 0 で stdio mode + 11 Tools (読み取り 6 + invoke_agent + CRUD 4 全実装)、Smoke test 14/14 pass。Phase 1-D で HTTP transport + Cloud Run + Firestore + OAuth 2.1。書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (MCP server 側に dryRun ロジックを持たない)。
 
 ---
 
@@ -71,25 +74,25 @@
 |---|---|
 | 役割 | デイリースクラム運営支援。進捗・障害・血のつまり (3日停滞) 検出 |
 | 起動 | 毎営業日 09:55 |
-| 入力 | 現スプリントの `Ticket[]`, 各メンバの直近 Slack/GitHub 活動 |
+| 入力 | 現スプリントの `Ticket[]`, 各メンバの直近 Slack 活動 (+ Phase 3 で GitHub commit/PR 活動を追加予定) |
 | 出力 | 短い要約 (Slack), 障害候補, 進捗ずれ, 品質警告 |
 | LLM | gemini-flash (頻度高い、短い処理) |
-| 主な Tool | `slack.thread.fetch`, `github.activity`, `firestore.update`, `ticket.quality.check` |
+| 主な Tool | `slack.thread.fetch`, `firestore.update`, `ticket.quality.check`, `github.activity` (Phase 3) |
 | 自律性 | L3 (要約は自動投稿、メンションは L2) |
 
-### 2-3. Refinement Agent (2026-05-03 追加)
+### 2-3. Refinement Agent (2026-05-03 追加 / 2026-05-05 第6観点追加)
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | Backlog Refinement 運営支援。次スプリント以降の候補 Story を **5観点で診断** |
+| 役割 | Backlog Refinement 運営支援。次スプリント以降の候補 Story を **6観点で診断** (戦略整合性を含む) |
 | 起動 | Refinement 30分前 / 手動 / `topic.ticket.created` (新規 Story 起票時) |
-| 入力 | 次スプリント候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story |
-| 出力 | 形骸化シグナル一覧 (5観点) + 修正提案 |
+| 入力 | 次スプリント候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story, **`Epic.rationale` / `successMetric`** |
+| 出力 | 形骸化シグナル一覧 (6観点) + 修正提案 |
 | LLM | gemini-2.5-pro |
-| 主な Tool | `project.list`, `epic.list`, `ticket.list`, `backlog.refinement.check` (5観点を一括診断する専用 Tool) |
+| 主な Tool | `project.list`, `epic.list`, `ticket.list`, `backlog.refinement.check` (6観点を一括診断する専用 Tool) |
 | 自律性 | L2 (提案 → 人が承認後に反映) |
 
-**5観点診断の中身** (`packages/tools/src/index.ts:160-222` で実装):
+**6観点診断の中身** (`packages/tools/src/index.ts:140-230` で実装):
 1. **Story 粒度過大**: `estimatePt > 8` → 分割候補を提案 (例: BLV-106 SP=13 → ①Eval set拡充 / ②few-shot rubric / ③コスト計測)
 2. **依存関係未整理**: `parentTicketId` (US- 紐付け) も `blockedBy` も空 → 整理を促す
 3. **valueImpact 未設定**: プロダクトゴール貢献度が空 → PO に確認推奨
@@ -98,18 +101,31 @@
    - `priority=low ∧ valueImpact=high` → 引き上げ推奨
    - `priority=medium ∧ valueImpact=high` → ゴール直結なのに優先度低の可能性
 5. **SP 見積バラつき異常**: 同 Epic 配下の SP の変動係数 (CV = stddev/mean) が 0.6 超 → 再見積推奨
+6. **戦略整合性 (Strategic Intent Drift) ⭐NEW**:
+   - `Epic.rationale` (戦略意図 / Why) が空のものを警告 → 配下チケットが「何のために?」を見失う形骸化サイン
+   - rationale が存在する場合、各チケットの内容が rationale と整合しているかを判定 (本物 Gemini 接続後に prompt 駆動で実装)
+   - **解く課題**: 「戦略があるから開発するはずだが、その戦略が開発者に伝わっていない」現象 (チケット → Epic 階層を 1 クリックで遡って Why が見える状態を作る)
 
 ### 2-4. Reviewer Agent
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | レビュー会用デモ準備 (デモシナリオ・preview URL集) |
-| 起動 | レビュー 1営業日前 |
-| 入力 | 完了/レビュー中チケット, 関連 PR, デプロイ履歴 |
-| 出力 | デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知 |
-| LLM | gemini-2.5-pro |
-| 主な Tool | `cloudrun.previewUrl`, `github.pr.diff`, `slack.notify` |
-| 自律性 | L2 |
+| 役割 | (a) レビュー会用デモ準備 (デモシナリオ / preview URL 集) — レビュー会 *前* / (b) **Sprint Review 録画から指摘を抽出して Ticket 起票候補を生成** — レビュー会 *後* |
+| 起動 | レビュー 1営業日前 (a) / `topic.review_recording.uploaded` (b) |
+| 入力 | (a) 完了/レビュー中チケット, デプロイ履歴 (+ Phase 3 で関連 PR 差分を追加予定) / (b) `ReviewRecording.videoUrl` (Cloud Storage 上の MP4), 参加メンバ一覧, Sprint Goal |
+| 出力 | (a) デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知 / (b) **指摘 → Ticket 起票候補リスト** (`sourceRecordingId` / `sourceTimestampSec` / `sourceQuote` / `sourceSpeakerId` 紐付き) |
+| LLM | **gemini-2.5-pro (Multimodal)** — 動画ファイルを直接入力可、Speech-to-Text を経由しない |
+| 主な Tool | `cloudrun.previewUrl`, `slack.notify`, **`video.extractIssues`** (録画 → 指摘抽出専用 Tool), `github.pr.diff` (Phase 3) |
+| 自律性 | L2 (デモシナリオ・指摘 → チケット転記とも人間確認後に確定) |
+
+**動画 → 指摘抽出の中身** (Phase 2 で実装):
+1. **発言検出**: 録画内で「ここの色が見えづらい」「並び順を変えて」「この表記やめて」など、改善要望を含む発言を検出
+2. **発言者特定**: 参加メンバ一覧と照合して発言者を特定 (`Member.userId`)
+3. **指摘の構造化**: `{ timestampSec, quote, speakerId, suggestedTitle, suggestedDoD[], suggestedSP }` 形式に変換
+4. **重複排除**: 同じ指摘が複数回言及された場合は最初の timestamp に集約
+5. **Ticket 候補生成**: `sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId` 紐付きで Ticket 候補オブジェクトを返す (人が Apply で確定 → Firestore 書込)
+
+> 競合との差別化: Atlassian Intelligence / Notion AI は動画 → チケットを持たない。Gemini Multimodal の独擅場であり、PITCH 質疑「他 LLM でなく Gemini である必然性」への直接回答になる。
 
 ### 2-5. Retrospective Agent
 
@@ -117,10 +133,10 @@
 |---|---|
 | 役割 | ふりかえり進行支援。Try抽出 + 翌スプリントWIP転記候補 |
 | 起動 | ふりかえり開始時 / 終了時 |
-| 入力 | 議事 (音声→Speech-to-Text), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
+| 入力 | 議事テキスト (Slack スレッド or 手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
 | 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新 |
-| LLM | gemini-2.5-pro + Speech-to-Text |
-| 主な Tool | `speech.transcribe`, `vector.search`, `firestore.write` |
+| LLM | gemini-2.5-pro |
+| 主な Tool | `slack.thread.fetch`, `vector.search`, `firestore.write` |
 | 自律性 | L2 (Try 転記は人間確認後) |
 
 ---
@@ -138,14 +154,13 @@
 | `member.list` | チームメンバ一覧 | SA |
 | `slack.message.post` | Slack 投稿 | Bot token |
 | `slack.thread.fetch` | スレッド取得 | Bot token |
-| `github.issues.list` | Issue 検索 | App / OAuth |
-| `github.pr.diff` | PR 差分取得 | App / OAuth |
-| `github.activity` | ユーザのコミット/PR活動 | App / OAuth |
+| `github.pr.diff` | PR 差分取得 (Reviewer Agent / Phase 3 実装予定) | App / OAuth |
+| `github.activity` | ユーザのコミット/PR活動 (Daily Agent / Phase 3 実装予定) | App / OAuth |
 | `calendar.events.list` | 儀式の予定取得 | OAuth |
 | `firestore.query` | Firestore クエリ | SA |
 | `firestore.write` | Firestore 書込 | SA |
 | `cloudrun.previewUrl` | preview revision URL 発行 | SA |
-| `speech.transcribe` | 音声 → テキスト | SA |
+| `video.extractIssues` | **Sprint Review 録画 → 指摘抽出 → Ticket 候補** (Gemini Multimodal) | SA |
 | `vector.search` | Vector Search クエリ | SA |
 | `human.ask` | (HITL) 不確実な時に人間に投げる | Slack |
 

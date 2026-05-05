@@ -11,15 +11,18 @@
 
 REPO="/Users/kaede/Projects/ai-agent-hackathon"
 STAMP="$REPO/.claude/.last-hackathon-check"
+LOG="$REPO/.claude/.hooks.log"
 THRESHOLD_DAYS=7
 
 # 最終チェックが無い (= まだ一度も走っていない) → 即リマインド
 if [ ! -f "$STAMP" ]; then
-  cat <<'EOF'
+  echo "$(date -u +%FT%TZ) [hackathon-check-reminder] FIRED reason=never-run" >> "$LOG"
+  printf '\033[33m🏁 [hackathon-check-reminder]\033[0m never run, prompting /hackathon-check\n' >&2
+  cat <<EOF
 {
   "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
-    "additionalContext": "🌬 ハッカソン要件チェックがまだ一度も走っていません。今のセッション中に `/hackathon-check` を実行することを推奨します。HACKATHON_COMPLIANCE.md / memory/hackathon_compliance.md を一次情報の Notion と突き合わせて、🟢/🟡/🔴 のステータスを更新してください。"
+    "hookEventName": "${HACKATHON_REMINDER_EVENT:-SessionStart}",
+    "additionalContext": "🌬 ハッカソン要件チェックがまだ一度も走っていません。今のセッション中に \`/hackathon-check\` を実行することを推奨します。HACKATHON_COMPLIANCE.md / memory/hackathon_compliance.md を一次情報の Notion と突き合わせて、🟢/🟡/🔴 のステータスを更新してください。"
   }
 }
 EOF
@@ -32,10 +35,12 @@ LAST_S=$(stat -f %m "$STAMP" 2>/dev/null || stat -c %Y "$STAMP" 2>/dev/null)
 DIFF=$(( (NOW_S - LAST_S) / 86400 ))
 
 if [ "$DIFF" -ge "$THRESHOLD_DAYS" ]; then
+  echo "$(date -u +%FT%TZ) [hackathon-check-reminder] FIRED reason=stale-${DIFF}days" >> "$LOG"
+  printf '\033[33m🏁 [hackathon-check-reminder]\033[0m %d days since last check, prompting /hackathon-check\n' "$DIFF" >&2
   cat <<EOF
 {
   "hookSpecificOutput": {
-    "hookEventName": "SessionStart",
+    "hookEventName": "${HACKATHON_REMINDER_EVENT:-SessionStart}",
     "additionalContext": "🌬 ハッカソン要件の最終チェックから ${DIFF} 日経過しました (閾値: ${THRESHOLD_DAYS} 日)。応募方法や審査基準が更新されている可能性があります。今のセッション中に \`/hackathon-check\` を実行して HACKATHON_COMPLIANCE.md を最新化してください。"
   }
 }

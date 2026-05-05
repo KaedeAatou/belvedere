@@ -1,8 +1,9 @@
-// 風車 / Kazaguruma — 共通定数
+// Belvedere — 共通定数
 
 export const RITUAL_LABELS = {
   planning: 'プランニング',
   daily: 'デイリースクラム',
+  refinement: 'バックログリファインメント',
   review: 'スプリントレビュー',
   retrospective: 'ふりかえり',
 } as const;
@@ -20,23 +21,4 @@ export const PRIORITY_WEIGHT = {
   medium: 2,
   high: 3,
   urgent: 4,
-} as const;
-
-// 風車の翼配置: プランニング=北 / デイリー=東 / レビュー=南 / ふりかえり=西
-export const RITUAL_TO_WING = {
-  planning: 'N',
-  daily: 'E',
-  review: 'S',
-  retrospective: 'W',
-} as const;
-
-export const WIND_SOURCE_TO_DIRECTION = {
-  voc: 'N',
-  nps: 'N',
-  support: 'N',
-  'github-pr': 'E',
-  'github-issue': 'E',
-  slack: 'E',
-  sentry: 'S',
-  manual: 'W',
 } as const;

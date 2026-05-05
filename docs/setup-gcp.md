@@ -59,23 +59,23 @@ gcloud billing accounts list
 export BILLING_ID="XXXXXX-XXXXXX-XXXXXX"  # 適宜置き換え
 
 # 開発プロジェクト
-gcloud projects create kazaguruma-dev-2026 \
+gcloud projects create belvedere-dev-atrium \
   --name="Belvedere Dev"
-gcloud billing projects link kazaguruma-dev-2026 --billing-account=$BILLING_ID
+gcloud billing projects link belvedere-dev-atrium --billing-account=$BILLING_ID
 
 # 本番プロジェクト
-gcloud projects create kazaguruma-prod-2026 \
+gcloud projects create belvedere-prod-atrium \
   --name="Belvedere Prod"
-gcloud billing projects link kazaguruma-prod-2026 --billing-account=$BILLING_ID
+gcloud billing projects link belvedere-prod-atrium --billing-account=$BILLING_ID
 ```
 
-> プロジェクトIDはグローバルでユニークなので、すでに存在したら `-2026` の代わりに数字を増やす。
+> プロジェクトIDはグローバルでユニーク。すでに存在したら `belvedere-dev-atrium-2` のように suffix を増やす、もしくは別のコードネーム (Atrium → Borealis 等) に切替。display name は英数字/スペース/`-`/`'`/`"`/`!` のみ可 (カッコ・記号は INVALID_ARGUMENT エラー)。
 >
 > **AWS的に言うと**: プロジェクトの作成はAWSアカウントを2つ作るのに近い（ただし課金は1つの billing account にまとめられる）。
 
 デフォルトプロジェクトを dev に向ける:
 ```bash
-gcloud config set project kazaguruma-dev-2026
+gcloud config set project belvedere-dev-atrium
 ```
 
 ---
@@ -100,7 +100,7 @@ gcloud services enable \
   cloudtrace.googleapis.com \
   logging.googleapis.com \
   monitoring.googleapis.com \
-  --project=kazaguruma-dev-2026
+  --project=belvedere-dev-atrium
 ```
 
 **AWS的に言うと**: AWSはAPIを有効化する概念がなく、SDKを叩けば動く。GCPはまずAPIを有効化する必要がある (慣れるまで違和感)。
@@ -113,7 +113,7 @@ gcloud services enable \
   generativelanguage.googleapis.com pubsub.googleapis.com cloudscheduler.googleapis.com \
   storage.googleapis.com iamcredentials.googleapis.com cloudtrace.googleapis.com \
   logging.googleapis.com monitoring.googleapis.com \
-  --project=kazaguruma-prod-2026
+  --project=belvedere-prod-atrium
 ```
 
 ---
@@ -137,7 +137,7 @@ gcloud config set artifacts/location asia-northeast1
 gcloud firestore databases create \
   --location=asia-northeast1 \
   --type=firestore-native \
-  --project=kazaguruma-dev-2026
+  --project=belvedere-dev-atrium
 ```
 
 **AWS的に言うと**: DynamoDBテーブルに最初に1個作る感覚。Firestoreはプロジェクトごとに1個 (またはデータベースID付きで複数) 作る。
@@ -149,11 +149,11 @@ gcloud firestore databases create \
 ## 7. Artifact Registry (Dockerイメージ置き場) (3分)
 
 ```bash
-gcloud artifacts repositories create kazaguruma \
+gcloud artifacts repositories create belvedere \
   --repository-format=docker \
   --location=asia-northeast1 \
   --description="Belvedere container images" \
-  --project=kazaguruma-dev-2026
+  --project=belvedere-dev-atrium
 ```
 
 **AWS的に言うと**: ECR リポジトリ作成。
@@ -170,8 +170,8 @@ gcloud auth configure-docker asia-northeast1-docker.pkg.dev
 Belvedere のCloud Runが他GCPサービスにアクセスするためのIDを作る。
 
 ```bash
-PROJECT=kazaguruma-dev-2026
-SA_NAME=kazaguruma-runtime
+PROJECT=belvedere-dev-atrium
+SA_NAME=belvedere-runtime
 SA_EMAIL=${SA_NAME}@${PROJECT}.iam.gserviceaccount.com
 
 gcloud iam service-accounts create $SA_NAME \
@@ -212,7 +212,7 @@ done
 ```bash
 echo -n "YOUR_API_KEY_HERE" | gcloud secrets create gemini-api-key \
   --data-file=- \
-  --project=kazaguruma-dev-2026
+  --project=belvedere-dev-atrium
 ```
 
 > 本番は Vertex AI 経由が推奨 (キー不要、SAだけで叩ける)。
@@ -225,7 +225,7 @@ echo -n "YOUR_API_KEY_HERE" | gcloud secrets create gemini-api-key \
 
 ブラウザで:
 1. https://console.cloud.google.com/billing/budgets
-2. プロジェクト = `kazaguruma-dev-2026` 選択
+2. プロジェクト = `belvedere-dev-atrium` 選択
 3. Budget 作成: 月額 $50, 50% / 90% / 100% で通知
 
 **AWS的に言うと**: AWS Budgets と同じ。

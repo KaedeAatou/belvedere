@@ -1,14 +1,20 @@
 {
-  "name": "@belvedere/cli",
+  "name": "@belvedere/mcp-server",
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "bin": {
+    "belvedere-mcp": "./dist/index.js"
+  },
   "scripts": {
     "dev": "tsx src/index.ts",
-    "demo": "tsx src/index.ts demo",
+    "smoke": "tsx src/smoke.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
     "@belvedere/shared": "workspace:*",
     "@belvedere/seed": "workspace:*",
     "@belvedere/repo": "workspace:*",

@@ -4,6 +4,9 @@
 > 最終ピッチ: 2026-08-19 渋谷ストリーム
 > 2026-04-30 改訂: 「形骸化したスクラムをAIが品質と運営で底上げする」軸に統一。風メタファーを廃止。
 > 2026-05-03 改訂: **Refinement Agent (5番目)** 追加 + Project エンティティ + valueImpact 軸。比喩は「螺旋階段の眺望」(明示)。
+> 2026-05-04 改訂: **Reviewer Agent に「録画動画 → 指摘抽出 → Ticket 起票候補」機能を追加** (Gemini 2.5 Pro Multimodal)。デモ #6 を Refinement → Reviewer 動画抽出 に差し替え、§5 差別化表に Multimodal 軸を追加。
+> 2026-05-05 改訂: **Refinement Agent に第 6 観点「戦略整合性」追加** (Epic.rationale 欠落検出)。§2 課題に「戦略の不在 (開発者が Why を見失う)」を追加、デモ #4 で「BLV-110 ミスマッチ + EP-3 rationale 欠落」を見せる。
+> 2026-05-05 (夜) 改訂: **MCP server 追加** — Claude Code / Cursor から Belvedere の Agent を直接呼べる。§5 差別化表に「MCP で AI Agent エコシステムに統合」軸追加、§6 stack に MCP server (stdio + HTTP)、デモ #7 を「Claude Code から Belvedere を呼んで Belvedere を開発している」シーンに差し替え可能。
 
 ---
 
@@ -40,7 +43,8 @@
 |---|---|
 | **書き忘れ** | DoD空・SP未定・US紐付けなしのチケットが溜まる |
 | **形骸化** | 儀式が「時間通りやっただけ」で前進感が薄い |
-| **言いっぱなし** | ふりかえりで Try が出るが翌スプリントに繋がらない |
+| **言いっぱなし** | ふりかえりの Try、**レビュー会の指摘** が翌スプリントに繋がらない |
+| **戦略の不在** | 開発者が「**何のためにこのチケットをやってるか**」を見失う (Epic に Why が書かれてない or 深く埋もれて読まれない) |
 
 > 「= 形骸化したスクラム。**回ってるのに、進んでない**。」
 
@@ -62,18 +66,21 @@
 
 画面録画 (or ライブ):
 
-1. **(15秒)** 大久保さんが Web で「Slack要約Botの起動安定化」というチケットを起票 (タイトルだけ)
-2. **(10秒)** 保存した瞬間、右パネルに **AI 提案** がポップアップ:
-   - 🟡 DoD 候補3件 (Bot起動成功率99% / リトライ機構 / 監視アラート)
-   - 🟡 User Story `US-201` への紐付け提案
-   - 🟡 Story Point: 過去類似から `5pt` 提案
-3. **(10秒)** 大久保さん「Apply」ボタン3クリック → **Quality 100% 緑バッジ**
-4. **(15秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・容量24/30pt」
-5. **(15秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)
-6. **(15秒)** Refinement 画面 → AI が次スプリント候補を **5観点で診断**: 「BLV-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「BLV-106 は SP=13 で過大、3つに分割候補」
-7. **(10秒)** Live Activity に「Daily Agent: 停滞警告 → 林 へ」と AI が自分で動いた履歴
+1. **(12秒)** 大久保さんが Web で「Slack要約Botの起動安定化」というチケットを起票 (タイトルだけ)
+2. **(8秒)** 保存した瞬間、右パネルに **AI 提案** がポップアップ:
+   - 🟡 DoD 候補3件 / User Story `US-201` 紐付け / SP=5 (過去類似から)
+   - 「Apply」ボタン3クリック → **Quality 100% 緑バッジ**
+3. **(12秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・容量24/30pt」
+4. **(14秒)** Refinement 画面 → AI が次スプリント候補を **6観点で診断**: 「BLV-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「BLV-106 は SP=13 で過大、3つに分割候補」「⭐ EP-3 (デリバリー信頼化) に rationale 未設定 → 配下 3 チケットが Why を見失う形骸化サイン」 — クリックで Epic.rationale 編集画面へジャンプ
+5. **(20秒) ★Multimodal キラーシーン★** Review 画面 → 前スプリントレビュー会の **録画動画をアップロード** → Reviewer Agent (Gemini 2.5 Pro Multimodal) が動画を直接読む → タイムスタンプ付きで 3 件の指摘を抽出:
+   - `12:35 田中(PO)`「この緑のボタン目立たない」 → CTA ボタン視認性改善 (SP=2)
+   - `18:42 田中(PO)`「並び順カスタマイズしたい」 → ソート機能 (SP=5)
+   - `24:40 大久保(SM)`「DoD 提案の出典見せて」 → AI 提案 source citation (SP=3)
+   - 各候補に動画タイムスタンプへのジャンプリンク付き、Apply で Sprint 14 候補へ
+6. **(12秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)
+7. **(8秒)** Live Activity に「Daily Agent: 停滞警告 → 林 へ」と AI が自分で動いた履歴
 
-> 「全部、エージェントが自分で動いた結果です。**ボタンを押したのは Apply だけ。**」
+> 「全部、エージェントが自分で動いた結果です。**動画も AI が見てくれます。** ボタンを押したのは Apply だけ。」
 
 ---
 
@@ -85,6 +92,8 @@
 | 1機能=1ボタン | チケット品質→US候補→SP推定 を **連鎖** |
 | 静的ルール | ふりかえりとチーム判断履歴から **学習** |
 | ユーザー起点 | チケット保存・Slack・儀式時刻の **トリガで自分から動く** |
+| テキストのみ | レビュー会 **録画動画** から指摘を抽出してチケット化 (**Gemini Multimodal の必然性**) |
+| 単独 SaaS に閉じる | **MCP** で Claude Code / Cursor から呼べる ── AI Agent エコシステム統合 |
 
 ---
 
@@ -93,12 +102,15 @@
 スライド: アーキ図 (Cloud Run × 5 / Gemini + ADK / Firestore / Pub/Sub)
 
 - **Cloud Run**: Frontend (Nuxt 3 SSR) + Orchestrator + 5 Ceremony Agents + Tool Server を独立サービスに
-- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + Orchestrator)、Orchestrator のみ gemini-2.5-flash で軽量ルーティング
-- **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix)
+- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / **Reviewer (Multimodal)** / Retrospective + Orchestrator)、Orchestrator のみ gemini-2.5-flash で軽量ルーティング
+- **Gemini 2.5 Pro Multimodal**: Reviewer Agent がレビュー会の **録画動画 (MP4) を直接入力** して指摘抽出 (Speech-to-Text を経由しない)
+- **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + ReviewRecording コレクション
+- **Cloud Storage**: Sprint Review 録画 (`gs://belvedere-{env}-review-recordings/`)
 - **Vertex AI Vector Search + RAG Engine**: Refinement / Retrospective が過去 Try / Scrum Guide を参照
 - **Cloud Build / WIF**: 個人 GitHub (KaedeAatou/belvedere) からの鍵レスデプロイ + OWASP リリースゲート
+- **MCP Server (stdio + HTTP)**: Claude Code / Cursor / 他 AI Agent クライアントから Belvedere を呼べる API。「Belvedere の開発自体を Claude Code 経由で Belvedere に管理させている」究極のドッグフード
 
-> 「**儀式運営の必然性** から組み合わせた GCP スタックです。」
+> 「**儀式運営の必然性** から組み合わせた GCP スタックです。動画 → チケットは **Gemini Multimodal の独擅場**。MCP で AI Agent エコシステムにも開かれている。」
 
 ---
 
@@ -115,12 +127,12 @@
 
 | 質問 | 答え方 |
 |---|---|
-| ハルシネーションの懸念は? | L0-L4 の自律性レベル設計。重要書込前は L2 で人間確認 |
-| Geminiでなく他LLMでもよくない? | ADKでマルチエージェントを宣言的に / Vertex AIでログ統合 |
-| Atlassian Intelligence との差は? | 1機能ではなく "儀式" + "チケット品質" を統合的に扱う体系 |
-| 個人参加で完走できる? | Boot Camp 並行、Cloud Run + Firestore で MVP / 6/7 でチーム化判断 |
-| コスト規模は? | 1スプリント (2週間) で $5-10 想定。Plannerが重く Dailyは軽い |
-| 実用は? | 自分のチームでドッグフードして、品質充足率改善を測る |
+| ハルシネーションの懸念は? | L0-L4 の自律性レベル設計。重要書込前は L2 で人間確認。**MCP 経由でも書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲** |
+| Geminiでなく他LLMでもよくない? | **Reviewer の動画 → 指摘抽出は Gemini 2.5 Pro Multimodal の独擅場**。Claude/GPT で同等品質は出せない。ADK でマルチエージェントを宣言的に / Vertex AI でログ統合 |
+| Atlassian Intelligence との差は? | 1機能ではなく "儀式" + "チケット品質" を統合的に扱う体系。**動画 → チケット起票は Atlassian には無い**。**MCP で外部 AI Agent から呼べるのも独自軸** |
+| 個人参加で完走できる? | Boot Camp 並行、Cloud Run + Firestore で MVP / 6/7 でチーム化判断。**Belvedere の開発自体を Claude Code + MCP で Belvedere に管理させているのが究極のドッグフード** |
+| コスト規模は? | 1スプリント (2週間) で $5-10 想定。Plannerが重く Dailyは軽い。動画 1 本 (~30 分) の Multimodal 解析が ~$0.5 |
+| 実用は? | 自分のチームでドッグフードして、品質充足率改善を測る。MCP server もハッカソン期間中に自分が使い続けて UX を改善 |
 
 ---
 
@@ -136,6 +148,6 @@
 ## 1分版 (中間提出 / 紹介動画用)
 
 > 「Jira を使っていて、DoD空・SP未定・User Story紐付けなしのチケット、ありませんか?
-> ふりかえりで出た Try、翌スプリントに繋がっていますか?
-> **Belvedere** は、保存した瞬間に AI がチケット品質を補強し、5儀式 (Planning / Daily / Refinement / Review / Retrospective) の運営を引き受けるスクラム支援サービスです。
+> ふりかえりの Try、レビュー会の指摘、翌スプリントに繋がっていますか?
+> **Belvedere** は、保存した瞬間に AI がチケット品質を補強し、**レビュー会の録画動画から指摘を自動でチケット化**し、5儀式 (Planning / Daily / Refinement / Review / Retrospective) の運営を引き受けるスクラム支援サービスです。
 > 形だけ回っているスクラムから、本当に前進するスクラムへ。」

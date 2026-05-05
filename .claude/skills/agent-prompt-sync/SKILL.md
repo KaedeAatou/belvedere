@@ -1,6 +1,7 @@
 ---
 name: agent-prompt-sync
 description: TS側のエージェント prompt (packages/agent/src/prompts.ts) と Python側 ADK instruction (apps/orchestrator-py/src/orchestrator/agents.py) のキーワード差分を検出する。Mock LLMの正規表現ルーティングは英語Agent名 (Planner / Daily / Refinement / Reviewer / Retrospective / Orchestrator) に依存しているため、片方を変更したらもう片方も追随する必要があることを確認する。
+color: green
 ---
 
 # Agent Prompt Sync

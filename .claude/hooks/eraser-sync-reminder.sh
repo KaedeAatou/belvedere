@@ -5,6 +5,7 @@
 set -euo pipefail
 
 MARKER="$CLAUDE_PROJECT_DIR/.claude/.eraser-sync-pending"
+LOG="$CLAUDE_PROJECT_DIR/.claude/.hooks.log"
 
 if [[ ! -f "$MARKER" ]]; then
   exit 0
@@ -12,6 +13,9 @@ fi
 
 # 編集されたファイル一覧 (1ファイル1行)
 files=$(tr '\n' ', ' < "$MARKER" | sed 's/, $//')
+
+echo "$(date -u +%FT%TZ) [eraser-sync-reminder] FIRED files=$files" >> "$LOG"
+printf '\033[35m📐 [eraser-sync-reminder]\033[0m injecting Claude prompt for: %s\n' "$files" >&2
 
 # additionalContext 経由で Claude に同期実行を指示
 # 注: hookSpecificOutput.hookEventName は spec で必要、additionalContext でテキスト注入

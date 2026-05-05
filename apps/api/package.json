@@ -1,5 +1,5 @@
 {
-  "name": "@kazaguruma/api",
+  "name": "@belvedere/api",
   "version": "0.0.1",
   "private": true,
   "type": "module",
@@ -9,12 +9,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kazaguruma/shared": "workspace:*",
-    "@kazaguruma/seed": "workspace:*",
-    "@kazaguruma/repo": "workspace:*",
-    "@kazaguruma/llm": "workspace:*",
-    "@kazaguruma/agent": "workspace:*",
-    "@kazaguruma/tools": "workspace:*",
+    "@belvedere/shared": "workspace:*",
+    "@belvedere/seed": "workspace:*",
+    "@belvedere/repo": "workspace:*",
+    "@belvedere/llm": "workspace:*",
+    "@belvedere/agent": "workspace:*",
+    "@belvedere/tools": "workspace:*",
     "@hono/node-server": "^1.13.7",
     "hono": "^4.6.14",
     "tsx": "^4.19.2"

@@ -1,4 +1,4 @@
-import type { AgentName } from '@kazaguruma/shared';
+import type { AgentName } from '@belvedere/shared';
 
 const COMMON = `
 You are part of Belvedere, a Scrum facilitation system for the DevOps × AI Agent Hackathon 2026.
@@ -26,12 +26,12 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   refinement: {
     role: 'Refinement Agent',
     responsibility:
-      'Backlog Refinement 支援。次スプリント以降の候補 Story について以下5観点を診断: (1) Story 粒度過大 (SP > 8 で分割推奨)、(2) 依存関係未整理 (parentTicketId / blockedBy 欠落)、(3) valueImpact 未設定、(4) priority × valueImpact ミスマッチ (priority=urgent ∧ valueImpact=low → 緊急根拠を再確認 / priority=low ∧ valueImpact=high → 引き上げ推奨 / priority=medium ∧ valueImpact=high → ゴール直結なのに優先度低の可能性) と Workspace.productGoal との整合、(5) 同 Epic 配下の Story Point 見積バラつき異常。提案は L2 (人が承認後に反映)。',
+      'Backlog Refinement 支援。次スプリント以降の候補 Story について以下 6 観点を診断: (1) Story 粒度過大 (SP > 8 で分割推奨)、(2) 依存関係未整理 (parentTicketId / blockedBy 欠落)、(3) valueImpact 未設定、(4) priority × valueImpact ミスマッチ (priority=urgent ∧ valueImpact=low → 緊急根拠を再確認 / priority=low ∧ valueImpact=high → 引き上げ推奨 / priority=medium ∧ valueImpact=high → ゴール直結なのに優先度低の可能性) と Workspace.productGoal との整合、(5) 同 Epic 配下の Story Point 見積バラつき異常、(6) 戦略整合性 — Epic.rationale (戦略意図 / Why) が空 or 配下チケットがその意図からドリフトしているか (rationale 欠落の Epic は配下チケットが「何のために?」を見失う形骸化サインとして警告し、rationale が存在する場合は各チケットの内容が rationale と整合しているかも判定する)。提案は L2 (人が承認後に反映)。',
   },
   reviewer: {
     role: 'Reviewer Agent',
     responsibility:
-      'Sprint Review 準備。review/done 状態のチケットからデモシナリオ草稿を作り、各チケットに Cloud Run preview URL を付け、ステークホルダ向け Slack 通知文 (1営業日前投下) を整える (L2: 人間確認後)。',
+      'Sprint Review の前後を支援する: (a) レビュー会 *前* (1営業日前): review/done 状態のチケットからデモシナリオ草稿を作り、各チケットに Cloud Run preview URL を付け、ステークホルダ向け Slack 通知文を整える。(b) レビュー会 *後*: 録画動画 (ReviewRecording) を gemini-2.5-pro Multimodal で直接読み取り、ステークホルダの発言から指摘 (UI改善 / 仕様追加 / バグ報告 等) を検出して Ticket 起票候補を生成する。各候補には sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId を必ず紐付けること。すべて L2 (人間確認後に Firestore 書込)。',
   },
   retrospective: {
     role: 'Retrospective Agent',

@@ -1,4 +1,4 @@
-import type { LLMToolSpec } from '@kazaguruma/llm';
+import type { LLMToolSpec } from '@belvedere/llm';
 
 export interface AgentTool<TArgs = Record<string, unknown>, TResult = unknown> {
   spec: LLMToolSpec;

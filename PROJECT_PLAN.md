@@ -68,7 +68,7 @@
 | # | タスク | 内容 | 依存 | 重要度 |
 |---|---|---|---|---|
 | U1 | Google Cloud アカウント作成 / 課金有効化 | コンソールで作業。$300無料枠あり | ⚪ | 🔥 |
-| U2 | プロジェクト作成 (`kazaguruma-prod` / `kazaguruma-dev`) | gcloudで作る手順書を私が用意 | 🟡 U1 | 🔥 |
+| U2 | プロジェクト作成 (`belvedere-prod` / `belvedere-dev`) | gcloudで作る手順書を私が用意 | 🟡 U1 | 🔥 |
 | U3 | 必要API有効化 (Cloud Run / Cloud Build / Vertex AI / Secret Manager / Artifact Registry) | gcloud services enable のスクリプト化 | 🟡 U2 | 🔥 |
 | U4 | サービスアカウント発行 / IAM設定 | スクリプト化済 | 🟡 U2 | 🔥 |
 | U5 | 課金アラート設定 ($50/月くらい) | コンソール作業 | 🟡 U1 | 🟧 |

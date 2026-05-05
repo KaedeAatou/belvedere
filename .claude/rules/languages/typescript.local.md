@@ -8,7 +8,7 @@ paths:
 ## Project-specific patterns
 
 - `import { ... } from './types'` - **`.js` 拡張子なし** で内部 import (Nuxt/Nitro の workspace 解決制約。`from './types.js'` は使わない)
-- `import { ... } from '@kazaguruma/<pkg>'` - workspace パッケージ参照 (内部識別子は再ブランド過渡期で `@kazaguruma/*` 維持)
+- `import { ... } from '@belvedere/<pkg>'` - workspace パッケージ参照 (内部識別子は `@belvedere/*` に統一済 / 旧 `@kazaguruma/*` は混入禁止)
 - `LLMProvider` interface - `mock` 以外は throw する factory (`packages/llm/src/factory.ts`)
 - `RepoContainer` interface - `tickets` / `sprints` / `projects` / `epics` / `stories` / `members` / `ceremonies` / `agentRuns` / `ceremonyHealth` の集約点 (`packages/repo/src/types.ts`)
 - `buildTools(repo: RepoContainer): AgentTool[]` factory - グローバルな `allDefaultTools` 配列を作らない (storage 非依存性のため)
