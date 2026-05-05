@@ -1,6 +1,6 @@
 ---
 name: agent-prompt-sync
-description: TS側のエージェント prompt (packages/agent/src/prompts.ts) と Python側 ADK instruction (apps/orchestrator-py/src/orchestrator/agents.py) のキーワード差分を検出する。Mock LLMの正規表現ルーティングは英語Agent名 (Planner / Daily / Refinement / Reviewer / Retrospective / Orchestrator) に依存しているため、片方を変更したらもう片方も追随する必要があることを確認する。
+description: Belvedere の TS prompt (`packages/agent/src/prompts.ts`) と Python ADK instruction (`apps/orchestrator-py/src/orchestrator/agents.py`) のキーワード差分を検出し、Mock LLM の役割判定 (英語 Agent 名: Planner / Daily / Refinement / Reviewer / Retrospective / Orchestrator) が壊れていないか確認する。Use this skill whenever the user edits or mentions `prompts.ts` / `agents.py` / agent 責務 / 5 儀式 Agent / Mock LLM ルーティング / Refinement の観点 / Reviewer の Multimodal — 片方だけ変えるとピッチ・デモ・テストが連鎖崩壊するため必ずチェックすること。`prompt-quality-reviewer` Subagent と並行して呼んで構わない (役割が補完的: こちらは drift 検出、あちらは prompting 品質)。
 color: green
 ---
 

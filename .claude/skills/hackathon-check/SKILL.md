@@ -1,6 +1,6 @@
 ---
 name: hackathon-check
-description: ハッカソン要件 (DevOps × AI Agent Hackathon 2026) を満たしているかチェックする。公式 Notion を再取得してプロジェクト現状と突き合わせ、HACKATHON_COMPLIANCE.md を更新し、🔴 リスクがあれば警告する。
+description: DevOps × AI Agent Hackathon 2026 (最終ピッチ 2026-08-19) の応募要件チェック。公式 Notion (memory/hackathon_url.md) を一次情報として再取得し、Cloud Run / Gemini-ADK / 個人 GitHub / 個人 GCP の現状と突き合わせて HACKATHON_COMPLIANCE.md を更新し、🔴 リスクを目立つ形で警告する。Use this skill whenever the user mentions ハッカソン / hackathon / 応募要件 / コンプライアンス確認 / 公式 Notion / 中間提出 / 最終ピッチ / 動画必須 / 個人参加要件 / コスト制限 / Cloud Run 必須 / Gemini-ADK 必須、またはフェーズ移行・大きな技術スタック変更の直後 / 週次定期チェック / 7 日経過リマインダー発火時。修正提案までで止め、要件未充足を勝手に塞ぐ実装は行わない。
 color: red
 ---
 
