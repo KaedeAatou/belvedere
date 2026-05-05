@@ -1,6 +1,6 @@
 ---
 name: gcp-setup
-description: docs/setup-gcp.md の14ステップを対話的に進めるための手引き。ユーザーは AWS実務経験あり / GCP未経験のため、各ステップで AWS の対応サービスを併記すること。billing有効化やプロジェクト作成など破壊的でないがコスト発生する操作はユーザーの明示的なYesを取ってから流す。
+description: docs/setup-gcp.md の 11 ステップ (gcloud install / プロジェクト + billing / API 有効化 / Firestore / Artifact Registry / IAM / 課金アラート / WIF) を対話的に進めるための手引き。ユーザーは AWS 実務経験あり / GCP 未経験のため、各ステップで AWS の対応サービスを併記すること。billing 有効化やプロジェクト作成などコスト発生操作はユーザーの明示的な Yes を取ってから流す。`disable-model-invocation: true` のためユーザーが `/gcp-setup` と入力した時のみ起動する。
 disable-model-invocation: true
 color: yellow
 ---
@@ -32,7 +32,7 @@ color: yellow
 | 7 | Artifact Registry 作成 | 3min | ECR repository 作成 |
 | 8 | サービスアカウント (`belvedere-runtime`) + IAM | 5min | IAM Role + Policy |
 | 9 | (任意) Gemini API key を Secret Manager へ | 3min | Secrets Manager |
-| 10 | 課金アラート ($50/月) | 3min | AWS Budgets |
+| 10 | 課金アラート ($10/月、ハッカソン期間 2026-08-19 までのコスト保護) | 3min | AWS Budgets |
 | 11 | (Phase 1 終盤で) GitHub Actions WIF — `docs/setup-github-wif.md` 参照 | 15min | IAM OIDC Provider |
 
 ## 完了の合図

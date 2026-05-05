@@ -1,6 +1,6 @@
 ---
 name: eraser-arch-sync
-description: Belvedere の Eraser アーキテクチャ図 (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) を `ARCHITECTURE.md` の Mermaid 図と整合する形で同期更新する。儀式数・Agent 構成・GCP サービス選択・データ層に変更があった時に呼び出す
+description: Belvedere の Eraser アーキ図 (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) を `ARCHITECTURE.md` の Mermaid 図と一方向同期する (ARCHITECTURE.md → Eraser)。Use this skill whenever the user edits `ARCHITECTURE.md` / Mermaid 図 / 儀式数 / Agent 構成 / GCP サービス選択 / データ層、または mentions「アーキ図同期」「Eraser 反映」「ピッチ用の図を更新」/ arch-sync。ピッチ審査員に見せる公開図のため、編集後は同期し忘れない。会社情報 (`***company-redacted***`/`***company-account-redacted***`) と廃止語 (翼/風車/Kazaguruma) は絶対に図に混入させない。
 color: purple
 ---
 
