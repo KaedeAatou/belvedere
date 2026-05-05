@@ -116,7 +116,7 @@ LLM_PROVIDER=vertex pnpm demo          # 〃
 
 ---
 
-## 進捗状況 (2026-05-04 現在 / Phase 0 完了 → Phase 1 着手目前)
+## 進捗状況 (2026-05-06 現在 / Phase 0 ✅ + Phase 1-A GCP セットアップ完了)
 
 ### ✅ Phase 0 完了
 - [x] プロダクト・アーキ・データ・エージェント設計ドキュメント (5 儀式 / Project / valueImpact 反映済)
@@ -135,11 +135,24 @@ LLM_PROVIDER=vertex pnpm demo          # 〃
 
 ### 🟡 Phase 1: 手動 Belvedere SaaS (期限 2026-06-09)
 ゴール: Agent なしで Jira 風 SaaS が Cloud Run 上で動く。MCP も Cloud Run にホストして Claude Code から本番 Belvedere を操作。
-- [ ] **次にユーザーがやること**: GCP プロジェクト作成 (5/7 の 300 ドルクーポン受領後 / `/gcp-setup` skill 経由)
-- [ ] Cloud Run 初回デプロイ (5/17 までに `/health` 200)
+
+#### Phase 1-A GCP 基盤 ✅ 完了 (2026-05-06)
+- [x] GCP プロジェクト 2 つ作成 (`belvedere-dev-atrium` / `belvedere-prod-atrium`) + billing link
+- [x] API 14 個 enable
+- [x] リージョン固定 `asia-northeast1`
+- [x] Firestore Native DB 初期化
+- [x] Artifact Registry (`belvedere`) 作成
+- [x] Service Account `belvedere-runtime` + 9 ロール
+- [x] 課金アラート $10/月
+
+#### Phase 1-A 残タスク
+- [ ] **次にユーザーがやること**: Cloud Run 初回デプロイ (`gcloud builds submit` で `/health` 200)
+- [ ] `.github/workflows/deploy-api.yml` の WIF_PROVIDER の PROJECT_NUMBER 置換 + push トリガ復活
+
+#### Phase 1-B 〜 1-E
 - [ ] Firestore 実装 (`packages/repo/src/firestore.ts`)
 - [ ] Firebase Auth (個人 Google) で UI / API / MCP 保護
-- [ ] Web UI で チケット CRUD / Sprint 切替 / Epic 編集
+- [ ] Web UI でチケット CRUD / Sprint 切替 / Epic 編集
 - [ ] MCP server を Cloud Run へ (HTTP transport + OAuth 2.1)
 - [ ] ピッチデモ動画 1 本 (5/末まで / Mock UI 範囲で)
 

@@ -73,8 +73,8 @@ gantt
 
 ゴール: **Agent なしの Jira 風 SaaS** が Cloud Run で動く。Web UI で人間がチケット起票・編集・進捗変更ができる。MCP も Cloud Run 上にホストされ、Claude Code から本番 Belvedere を操作できる = ここから自分が Belvedere の最初のヘビーユーザーに。
 
-#### Phase 1-A: GCP 基盤 (5/13-17)
-- [ ] **GCP セットアップ** (個人 `owner@example.com` / プロジェクト / API 有効化 / SA / 課金アラート $5/月)
+#### Phase 1-A: GCP 基盤 (5/13-17 → ✅ 完了 2026-05-06)
+- [x] **GCP セットアップ** (個人 `owner@example.com` / `belvedere-dev-atrium` + `belvedere-prod-atrium` / API 14 個有効化 / Firestore Native asia-northeast1 / Artifact Registry "belvedere" / Service Account `belvedere-runtime` + 9 ロール / 課金アラート $10/月)
 - [ ] `.github/workflows/deploy-api.yml` の 2 点修正 (push トリガ復活 + `WIF_PROVIDER` の `PROJECT_NUMBER` 実数置換)
 - [ ] **Cloud Run 初回デプロイ**: Web (Nuxt 3) + API (Hono) を `/health` 200 状態で公開
 - [ ] Cloud Build → Cloud Run CI (WIF 経由)

@@ -146,7 +146,8 @@
 | マイルストーン | 期限 | 状態 |
 |---|---|---|
 | Phase 0: ローカル基盤 (Mock LLM / Web UI / MCP CRUD) | 2026-05-12 | ✅ 完了 |
-| Phase 1: 手動 Belvedere SaaS (Cloud Run + Firestore + Firebase Auth + UI CRUD + MCP Cloud Run) | 2026-06-09 | 🔴 GCP 未セットアップ、要即着手 |
+| Phase 1-A: GCP セットアップ (project / API / Firestore / Artifact Registry / SA / 課金アラート $10/月) | 2026-05-06 | ✅ 完了 |
+| Phase 1: 手動 Belvedere SaaS (Cloud Run デプロイ + Firestore 実装 + Firebase Auth + UI CRUD + MCP Cloud Run) | 2026-06-09 | 🟡 Phase 1-A 完了、Cloud Run 初回デプロイへ |
 | Phase 2: Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + Mock Agent + AI Panel) | 2026-06-30 | 🟡 配線設計済、Phase 1 完了後着手 |
 | Phase 3: Agent 本実装 (Gemini + ADK + Multimodal + RAG + GitHub 連携) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち |
 | Phase 4: 仕上げ + ピッチ (a11y / OWASP / 動画 / リハ) | 2026-08-19 | 🔴 ピッチ素材未着手 |

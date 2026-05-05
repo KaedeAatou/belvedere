@@ -74,7 +74,7 @@ class MemEpicRepo implements EpicRepository {
 }
 
 class MemUserStoryRepo implements UserStoryRepository {
-  // UI側 (apps/web/lib/data.ts) で静的定義しているものを将来的にここに移管予定。
+  // UI側 (apps/web/composables/useDemoData.ts) で静的定義しているものを将来的にここに移管予定。
   // 現状は空実装でリポジトリ抽象だけ確保しておく。
   private store = new Map<string, UserStory>();
   async list(opts: { projectId?: string; epicId?: string } = {}): Promise<UserStory[]> {

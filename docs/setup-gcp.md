@@ -12,7 +12,7 @@
 
 - macOS / Apple Silicon (Darwin)
 - ブラウザで Google アカウント（個人）にログイン済み
-- 課金アラート設定で精神的負担を減らす方針 ($50/月で警告)
+- 課金アラート設定で精神的負担を減らす方針 ($10/月で警告)
 
 ⚠️ ハッカソン参加要件: 個人の私的活動のため、**会社アカウントではなく個人Googleアカウント** で進めること。
 
@@ -226,7 +226,7 @@ echo -n "YOUR_API_KEY_HERE" | gcloud secrets create gemini-api-key \
 ブラウザで:
 1. https://console.cloud.google.com/billing/budgets
 2. プロジェクト = `belvedere-dev-atrium` 選択
-3. Budget 作成: 月額 $50, 50% / 90% / 100% で通知
+3. Budget 作成: 月額 $10, 50% / 90% / 100% で通知
 
 **AWS的に言うと**: AWS Budgets と同じ。
 
