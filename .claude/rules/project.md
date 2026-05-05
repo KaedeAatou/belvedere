@@ -24,6 +24,14 @@
 - **比喩は明示**: 螺旋階段比喩は冒頭で「比喩」と宣言。コードや型名には持ち込まない
 - **AI Agent 出力では source ID を引用**: `EP-xxx` / `US-xxx` / `WC-xxx`、外部参照は `slack:Cxx:Txx` / `gh:org/repo#nn`。fabricated ID は禁止
 
+## Git commit メッセージ (non-negotiable)
+
+**`git commit` 実行前に必ず `belvedere-commit` skill を呼ぶ**。Qiita itosho 流のフォーマット (1 行目: `[<種別>]<要約>` / 2 行目: 空行 / 3 行目以降: 変更理由) を強制。GitHub の commits 一覧で 1 行目だけで「なぜ必要か」が読み取れることが審査基準 (B-5 実装力評価)。
+
+- **直接 `git commit` を Bash で実行する場合も**、メッセージは belvedere-commit のフォーマットに従う
+- 既存 `commit-commands:commit` plugin は **使わない** (フォーマット強制しないため)
+- 詳細: `.claude/skills/belvedere-commit/SKILL.md` + `references/examples.md`
+
 ## 廃止済キーワード (2026-04-30 / 05-01)
 
 復活させない。`prompt-quality-reviewer` Subagent はこれらの混入を検出する:
