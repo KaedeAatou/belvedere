@@ -129,17 +129,41 @@
 
 ## D. スケジュール要件
 
+> **2026-05-06 Notion 再取得で全マイルストーン確定**: 前回チェック (2026-05-04) で「Coming Soon」だった応募方法・スケジュールが完全公開された。**中間提出は無し**。7/10 一発提出 → 一次/二次審査 → 7/30 通知 → 8/19 最終ピッチ。
+
 | イベント | 日付 | 状態 |
 |---|---|---|
-| Google Cloud 300ドルクーポン配布開始 | 2026-05-07 以降 | 🟢 確認 (2026-05-01 Notion 更新)。申込済参加者には登録メールアドレスへ送付 |
-| チームビルディングイベント (個人参加者向け) | 2026-06-07 | 🟡 個人参加判断中 |
-| Boot Camp (Agentic AI Bootcamp 2026) | 2026-06-07〜 | 🟡 参加予定 |
-| 応募受付開始 | 公開待ち (Coming Soon) | 🔴 公開時刻 watch |
-| 中間提出 (あれば) | 公開待ち | 🔴 公開時刻 watch |
-| 最終ピッチ (10チームのみ招待) | 2026-08-19 (水) 渋谷ストリーム | 🔴 通過依存 |
+| Google Cloud 300ドルクーポン配布開始 | 2026-05-07 以降 | 🟢 確認 (申込済参加者には登録メールアドレスへ送付) |
+| ① 参加登録 (Findy Conference) | 2026-04-27 10:00 〜 2026-07-10 23:59 | 🔴 未確認 (個人 `owner@example.com` で実施 / クーポン受信のため早期推奨) |
+| ② チームビルディングイベント (オフライン) | 2026-06-07 (日) 13:00–18:00 / ファインディ株式会社 イベントスペース | 🟡 個人参加判断中 |
+| ③ Boot Camp (Agentic AI Bootcamp 2026) | 2026-06 上旬〜下旬 / オンライン無料 / 事前申込制 | 🟡 参加予定 |
+| ④ **作品提出〆切 (Proto Pedia + Google Form)** | **2026-07-10 (金) 23:59** | 🔴 必須 3 件: **公開** GitHub URL / デプロイ URL / Proto Pedia URL |
+| ⑤ 一次審査 (運営事務局) | 2026-07-13 (月) 〜 17 (金) | — 通過依存 |
+| ⑥ 二次審査 (外部有識者) | 2026-07-21 (火) 〜 24 (金) | — 通過依存 |
+| ⑦ 受賞&決勝進出通知 | 2026-07-30 (木) | — サイト + Google Cloud Japan ブログ |
+| ⑧ 最終ピッチ (10チーム招待) | 2026-08-19 (水) Google 渋谷オフィス (渋谷ストリーム) | — 通過依存 |
+| ⑨ アフターイベント | 2026-09 予定 (オンライン) | — |
 
-応募方法・スケジュール詳細は 2026-05-04 時点 Notion 上で依然「Coming Soon」状態。
-**監視必須**: 公開され次第ここを更新。
+### 応募方法 (3 STEP)
+
+- **STEP①**: Findy Conference 申込フォームから参加登録 (チームでも全員必須 / クーポン受信メールアドレス確認)
+- **STEP②**: Proto Pedia に作品登録 (アカウント要)
+- **STEP③**: 作品提出フォーム (Google Form) で正式エントリー — 必須 3 件:
+  1. **公開** GitHub リポジトリ URL ← 🔴 現在 `KaedeAatou/belvedere` は private、提出までに public 化必須
+  2. デプロイしたプロジェクト URL ← 🟢 `https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health` 200 OK 稼働中
+  3. Proto Pedia 作品 URL
+
+### Proto Pedia 登録必須項目 (STEP②)
+
+- 作品ステータス / タイトル / 概要
+- **動画 (YouTube または Vimeo URL) — 必須**
+- **システムアーキテクチャ図 — 必須** (アップロード)
+- 開発素材 / **タグに `findy_hackathon` を含める**
+- ストーリー (必須): ①課題と背景 ②利用ユーザー ③特徴
+
+### 賞金
+
+- 最優秀賞 50 万円 (1 作品) / 優秀賞 30 万円 (3 作品) / 特別賞 10 万円 (6 作品) / 総額 200 万円
 
 ### 自社マイルストーン (`ROADMAP.md` / 2026-05-05 4段階構成へ再編)
 
@@ -194,3 +218,4 @@
 | 2026-05-05 (深夜) | **MCP (Model Context Protocol) サーバ実装 (Phase 0)**: ① `apps/mcp-server/` 新設 (TypeScript / `@modelcontextprotocol/sdk@^1.0.4`) ② stdio mode + 読み取り 6 Tool (`belvedere_ticket_list / ticket_get / epic_list / member_list / quality_check / refinement_check`) + `belvedere_invoke_agent` (5 儀式 + Orchestrator) + CRUD 系 4 個 (Phase 0 で前倒し本実装、`EpicRepository.upsert` 追加) ③ Smoke test 14/14 pass / typecheck 全 11 ワークスペース緑 ④ `docs/setup-mcp.md` 新設で Claude Code から `claude mcp add belvedere stdio "..."` で接続する手順を文書化 ⑤ B-1 / B-4 / B-5 で「単独 SaaS でなく AI Agent エコシステム統合」「自分自身が Claude Code + MCP で Belvedere をドッグフード」を主張可能に。書込承認は MCP server 側に dryRun を持たず、ホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (L2 規範をホスト側で実現)。 |
 | 2026-05-05 (朝) | **ROADMAP を 4 段階構成に再編 + MCP CRUD を Phase 1 に前倒し本実装**: ① ユーザー意図「Agent 開発前にまず Jira 風 SaaS を作る経験」「Belvedere をドッグフードしながら Agent 開発」を反映 ② Phase 1 = 手動 SaaS (Cloud Run + Firestore + Firebase Auth + UI CRUD + MCP Cloud Run ホスト) / Phase 2 = Mock Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + AI Panel) / Phase 3 = Agent 本実装 (Gemini + ADK + Multimodal + RAG) / Phase 4 = 仕上げ ③ MCP CRUD 4 Tool を本実装 (`belvedere_ticket_create / update / status_change / epic_update`)、`EpicRepository.upsert` 追加、smoke test 14/14 pass ④ Phase 1 期限を 5/17 (Cloud Run /health 200) → 6/9 (手動 SaaS 完成) に延長 ⑤ 中間提出 (推定 6/30) は Phase 1 + Phase 2 (Mock 配線) で勝負可能、Gemini 接続は Phase 3 (~7/27) で。ハッカソン要件 Cloud Run は Phase 1 で達成、Gemini + ADK は Phase 3 で達成。 |
 | 2026-05-06 | **Phase 1-A 完了**: ① WIF (Workload Identity Federation) で GitHub Actions ↔ GCP の鍵レス CI/CD を有効化 (`belvedere-ci-pool` / `belvedere-ci-github` Provider / `belvedere-deployer` SA + 6 ロール / principalSet で `KaedeAatou/belvedere` repo に絞込) ② `.github/workflows/deploy-api.yml` の `WIF_PROVIDER` / `WIF_SA` を実値に置換 + push トリガ復活 ③ `infra/cloudbuild.yaml` に `_TAG` substitution 追加 (`gcloud builds submit` 経由では `${SHORT_SHA}` が空になる罠の回避) ④ `apps/api/Dockerfile` の旧 `@kazaguruma/api` 残骸を `@belvedere/api` に統一 + single-stage 化 (multi-stage では pnpm workspace の per-package symlink が runtime に届かず `ERR_MODULE_NOT_FOUND` になる罠の回避) ⑤ `belvedere-api-dev` が `asia-northeast1` で起動、`/health` 200 を確認。GCP リソース命名は `belvedere-` プレフィックスに統一済 (旧 `github-actions` SA / `github-pool` / `github-provider` は完全削除 + dangling 残骸 cleanup 済)。 |
+| 2026-05-06 (夜) | **Notion 再取得で応募方法 / スケジュール完全公開を検知** (`hackathon-compliance-auditor` Subagent 監査): ① **中間提出は無し** — 7/10 一発提出 ② 応募 STEP③ で **公開** GitHub URL 必須 → `KaedeAatou/belvedere` (private) を遅くとも 7/10 直前までに public 化必要 ③ Proto Pedia 必須項目に **動画 (YouTube/Vimeo)** + **システムアーキテクチャ図** + ストーリー 3 要素 + `findy_hackathon` タグ ④ 賞金確定 (最優秀 50 万 / 優秀 30 万 ×3 / 特別 10 万 ×6 / 総額 200 万) ⑤ 一次審査 7/13-17 / 二次審査 7/21-24 / 通知 7/30 ⑥ 公開リスク対処として `ui-mockups-v3/` 内の旧名 (`風車` / `kazaguruma`) 3 箇所を `Belvedere` / `belvedere` に置換 (廃止語残骸 0 件確認) ⑦ ARCHITECTURE.md / Eraser 図に実装ステータス色分け導入で「審査時点でどこが本当に動いているか」を視覚化済 (緑=API/CI-CD/Logging / 黄=Web/MCP/Orchestrator/5 Agents/Firestore / 灰=Tool Server/IAP/Gemini/ADK/Vector Search 等)。 |

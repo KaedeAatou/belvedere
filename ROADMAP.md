@@ -35,16 +35,19 @@ gantt
     AI Integrity Panel (Mock)     :2026-06-15, 7d
     Live Activity 履歴画面        :2026-06-22, 5d
     Slack 通知 (Mock or 実)       :2026-06-27, 5d
-    応募提出 / 中間提出 (推定)     :milestone, 2026-06-30, 1d
-    section 3. Agent 本実装
+    section 3. Agent 本実装 (提出ライン目標)
     Vertex AI Gemini 接続         :2026-07-01, 5d
-    Python ADK ランタイム接続     :2026-07-06, 5d
-    Reviewer Multimodal           :2026-07-11, 5d
-    Vector Search + RAG           :2026-07-16, 5d
-    CeremonyHealthScore 計算      :2026-07-21, 4d
-    GitHub 連携 (activity/pr.diff) :2026-07-25, 3d
+    Python ADK ランタイム接続     :2026-07-06, 4d
+    作品提出 (7/10 23:59)         :crit, milestone, 2026-07-10, 1d
+    一次審査 (運営事務局)         :2026-07-13, 5d
+    Reviewer Multimodal           :2026-07-13, 5d
+    Vector Search + RAG           :2026-07-18, 5d
+    二次審査 (外部有識者)         :2026-07-21, 4d
+    CeremonyHealthScore 計算      :2026-07-23, 4d
+    GitHub 連携 (activity/pr.diff) :2026-07-27, 3d
+    結果通知                      :crit, milestone, 2026-07-30, 1d
     section 4. 仕上げ + ピッチ
-    OWASP / a11y / 観測           :2026-07-28, 7d
+    OWASP / a11y / 観測           :2026-07-31, 7d
     ドッグフード強化              :2026-08-04, 5d
     ピッチ動画 / スライド         :2026-08-09, 5d
     リハーサル                    :2026-08-13, 5d
@@ -118,9 +121,9 @@ gantt
 - [ ] **Cloud Scheduler 設定**: 月曜 08:30 (Planner) / 平日 09:55 (Daily) / 木曜 14:30 (Refinement) / レビュー前日 17:00 (Reviewer) / ふりかえり当日 16:00 (Retro)
 - [ ] **Slack Bot Mock** (or 実 Slack に投稿) — Daily / Planner の通知を可視化
 - [ ] 5 画面それぞれで Mock Agent パネルが稼働 (Planning / Daily / Refinement / Review / Retro)
-- [ ] 応募提出 / 中間提出 (フォーム公開後すぐ)
+- [ ] **(2026-05-06 確定)** 応募提出は **2026-07-10 (金) 23:59** 1 発提出 (中間提出は無し)。提出 STEP③ で **公開 GitHub URL / デプロイ URL / Proto Pedia URL** の 3 件必須
 
-検証イベント: 2026-06-30 までに「ユーザーが何もしなくても Slack に Agent 通知が届く」演出が成立。ピッチデモ動画もこの時点で撮り直し可能。
+検証イベント: 2026-06-30 までに「ユーザーが何もしなくても Slack に Agent 通知が届く」演出が成立。ピッチデモ動画もこの時点で撮り直し可能。Phase 3 序盤 (Vertex Gemini 接続 + ADK ランタイム接続) を 7/10 までに 1 つでも本物推論で動かすのが提出ライン目標。
 
 ---
 
