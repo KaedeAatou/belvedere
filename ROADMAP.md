@@ -75,9 +75,10 @@ gantt
 
 #### Phase 1-A: GCP 基盤 (5/13-17 → ✅ 完了 2026-05-06)
 - [x] **GCP セットアップ** (個人 `owner@example.com` / `belvedere-dev-atrium` + `belvedere-prod-atrium` / API 14 個有効化 / Firestore Native asia-northeast1 / Artifact Registry "belvedere" / Service Account `belvedere-runtime` + 9 ロール / 課金アラート $10/月)
-- [ ] `.github/workflows/deploy-api.yml` の 2 点修正 (push トリガ復活 + `WIF_PROVIDER` の `PROJECT_NUMBER` 実数置換)
-- [ ] **Cloud Run 初回デプロイ**: Web (Nuxt 3) + API (Hono) を `/health` 200 状態で公開
-- [ ] Cloud Build → Cloud Run CI (WIF 経由)
+- [x] **WIF (Workload Identity Federation) セットアップ**: `belvedere-ci-pool` + `belvedere-ci-github` Provider + `belvedere-deployer` SA (6 ロール) + principalSet で `KaedeAatou/belvedere` repo に絞込。GCP リソース命名は `belvedere-` プレフィックスで統一 (旧 `github-actions` / `github-pool` / `github-provider` は完全削除)
+- [x] `.github/workflows/deploy-api.yml` 修正完了: `WIF_PROVIDER` 実値置換 (`876087923874` / `belvedere-ci-pool` / `belvedere-ci-github`) + push トリガ復活 (paths 限定) + `_TAG` substitution で SHORT_SHA を image tag に
+- [x] **Cloud Run 初回デプロイ完了** (2026-05-06): `https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health` で 200 OK + `{"status":"ok","llm":"mock","repo":"memory"}` 確認済。Web (Nuxt 3) のデプロイは Phase 1-C で対応
+- [x] Cloud Build → Cloud Run CI (WIF 経由) 動作確認済 (commit 4224ba6 で完全グリーン / 2m42s)
 - [ ] Secret Manager セットアップ (Phase 3 の Gemini key 用に枠だけ用意)
 
 #### Phase 1-B: データ層 + 認証 (5/18-22)
