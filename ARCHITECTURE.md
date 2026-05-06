@@ -21,12 +21,24 @@
 
 ## 1. 全体図
 
+> **凡例 (ノードの色は実装ステータス)**
+> - 🟢 **緑**: Cloud Run 上で動作確認済 (2026-05-06 時点)
+> - 🟡 **黄**: 実装済だが Cloud Run には未 deploy (ローカル動作のみ / 空インスタンス)
+> - ⚪ **灰 (破線)**: 未実装、Phase X 以降に着手予定
+
 ```mermaid
 graph TB
     subgraph User["👤 ユーザー / チーム"]
         U1[Web Browser]
         U2[Slack]
         U3[GitHub]
+    end
+
+    subgraph CICD["🔧 Build & Deploy (鍵レス CI/CD)"]
+        GH["GitHub Actions<br/>(deploy-api.yml)"]
+        WIF["Workload Identity<br/>belvedere-ci-pool<br/>belvedere-ci-github"]
+        CB["Cloud Build<br/>(_TAG = short SHA)"]
+        AR["Artifact Registry<br/>belvedere/api"]
     end
 
     subgraph Edge["Edge / Gateway"]
@@ -39,6 +51,7 @@ graph TB
     end
 
     subgraph Backend["Backend Services (Cloud Run)"]
+        API["apps/api<br/>Hono CRUD<br/>belvedere-api-dev"]
         ORC["orchestrator<br/>(gemini-2.5-flash)"]
         AG_P["agent-planner<br/>FLOOR 01"]
         AG_D["agent-daily<br/>FLOOR 02"]
@@ -77,11 +90,24 @@ graph TB
         ER["Error Reporting<br/>= CloudWatch Alarms"]
     end
 
+    %% --- ユーザーフロー ---
     U1 --> LB --> IAP --> WEB
-    WEB --> ORC
+    WEB --> API
+    API --> FS
+
+    %% --- CI/CD パイプライン (今日 2026-05-06 動作確認) ---
+    U3 -.push main.-> GH
+    GH --> WIF --> CB
+    CB --> AR
+    AR -.image pull.-> API
+
+    %% --- MCP フロー ---
     CC & CUR --> MCP
     MCP --> ORC
     MCP --> FS
+
+    %% --- Agent オーケストレーション ---
+    WEB -.Phase 3 以降.-> ORC
     ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
     AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
     AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
@@ -93,10 +119,46 @@ graph TB
     SCHED -.儀式30分前.-> ORC
     PUBSUB --> ORC
     ORC -.fan-out.-> AG_P & AG_D & AG_F & AG_R & AG_X
+
+    %% --- 共通インフラ ---
     Backend --> LOG & TR & ER
     Backend --> SM
     Backend --> GCS
+
+    %% --- 実装ステータス classDef ---
+    classDef deployed fill:#2E7D32,stroke:#1B5E20,color:#fff,stroke-width:2px
+    classDef implemented fill:#F9A825,stroke:#C77800,color:#000,stroke-width:2px
+    classDef planned fill:#90A4AE,stroke:#546E7A,color:#fff,stroke-dasharray: 5 5
+
+    %% 🟢 Deployed (今日 Cloud Run + CI/CD で動作確認)
+    class API,GH,WIF,CB,AR,LOG deployed
+
+    %% 🟡 Implemented (コードあり / ローカル動作 / 空 instance)
+    class WEB,MCP,ORC,AG_P,AG_D,AG_F,AG_R,AG_X,FS,GCS implemented
+
+    %% ⚪ Planned (Phase 1-B 以降に実装)
+    class LB,IAP,TOOL,GEM,ADK,VS,SM,PUBSUB,SCHED,TR,ER planned
 ```
+
+### 実装ステータス対応表 (2026-05-06 時点)
+
+| ステータス | ノード | 根拠 |
+|---|---|---|
+| 🟢 deployed | API (`belvedere-api-dev`) | `/health` 200 確認済 (commit 4224ba6) |
+| 🟢 deployed | GH / WIF / CB / AR | WIF 鍵レス CI/CD パイプライン全段動作確認済 |
+| 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
+| 🟡 implemented | WEB | Nuxt 3 + Designer 取り込み 5 画面 / ローカル `:3000` で動作 / Cloud Run 未 deploy (Phase 1-C) |
+| 🟡 implemented | MCP | stdio mode で 11 Tools 実装 / smoke test 14/14 / HTTP deploy は Phase 1-D |
+| 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
+| 🟡 implemented | FS | Firestore (default) instance 作成済 / データ投入は Phase 1-B |
+| 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / Sprint Review 録画 bucket は Phase 2 |
+| ⚪ planned | TOOL | Slack / GitHub Tool server (Phase 3) |
+| ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
+| ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
+| ⚪ planned | GEM / ADK / VS | Phase 3 (Vertex AI 接続) |
+| ⚪ planned | SM | Phase 3 (Gemini API key) |
+| ⚪ planned | PUBSUB / SCHED | Phase 2 (儀式トリガ) |
+| ⚪ planned | TR / ER | Phase 4 (本番監視) |
 
 ---
 
