@@ -1,21 +1,77 @@
 # Belvedere
 
-> Scrum facilitation AI agent for **DevOps × AI Agent Hackathon 2026**
+> **Scrum facilitation AI agent** — DevOps × AI Agent Hackathon 2026
 >
-> 「あなたのチームのスクラムは、形だけ回っていませんか?」
+> 形だけ回るスクラムを **AI が「チケット品質」と「儀式運営」の両面から底上げする** Jira 型 PM サービス。
+> 比喩: 螺旋階段を上った先の眺望。
+
+[![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-2E7D32)](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
+[![GitHub Actions](https://img.shields.io/badge/CI%2FCD-WIF%20%E9%8D%B5%E3%83%AC%E3%82%B9-blue)](./.github/workflows/deploy-api.yml)
+[![Hackathon](https://img.shields.io/badge/Hackathon-DevOps%20%C3%97%20AI%20Agent%202026-FF6B35)](https://findy.notion.site/devops-ai-agent-hackathon-2026)
 
 ---
 
-## 何をするプロダクトか
+## 動いているもの (今すぐ触れる)
 
-**Belvedere** は、形骸化したスクラムを **AI が「チケット品質」と「儀式運営」の両面から底上げする** Jira型プロジェクト管理サービス。
+| 種類 | URL / 場所 |
+|---|---|
+| 🟢 **Cloud Run /health** (動作確認) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health) |
+| 🟢 **Cloud Run /tickets** (seed の 12 チケット) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets) |
+| 🟢 **アーキテクチャ図** (Eraser) | [https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa](https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) |
+| 🟢 **GitHub Actions (鍵レス deploy)** | [`.github/workflows/deploy-api.yml`](./.github/workflows/deploy-api.yml) |
 
-- 人がチケットを起票する。AI Agent は **Definition of Done / Story Point / User Story 紐付け / valueImpact** の不足を検出し提案する (人が承認 / L2)
-- スクラムの5儀式 (**Planning / Daily / Refinement / Review / Retrospective**) ごとに **専用画面** を持ち、儀式特有の形骸化シグナルを AI が診断する。これが Jira (Sprint Board 1画面) との差別化軸
+```bash
+curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health
+# {"status":"ok","llm":"mock","repo":"memory"}
+```
 
-比喩: 螺旋階段を上った先にある眺望。形だけ回るスクラムから、儀式とチケット品質を一段ずつ底上げして眺望を獲得する。
+---
 
-詳細: [`PRODUCT_BRIEF.md`](./PRODUCT_BRIEF.md)
+## アーキテクチャ
+
+![Architecture](./docs/images/architecture.png)
+
+**色凡例 (実装ステータス / 2026-05-06 時点)**:
+- 🟢 **緑** = Cloud Run / GCP で動作確認済 (deployed) — API / GitHub Actions / WIF / Cloud Build / Artifact Registry / Cloud Logging
+- 🟡 **黄** = コードあり / ローカル動作 / 空インスタンス (implemented) — Web (Nuxt 3) / MCP / Orchestrator + 5 Agent / Firestore
+- ⚪ **灰** = 未実装、Phase 1-B 以降に着手予定 (planned) — Tool Server / IAP / Gemini / ADK / Vector Search / Pub/Sub
+
+詳細: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
+
+---
+
+## 何を解決するか
+
+1. **書き忘れ**: DoD 空 / SP 未定 / User Story 紐付けなしのチケットが溜まる
+2. **形骸化**: 儀式が「時間通りやっただけ」で前進感が薄い
+3. **言いっぱなし**: ふりかえり Try / レビュー会の指摘が翌スプリントに繋がらない
+4. **戦略の不在**: 開発者が「何のためにこのチケットをやってるか」を見失う (Epic に Why が書かれていない)
+
+→ **形だけ回るスクラム = 回ってるのに進んでない**。
+
+## どう解決するか
+
+- 人がチケットを起票する。AI Agent は **DoD / SP / User Story 紐付け / valueImpact / Epic.rationale** の不足を検出し提案 (人が承認 / L2 自律性)
+- スクラムの **5 儀式 (Planning / Daily / Refinement / Review / Retrospective)** ごとに **専用画面** を持ち、儀式特有の形骸化シグナルを AI が診断 (Jira の 1 Sprint Board に対する差別化軸)
+- ⭐ Reviewer Agent が **Sprint Review 録画 (MP4) を Gemini Multimodal で直接読んで指摘抽出 → Ticket 起票候補生成**
+- ⭐ Refinement Agent の **第 6 観点「戦略整合性」** で Epic.rationale 欠落を検出
+- ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接呼べる (= AI Agent エコシステム統合)
+
+詳細: [`PRODUCT_BRIEF.md`](./PRODUCT_BRIEF.md) / [`AGENT_DESIGN.md`](./AGENT_DESIGN.md)
+
+---
+
+## 採用技術
+
+| 役割 | GCP | AWS で言うと |
+|---|---|---|
+| コンテナ実行 | **Cloud Run** | Fargate / App Runner |
+| AI 推論 | **Gemini API + ADK** (Phase 3) | Bedrock Claude + AgentCore |
+| Multimodal (動画→指摘) | **Gemini 2.5 Pro Multimodal** | Bedrock (動画入力なし) |
+| NoSQL | Firestore | DynamoDB |
+| 鍵レス CI/CD | **Workload Identity Federation** | IAM OIDC Provider |
+| MCP integration | stdio / Streamable HTTP | (固有概念なし) |
 
 ---
 
@@ -23,16 +79,17 @@
 
 | ファイル | 役割 |
 |---|---|
-| [PROJECT_PLAN.md](./PROJECT_PLAN.md) | 作業仕分け / 依存度マップ (Claude単独 vs ユーザー必須) |
 | [PRODUCT_BRIEF.md](./PRODUCT_BRIEF.md) | 課題・ターゲット・UVP・差別化 |
-| [ARCHITECTURE.md](./ARCHITECTURE.md) | アーキ案 + GCP↔AWS対応表 |
+| [ARCHITECTURE.md](./ARCHITECTURE.md) | アーキ案 + GCP↔AWS 対応表 + Mermaid 図 (色分けステータス) |
 | [DATA_MODEL.md](./DATA_MODEL.md) | 型定義 / Firestore コレクション設計 |
 | [AGENT_DESIGN.md](./AGENT_DESIGN.md) | マルチエージェント / ツール / 自律性レベル |
-| [ROADMAP.md](./ROADMAP.md) | 4月末→8/19 のマイルストーン |
-| [PITCH.md](./PITCH.md) | 3分ピッチの台本 |
-| [HACKATHON_COMPLIANCE.md](./HACKATHON_COMPLIANCE.md) | ハッカソン要件↔現状の対応 |
-| [docs/setup-gcp.md](./docs/setup-gcp.md) | ユーザー作業のGCPセットアップ手順 |
-| [docs/setup-mcp.md](./docs/setup-mcp.md) | MCP server を Claude Code / Cursor から接続する手順 |
+| [ROADMAP.md](./ROADMAP.md) | 4/末 → 8/19 のマイルストーン |
+| [PITCH.md](./PITCH.md) | 3 分ピッチ脚本 |
+| [HACKATHON_COMPLIANCE.md](./HACKATHON_COMPLIANCE.md) | ハッカソン要件 ↔ 現状の対応表 |
+| [PROJECT_PLAN.md](./PROJECT_PLAN.md) | 作業仕分け (Claude 単独 vs ユーザー必須) |
+| [docs/setup-gcp.md](./docs/setup-gcp.md) | GCP セットアップ手順 |
+| [docs/setup-github-wif.md](./docs/setup-github-wif.md) | WIF 鍵レス連携設定 |
+| [docs/setup-mcp.md](./docs/setup-mcp.md) | MCP server を Claude Code から接続する手順 |
 
 ---
 
@@ -41,26 +98,29 @@
 ```
 ai-agent-hackathon/
 ├── apps/
-│   ├── web/                 # Nuxt 3 + Vue 3 SSR (UI再設計中・ガラのみ / Cloud Run 想定)
-│   ├── cli/                 # Mock LLM で動く CLI デモ (5ロール)
-│   ├── api/                 # Hono サーバ (Cloud Run想定 / TS)
+│   ├── web/                 # Nuxt 3 + Vue 3 SSR (Claude Designer 由来 5 画面)
+│   ├── api/                 # Hono on Cloud Run ⭐ deployed
+│   ├── cli/                 # Mock LLM CLI (5 ロール)
 │   ├── orchestrator-py/     # FastAPI + ADK 雛形 (Python)
-│   └── mcp-server/          # MCP (Model Context Protocol) サーバ (Claude Code 接続用)
+│   └── mcp-server/          # MCP server (stdio + HTTP / 11 Tools)
 ├── packages/
-│   ├── shared/              # 型定義 / 定数 (Project / Epic / UserStory / Ticket / CeremonyHealthScore など)
-│   ├── seed/                # 不変デモfixture (1 project, 4 epics, 12 tickets, 3 sprints, 5 members)
-│   ├── repo/                # Repository抽象 (memory / firestore)
-│   ├── llm/                 # LLMプロバイダ抽象 (mock / gemini / vertex)
-│   ├── agent/               # Agent runtime (Tool呼び出しループ)
-│   └── tools/               # Tool 実装
+│   ├── shared/              # 型 (Project / Epic / UserStory / Ticket / CeremonyHealthScore)
+│   ├── seed/                # 不変 fixture (1 project / 4 epics / 12 tickets / 3 sprints / 5 members)
+│   ├── repo/                # Repository 抽象 (memory ✅ / firestore は Phase 1-B)
+│   ├── llm/                 # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3)
+│   ├── agent/               # Agent runtime (thought→tool→output ループ)
+│   └── tools/               # Tool 実装 (refinement.check / quality.check / video.extractIssues 等)
 ├── infra/
-│   └── cloudbuild.yaml      # Cloud Build パイプライン
-├── .github/workflows/       # CI / Cloud Run デプロイ (WIF経由)
+│   └── cloudbuild.yaml      # Cloud Build パイプライン (build / push / deploy 3 step)
+├── .github/workflows/
+│   ├── ci.yml
+│   └── deploy-api.yml       # WIF 経由 Cloud Run deploy
 ├── docs/
-│   ├── setup-gcp.md         # ユーザー作業のGCPセットアップ手順
-│   └── setup-github-wif.md  # Workload Identity Federation設定
-├── package.json             # pnpm workspace ルート (内部パッケージ名 @belvedere/* で統一)
-├── pnpm-workspace.yaml
+│   ├── setup-gcp.md
+│   ├── setup-github-wif.md
+│   ├── setup-mcp.md
+│   └── images/architecture.png
+├── package.json             # pnpm workspace ルート (@belvedere/* に統一)
 └── tsconfig.base.json
 ```
 
@@ -70,118 +130,89 @@ ai-agent-hackathon/
 
 ### 前提
 
-- Node.js 20.10+
-- pnpm 9+ (corepack で有効化推奨)
+- Node.js 20.10+ / pnpm 9+ (corepack 推奨)
+- Python 3.11+ + uv (orchestrator-py 用)
 
 ### セットアップ
 
 ```bash
 pnpm install
-pnpm typecheck
+pnpm typecheck                                              # 全 11 ワークスペース
 ```
 
-### CLI デモ (Mock LLM, 5ロール)
+### 起動コマンド
 
 ```bash
-pnpm demo                                                       # Plannerデモ
+pnpm demo                                                   # Planner Mock LLM デモ
 pnpm --filter @belvedere/cli dev plan       "Sprint 13 議題"
 pnpm --filter @belvedere/cli dev daily      "本日のスタンドアップ要約"
 pnpm --filter @belvedere/cli dev refinement "次スプリント候補のリファインメント診断"
 pnpm --filter @belvedere/cli dev review     "デモシナリオ草稿"
 pnpm --filter @belvedere/cli dev retro      "Sprint 12 のTry抽出"
+
+pnpm --filter @belvedere/api dev                            # Hono :8080
+pnpm --filter @belvedere/web dev                            # Nuxt 3 :3000
+pnpm --filter @belvedere/mcp-server smoke                   # MCP server 14 ケース動作確認
+pnpm --filter @belvedere/mcp-server dev                     # stdio MCP (Claude Code 接続用)
+
+cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 8081
 ```
 
-### API サーバ (Hono / Cloud Run想定)
+### LLM プロバイダ切替
 
 ```bash
-pnpm --filter @belvedere/api dev
-# → http://localhost:8080/health, /tickets, /sprints/:id, /epics, POST /agents/:name
-```
-
-### Python Orchestrator (FastAPI + ADK 雛形)
-
-```bash
-cd apps/orchestrator-py && uv sync
-uv run uvicorn orchestrator.main:app --reload --port 8081
-# ADK 接続は USE_REAL_ADK=true (GCPセットアップ後)
-```
-
-### LLMプロバイダ切替
-
-```bash
-LLM_PROVIDER=mock pnpm demo            # デフォルト (現在唯一の動作版)
-LLM_PROVIDER=gemini pnpm demo          # GCPセットアップ後に追加実装
+LLM_PROVIDER=mock pnpm demo            # デフォルト (動作版)
+LLM_PROVIDER=gemini pnpm demo          # Phase 3 で実装 (現状 throw)
 LLM_PROVIDER=vertex pnpm demo          # 〃
 ```
 
+未実装プロバイダは silent fallback せず **明示的に throw** (= GCP セットアップ前提のサインポスト)。
+
 ---
 
-## 進捗状況 (2026-05-06 現在 / Phase 0 ✅ + Phase 1-A GCP セットアップ完了)
+## 進捗状況 (2026-05-06 現在)
 
 ### ✅ Phase 0 完了
-- [x] プロダクト・アーキ・データ・エージェント設計ドキュメント (5 儀式 / Project / valueImpact 反映済)
-- [x] ローカル動作の最小スキャフォールド (Mock LLM で5ロール + Orchestrator 動作)
-- [x] Repository パターン (memory 実装 / Firestore は GCP 接続後)
-- [x] API サーバ (Hono on Cloud Run想定) + Dockerfile + Cloud Build
-- [x] Python Orchestrator (FastAPI + ADK 雛形 / 5 ロール INSTRUCTION)
-- [x] GitHub Actions CI / Cloud Run デプロイ (WIF想定)
-- [x] GCPセットアップ手順書 (ユーザー向け `docs/setup-gcp.md`)
-- [x] Belvedere 再ブランド + Project エンティティ + Refinement Agent (5ロール目)
-- [x] **Nuxt 3 + Vue 3 SSR** + Claude Design 由来 5 画面 + AI Integrity Panel
-- [x] **個人 GitHub repo** (KaedeAatou/belvedere private) + 個人 Google アカウント設定
-- [x] **Eraser アーキ図** (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) + 自動同期 hook
-- [x] **週次 hackathon-check routine** (毎週月曜 09:00 JST 自動実行)
-- [x] **MCP server (stdio + CRUD 本実装)** (`apps/mcp-server/`): 11 Tools (6 read + 1 invoke + 4 CRUD)、Smoke 14/14 pass、`docs/setup-mcp.md` で Claude Code から接続可能
 
-### 🟡 Phase 1: 手動 Belvedere SaaS (期限 2026-06-09)
-ゴール: Agent なしで Jira 風 SaaS が Cloud Run 上で動く。MCP も Cloud Run にホストして Claude Code から本番 Belvedere を操作。
+- 設計ドキュメント全揃い (5 儀式 / Project / valueImpact / Epic.rationale / Reviewer Multimodal)
+- ローカル動作の最小スキャフォールド (Mock LLM で 6 ロール: 5 儀式 + Orchestrator)
+- Repository / LLM の抽象化 (memory / mock)
+- Hono API / Nuxt 3 web / FastAPI orchestrator 雛形
+- **MCP server (stdio + 11 Tools)** smoke 14/14 pass
 
-#### Phase 1-A GCP 基盤 ✅ 完了 (2026-05-06)
-- [x] GCP プロジェクト 2 つ作成 (`belvedere-dev-atrium` / `belvedere-prod-atrium`) + billing link
-- [x] API 14 個 enable
-- [x] リージョン固定 `asia-northeast1`
-- [x] Firestore Native DB 初期化
-- [x] Artifact Registry (`belvedere`) 作成
-- [x] Service Account `belvedere-runtime` + 9 ロール
-- [x] 課金アラート $10/月
+### ✅ Phase 1-A 完了 (2026-05-06)
 
-#### Phase 1-A 残タスク
-- [ ] **次にユーザーがやること**: Cloud Run 初回デプロイ (`gcloud builds submit` で `/health` 200)
-- [ ] `.github/workflows/deploy-api.yml` の WIF_PROVIDER の PROJECT_NUMBER 置換 + push トリガ復活
+- GCP セットアップ全 10 ステップ (project / billing / API / Firestore / Artifact Registry / SA / 課金アラート $10/月)
+- **WIF 鍵レス CI/CD**: `belvedere-ci-pool` / `belvedere-ci-github` Provider / `belvedere-deployer` SA + 6 ロール / principalSet で `KaedeAatou/belvedere` repo に絞込
+- **Cloud Run 初回 deploy**: `belvedere-api-dev` が `asia-northeast1` で稼働、`/health` 200 OK 確認済
+- ARCHITECTURE.md / Eraser 図に **実装ステータス色分け** 導入
+- リポジトリ public 化 (MIT License)
 
-#### Phase 1-B 〜 1-E
-- [ ] Firestore 実装 (`packages/repo/src/firestore.ts`)
-- [ ] Firebase Auth (個人 Google) で UI / API / MCP 保護
-- [ ] Web UI でチケット CRUD / Sprint 切替 / Epic 編集
-- [ ] MCP server を Cloud Run へ (HTTP transport + OAuth 2.1)
-- [ ] ピッチデモ動画 1 本 (5/末まで / Mock UI 範囲で)
+### 🟡 Phase 1-B (5/18-22 予定 / 11 日バッファあり)
+- Firestore データ層 (`packages/repo/src/firestore.ts`)
+- Firebase Auth (個人 Google) で `/api/*` JWT 必須
+- seed の Firestore 投入
 
-### Phase 2: Agent トリガ可視化 Mock (6/10 〜 6/30)
-- [ ] Pub/Sub + Cloud Scheduler 配線
-- [ ] AI Integrity Panel が Mock 応答を即時表示
-- [ ] Live Activity 履歴画面
-- [ ] Slack Bot Mock (or 実 Slack 投稿)
-- [ ] 応募提出 / 中間提出
-
-### Phase 3: Agent 本実装 (7/1 〜 7/27)
-- [ ] Vertex AI Gemini 接続 (`packages/llm/src/gemini.ts`)
-- [ ] Python `USE_REAL_ADK=true` 実装
-- [ ] **Reviewer Multimodal**: 録画 → 指摘抽出 → Ticket 起票 (ピッチキラーシーン)
-- [ ] Vector Search + RAG (Refinement / Retrospective)
-- [ ] CeremonyHealthScore 計算 + GitHub 連携
+### 🟡 Phase 1-C (5/23-29) — Web UI で CRUD 動作
+### 🟡 Phase 1-D (5/30-6/3) — MCP server を Cloud Run へ
+### 🟡 Phase 2 (6/10-6/30) — Mock Agent トリガ可視化 (Pub/Sub + Cloud Scheduler)
+### 🟡 Phase 3 (7/1-7/27) — Gemini + ADK 本実装 + Reviewer Multimodal + RAG
+### 🔴 Phase 4 (7/31-8/19) — 仕上げ + ピッチ + 最終発表
 
 ---
 
 ## ハッカソン情報
 
-- 主催: ファインディ株式会社 / メインスポンサー: グーグル・クラウド・ジャパン
-- 公式ページ: https://findy.notion.site/devops-ai-agent-hackathon-2026
-- 最終ピッチ: 2026-08-19 渋谷ストリーム (10チーム)
-- 賞金総額: 200万円
-- 必須技術: Cloud Run / GKE / Cloud Functions / App Engine / TPU/GPU から1つ以上 + Gemini / Vertex AI / ADK / 各種AI APIから1つ以上
+- **主催**: [ファインディ株式会社](https://findy.co.jp/) / メインスポンサー: グーグル・クラウド・ジャパン
+- **公式ページ**: https://findy.notion.site/devops-ai-agent-hackathon-2026
+- **作品提出 〆切**: 2026-07-10 (金) 23:59
+- **最終ピッチ**: 2026-08-19 (水) Google 渋谷オフィス (10 チーム招待制)
+- **賞金総額**: 200 万円 (最優秀 50 万 / 優秀 30 万×3 / 特別 10 万×6)
+- **必須技術**: Cloud Run / GKE / Cloud Functions / App Engine / TPU・GPU から 1 つ以上 + Gemini / Vertex AI / ADK / 各種 AI API から 1 つ以上
+- **個人参加**: KaedeAatou (個人 Google アカウント / 個人 GitHub)
 
 ---
 
 ## ライセンス
 
-未定 (ハッカソン期間中は private 想定)
+[MIT License](./LICENSE) — Copyright (c) 2026 KaedeAatou
