@@ -24,13 +24,13 @@
 
 | 候補 | 採用 | 状態 | 根拠 |
 |---|---|---|---|
-| **Cloud Run** | ✅ 採用 | 🟡 計画 | `apps/api/Dockerfile` (Hono / Node 20 / pnpm workspace 対応マルチステージ), `infra/cloudbuild.yaml` (asia-northeast1 / Artifact Registry / 自動デプロイ), `.github/workflows/deploy-api.yml` (WIF 認証) 雛形済。GCPプロジェクト未作成 / `git init` 未実行のため未デプロイ。Phase 1 期限 2026-05-17 まで残 13 日 |
+| **Cloud Run** | ✅ 採用 | 🟢 **充足 (2026-05-06)** | `belvedere-api-dev` が `asia-northeast1` で起動 (`https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health` が 200 を返す状態を確認)。WIF 鍵レス CI/CD で自動 deploy 動作確認済 (commit 4224ba6 / 4 回目の試行で完全グリーン)。GCP リソース命名は `belvedere-` で統一 (`belvedere-runtime` / `belvedere-deployer` / `belvedere-ci-pool` / `belvedere-ci-github`)。`apps/api/Dockerfile` は single-stage 化済 (pnpm workspace symlink 維持のため) |
 | Cloud Functions | — | ⚪ | 縮退オプションとして保持 (`ROADMAP.md` 中止判断ライン参照) |
 | GKE | — | ⚪ | 個人参加では運用負荷大 |
 | App Engine | — | ⚪ | レガシー扱いのため不採用 |
 | Cloud TPU/GPU | — | ⚪ | 推論はサーバーレスで足りる想定 |
 
-**充足条件**: Cloud Run に `belvedere-api` がデプロイされ、`https://...run.app/health` が 200 を返す状態。
+**充足条件**: Cloud Run に `belvedere-api` がデプロイされ、`https://...run.app/health` が 200 を返す状態。✅ 2026-05-06 達成
 **Phase 1 期限**: 2026-05-17 (`ROADMAP.md`)
 
 ### A-2. GCP AI 技術を1つ以上採用
@@ -193,3 +193,4 @@
 | 2026-05-05 (夜) | **ユーザー GitHub 連携を Phase 3 へ後ろ倒し**: Eraser 図の混乱 (1 個の GitHub アイコンが「ユーザーチームのリポジトリ」と「Belvedere ソース KaedeAatou/belvedere」の両方を表していた問題) を整理。① 図を 2 つに分離 (`UserGitHub` / `BelvedereSource`) + 「Belvedere 開発者」アイコン追加 + 凡例で明文化 ② AGENT_DESIGN §3 から `github.issues.list` (Planner 用) を削除 (用途不要と判断) ③ 残る 2 Tool (`github.activity` / `github.pr.diff`) は Phase 3 実装と明示 ④ ROADMAP Phase 3 に 2 日工数のタスク追加。MVP / ピッチでは GitHub 連携には触れない方針。 |
 | 2026-05-05 (深夜) | **MCP (Model Context Protocol) サーバ実装 (Phase 0)**: ① `apps/mcp-server/` 新設 (TypeScript / `@modelcontextprotocol/sdk@^1.0.4`) ② stdio mode + 読み取り 6 Tool (`belvedere_ticket_list / ticket_get / epic_list / member_list / quality_check / refinement_check`) + `belvedere_invoke_agent` (5 儀式 + Orchestrator) + CRUD 系 4 個 (Phase 0 で前倒し本実装、`EpicRepository.upsert` 追加) ③ Smoke test 14/14 pass / typecheck 全 11 ワークスペース緑 ④ `docs/setup-mcp.md` 新設で Claude Code から `claude mcp add belvedere stdio "..."` で接続する手順を文書化 ⑤ B-1 / B-4 / B-5 で「単独 SaaS でなく AI Agent エコシステム統合」「自分自身が Claude Code + MCP で Belvedere をドッグフード」を主張可能に。書込承認は MCP server 側に dryRun を持たず、ホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (L2 規範をホスト側で実現)。 |
 | 2026-05-05 (朝) | **ROADMAP を 4 段階構成に再編 + MCP CRUD を Phase 1 に前倒し本実装**: ① ユーザー意図「Agent 開発前にまず Jira 風 SaaS を作る経験」「Belvedere をドッグフードしながら Agent 開発」を反映 ② Phase 1 = 手動 SaaS (Cloud Run + Firestore + Firebase Auth + UI CRUD + MCP Cloud Run ホスト) / Phase 2 = Mock Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + AI Panel) / Phase 3 = Agent 本実装 (Gemini + ADK + Multimodal + RAG) / Phase 4 = 仕上げ ③ MCP CRUD 4 Tool を本実装 (`belvedere_ticket_create / update / status_change / epic_update`)、`EpicRepository.upsert` 追加、smoke test 14/14 pass ④ Phase 1 期限を 5/17 (Cloud Run /health 200) → 6/9 (手動 SaaS 完成) に延長 ⑤ 中間提出 (推定 6/30) は Phase 1 + Phase 2 (Mock 配線) で勝負可能、Gemini 接続は Phase 3 (~7/27) で。ハッカソン要件 Cloud Run は Phase 1 で達成、Gemini + ADK は Phase 3 で達成。 |
+| 2026-05-06 | **Phase 1-A 完了**: ① WIF (Workload Identity Federation) で GitHub Actions ↔ GCP の鍵レス CI/CD を有効化 (`belvedere-ci-pool` / `belvedere-ci-github` Provider / `belvedere-deployer` SA + 6 ロール / principalSet で `KaedeAatou/belvedere` repo に絞込) ② `.github/workflows/deploy-api.yml` の `WIF_PROVIDER` / `WIF_SA` を実値に置換 + push トリガ復活 ③ `infra/cloudbuild.yaml` に `_TAG` substitution 追加 (`gcloud builds submit` 経由では `${SHORT_SHA}` が空になる罠の回避) ④ `apps/api/Dockerfile` の旧 `@kazaguruma/api` 残骸を `@belvedere/api` に統一 + single-stage 化 (multi-stage では pnpm workspace の per-package symlink が runtime に届かず `ERR_MODULE_NOT_FOUND` になる罠の回避) ⑤ `belvedere-api-dev` が `asia-northeast1` で起動、`/health` 200 を確認。GCP リソース命名は `belvedere-` プレフィックスに統一済 (旧 `github-actions` SA / `github-pool` / `github-provider` は完全削除 + dangling 残骸 cleanup 済)。 |

@@ -54,7 +54,7 @@ steps:
       - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/api:${_TAG}
       - --region=${_REGION}
       - --platform=managed
-      - --allow-unauthenticated   # Phase 1-A 初回デプロイ専用 (/health 200 確認用)。Phase 1-B (5/18-22) で Firebase Auth 導入時に削除して --no-allow-unauthenticated + IAP / Firebase Auth 検証ミドルウェアに切替
+      - --allow-unauthenticated   # Cloud Run の IAM は最終形でも allUsers (世界公開) のまま。エンドユーザー認証は Phase 1-B (5/18-22) で導入する Firebase Auth 検証ミドルウェアがアプリ層で担当する設計 (Cloud Run + Firebase Auth の標準パターン)。/health は監視用に最終形でも公開、/login は認証画面自体公開、/api/* はアプリ層で JWT 必須
       - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
       - --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=memory,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
       - --memory=512Mi
