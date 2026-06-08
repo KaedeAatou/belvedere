@@ -27,7 +27,7 @@ function header(title: string): void {
 
 async function runFor(agent: AgentName, prompt: string): Promise<void> {
   const llm = createLLMProvider(process.env.LLM_PROVIDER);
-  const repo = createRepoContainer(process.env.REPO_BACKEND);
+  const repo = await createRepoContainer(process.env.REPO_BACKEND);
   const tools = buildRegistry(buildTools(repo));
 
   header(`Belvedere ▸ ${agent} agent`);

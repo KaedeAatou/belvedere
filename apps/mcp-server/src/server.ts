@@ -19,7 +19,7 @@ import { MCP_TOOLS } from './tools';
 
 // シングルトン (リクエスト毎に再初期化しない)
 const llm = createLLMProvider(process.env.LLM_PROVIDER);
-const repo = createRepoContainer(process.env.REPO_BACKEND);
+const repo = await createRepoContainer(process.env.REPO_BACKEND);
 const internalTools = buildTools(repo);
 const registry = buildRegistry(internalTools);
 

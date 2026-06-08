@@ -18,7 +18,7 @@ import type { AgentName } from '@belvedere/shared';
 
 const app = new Hono();
 
-const repo = createRepoContainer(process.env.REPO_BACKEND);
+const repo = await createRepoContainer(process.env.REPO_BACKEND);
 const llm = createLLMProvider(process.env.LLM_PROVIDER);
 const tools = buildRegistry(buildTools(repo));
 

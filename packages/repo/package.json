@@ -9,10 +9,12 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "seed:firestore": "tsx scripts/seed-firestore.ts"
   },
   "dependencies": {
+    "@belvedere/seed": "workspace:*",
     "@belvedere/shared": "workspace:*",
-    "@belvedere/seed": "workspace:*"
+    "@google-cloud/firestore": "^8.6.0"
   }
 }
