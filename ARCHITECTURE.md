@@ -22,7 +22,7 @@
 ## 1. 全体図
 
 > **凡例 (ノードの色は実装ステータス)**
-> - 🟢 **緑**: Cloud Run 上で動作確認済 (2026-05-06 時点)
+> - 🟢 **緑**: Cloud Run 上で動作確認済 (2026-05-06 API / 2026-06-08 Web 追加デプロイ)
 > - 🟡 **黄**: 実装済だが Cloud Run には未 deploy (ローカル動作のみ / 空インスタンス)
 > - ⚪ **灰 (破線)**: 未実装、Phase X 以降に着手予定
 
@@ -147,7 +147,7 @@ graph TB
 | 🟢 deployed | API (`belvedere-api-dev`) | `/health` 200 確認済 (commit 4224ba6) |
 | 🟢 deployed | GH / WIF / CB / AR | WIF 鍵レス CI/CD パイプライン全段動作確認済 |
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
-| 🟡 implemented | WEB | Nuxt 3 + Designer 取り込み 5 画面 / ローカル `:3000` で動作 / Cloud Run 未 deploy (Phase 1-C) |
+| 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。Mock データ表示、Firestore 接続は Phase 1-B |
 | 🟡 implemented | MCP | stdio mode で 11 Tools 実装 / smoke test 14/14 / HTTP deploy は Phase 1-D |
 | 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
 | 🟡 implemented | FS | Firestore (default) instance 作成済 / データ投入は Phase 1-B |
