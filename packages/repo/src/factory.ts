@@ -5,12 +5,17 @@ export type RepoBackend = 'memory' | 'firestore';
 
 /**
  * env REPO_BACKEND で切替可能にする。
- * 現状は memory のみ。Firestore 実装は GCP セットアップ後に追加。
+ * firestore は動的 import — memory モード時に @google-cloud/firestore SDK をロードしない
+ * (web の Nitro バンドルに Node-only SDK を引っ張らないため)。よって async。
  */
-export function createRepoContainer(backend: RepoBackend | string | undefined = process.env.REPO_BACKEND): RepoContainer {
+export async function createRepoContainer(
+  backend: RepoBackend | string | undefined = process.env.REPO_BACKEND,
+): Promise<RepoContainer> {
   switch (backend) {
-    case 'firestore':
-      throw new Error(`[repo] firestore backend は未実装。GCPセットアップ後に追加します。今は REPO_BACKEND=memory で進めてください。`);
+    case 'firestore': {
+      const { createFirestoreRepoContainer } = await import('./firestore');
+      return createFirestoreRepoContainer();
+    }
     case 'memory':
     case undefined:
     case '':

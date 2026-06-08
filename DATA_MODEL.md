@@ -28,6 +28,8 @@
 
 - `Project` ごとに `idPrefix` を自由設定 (例: `BV` for Belvedere Core)
 - 配下の Epic / UserStory / Ticket の ID は `${idPrefix}-${number}` フォーマット
+
+> **実装メモ (Phase 1-B / 2026-06-09)**: 上表のコレクションパスは論理設計 (将来のマルチテナント本格化時の目標形)。`packages/repo/src/firestore.ts` の Phase 1-B 実装は、`RepoContainer` インタフェースを無変更で memory backend と即 swap できることを優先し、**サブコレクションではなくトップレベルのフラットコレクション** (`/tickets/{id}` 等) を採用した。各ドキュメントは `workspaceId` / `projectId` をフィールドで保持し、ワークスペース分離は `where('workspaceId', '==', X)` で実現する (equality-only の AND は composite index 不要)。サブコレクション (`/workspaces/{wsId}/...`) への移行は、`RepoContainer` に `wsId` 引数を通す全層 (repo / tools / agent / mcp) 改修を伴うため Phase 4 以降に再検討する。
 - 既存 seed (`EP-1..4` / `US-101..US-402` / `WC-101..112`) は **デフォルト Project (Belvedere Core, idPrefix=BV)** 配下と解釈し、ID 値は変更しない
 
 ---
