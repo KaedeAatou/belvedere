@@ -1,0 +1,68 @@
+# Cloud Build パイプライン (Web)
+# 用途: Nuxt 3 Web コンテナをビルドして Artifact Registry に push、Cloud Run にデプロイ
+#
+# 起動方法:
+#   gcloud builds submit \
+#     --config infra/cloudbuild.web.yaml \
+#     --substitutions=_REGION=asia-northeast1,_ENV=dev,_SERVICE=belvedere-web,_REPO=belvedere \
+#     .
+
+substitutions:
+  _REGION: asia-northeast1
+  _REPO: belvedere
+  _SERVICE: belvedere-web
+  _ENV: dev
+  _RUNTIME_SA: belvedere-runtime
+  _TAG: latest
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG}"
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:latest"
+
+steps:
+  # ---- Build ----
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG}"
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:latest"
+      - -f
+      - apps/web/Dockerfile
+      - .
+
+  # ---- Push ----
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, "--all-tags", "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web"]
+    waitFor: [build]
+
+  # ---- Deploy to Cloud Run ----
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - "${_SERVICE}-${_ENV}"
+      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG}
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated   # Phase 1-B (6/9-14) で Firebase Auth 検証を導入予定。/health と /login は最終形でも公開
+      - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
+      - --set-env-vars=NODE_ENV=production,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
+      - --memory=512Mi
+      - --cpu=1
+      - --timeout=300s
+      - --concurrency=40
+      - --max-instances=3
+      - --min-instances=0
+    waitFor: [push]
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s
