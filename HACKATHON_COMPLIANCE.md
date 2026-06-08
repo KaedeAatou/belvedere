@@ -3,9 +3,17 @@
 > このリポジトリの最終目的: **DevOps × AI Agent Hackathon 2026 への応募・受賞**
 > 一次情報: https://findy.notion.site/devops-ai-agent-hackathon-2026
 > 最終ピッチ: 2026-08-19 (渋谷ストリーム)
-> 最終チェック: 2026-05-04 (このファイルが古ければ Claude が再取得して更新する)
+> 最終チェック: 2026-06-08 (このファイルが古ければ Claude が再取得して更新する)
 >
 > **2026-05-01 Notion 更新検知**: Google Cloud クーポン (300ドル分) を申込者全員に配布開始 (5/7 以降登録メールアドレスへ送付)。Phase 1 GCP 立ち上げ予算が確保されたため、Cloud Run / Gemini 接続着手の障害が1段階下がった。
+>
+> **2026-05-11 Notion 更新検知**: 「Agentic AI Bootcamp 2026」(グーグル・クラウド・ジャパン主催) 申込受付開始。開催 6/1 (月) 〜 6/12 (金)。ADK / Gemini Enterprise Agent Platform / Cloud Run / Gemini API を実機ハンズオンで習得できる無料・事前申込制。**今日 6/8 時点で会期内** — 残り 4 営業日。
+>
+> **2026-05-26 Notion 更新検知**: Elasticsearch 社による「Elastic Agent Builder 実践 Bootcamp」を 6/23 (火) 19:00–20:30 オンライン無料開催。A2A プロトコル経由で Elastic Agent を Gemini Enterprise に接続するハンズオン。利用チーム 1 組に「Findy Tools 記事化」特典あり。Belvedere は Vector Search で検討中の RAG 軸と直結 (`ROADMAP.md` Phase 3 / 7/18-)。
+>
+> **2026-06-08 監査ハイライト**: 前回チェック (5/6 夜) から **32 日間コミットゼロ** + Phase 1-B/C/D/E 全て未着手 (期限超過 5〜17 日)。Cloud Run /health は依然 200 OK (159ms / `belvedere-api-dev`) で **Phase 1-A 完了状態を保全**、GitHub repo public + MIT + `KaedeAatou` 個人アカウント維持、廃止語 (`Kazaguruma` / `風車` / `WindEvent` / 翼) のコード/docs 残骸ゼロ、会社識別子 (`***company-redacted***` / `***company-account-redacted***`) の混入ゼロ、`pnpm typecheck` 11/11 全通過。一方で Phase 1 全体 (6/9 = 明日) は事実上達成不能。**応募〆切 7/10 まで残り 32 日 — Phase 1-B/C/D/E 全部を 1 ヶ月で巻き取るか、Phase 1-D (MCP→Cloud Run) と Phase 1-E (動画) のみに絞った縮退ライン発動かをユーザーが判断する必要がある**。
+>
+> **2026-06-08 Notion 一次情報差分**: ルール / 開発要件 / 審査5基準 / 参加要件 / スケジュール (チーム提出までの全 9 マイルストーン) を Notion API で完全再取得し、`HACKATHON_COMPLIANCE.md` 記載内容と完全一致を確認 (差分ゼロ)。お知らせ欄の追加更新も 5/26 Elasticsearch Bootcamp が最新で、ルール本体に変更なし。`Cloud Run・Cloud Functions (旧 Cloud Functions)` の表記揺れは Cloud Functions 2nd gen 統合に伴う Notion 側の表記補正で実害なし。応募方法 STEP②/③ の詳細本文は Cloudflare ガードで syncRecordValues が弾かれたが、お知らせ欄に応募方法変更告知が存在しないため `§D` の記述で確度十分。
 
 ---
 
@@ -78,7 +86,7 @@
 
 | 観点 | 状態 | エビデンス |
 |---|---|---|
-| 直観的 UI | 🟢 充足 (Mock data) | `apps/web/` Nuxt 3 + Vue 3 SFC 17 ファイル実装済。Claude Designer から取り込んだ 5 画面 (`BacklogScreen.vue` / `PlanningScreen.vue` / `DailyScreen.vue` / `ReviewScreen.vue` / `RetroScreen.vue`) + Shell / RailPanel / AIPanel / DetailSheet / 6 primitives (Icon / TicketRow / StoryPoints / StatusDot / FlagPill / Avatar / TypeMark) |
+| 直観的 UI | 🟢 充足 (Mock data + 公開 URL) | `apps/web/` Nuxt 3 + Vue 3 SFC 17 ファイル実装済 + **2026-06-08 Cloud Run デプロイ完了** (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。Claude Designer から取り込んだ 5 画面 (`BacklogScreen.vue` / `PlanningScreen.vue` / `DailyScreen.vue` / `ReviewScreen.vue` / `RetroScreen.vue`) + Shell / RailPanel / AIPanel / DetailSheet / 6 primitives (Icon / TicketRow / StoryPoints / StatusDot / FlagPill / Avatar / TypeMark) |
 | 儀式別画面 (差別化軸) | 🟢 充足 | Jira の単一 Sprint Board に対し、Planning / Daily / Review / Retro + Backlog (Refinement 統合) の5枚を専用画面化。`useChecks.ts` で各儀式の AI Integrity Panel を描画 |
 | 階層の情報設計 | 🟢 | Goal › Story › Task の3階層、SP / valueImpact / status / flag を1画面に圧縮表示 |
 | ナビゲーション | 🟢 | Shell + RailPanel の2ペイン構成。AIPanel が常時 AI Integrity Signal を表示 |
@@ -86,7 +94,7 @@
 | コラボ表現 | 🟡 計画 | アバタースタックは表示あり (Avatar primitive) / ライブカーソルや Activity ログは UI 表示のみ実機能は未実装 |
 | アクセシビリティ | 🔴 未着手 | Phase 3 (`ROADMAP.md`) で a11y 監査予定 |
 
-**リスク**: 既に5画面 SFC 実装済。Nuxt 3 + Vue 3 strict TS 環境で `pnpm typecheck` 全通過 (2026-05-04 時点)。次の優先課題は (1) Cloud Run デプロイで実 URL を持つこと、(2) Mock LLM ではなく Gemini 経由でリアルタイムに AI Integrity Signal を生成できる API を繋ぐこと。
+**リスク**: 既に5画面 SFC 実装済。Nuxt 3 + Vue 3 strict TS 環境で `pnpm typecheck` 全通過 (2026-05-04 時点)。**2026-06-08 Cloud Run デプロイ完了で「実 URL を持つ」要件はクリア**。次の優先課題は (1) Mock データを Firestore 実データに置換 (Phase 1-B / 6/9-14)、(2) Mock LLM ではなく Gemini 経由でリアルタイムに AI Integrity Signal を生成できる API を繋ぐこと (Phase 3 / 7/3-9)。
 
 ### B-4. 実用性・体験価値の魅力
 
@@ -171,9 +179,14 @@
 |---|---|---|
 | Phase 0: ローカル基盤 (Mock LLM / Web UI / MCP CRUD) | 2026-05-12 | ✅ 完了 |
 | Phase 1-A: GCP セットアップ (project / API / Firestore / Artifact Registry / SA / 課金アラート $10/月) | 2026-05-06 | ✅ 完了 |
-| Phase 1: 手動 Belvedere SaaS (Cloud Run デプロイ + Firestore 実装 + Firebase Auth + UI CRUD + MCP Cloud Run) | 2026-06-09 | 🟡 Phase 1-A 完了、Cloud Run 初回デプロイへ |
-| Phase 2: Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + Mock Agent + AI Panel) | 2026-06-30 | 🟡 配線設計済、Phase 1 完了後着手 |
-| Phase 3: Agent 本実装 (Gemini + ADK + Multimodal + RAG + GitHub 連携) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち |
+| **Phase 1-Day0: Web を Cloud Run にデプロイ** | 2026-06-08 | 🟢 **完了** (Nuxt 3 SSR / 200 OK) |
+| Phase 1-B: Firestore + Firebase Auth | 2026-06-14 (改訂) | 🟡 6/9 着手予定 |
+| Phase 1-C: Web UI で CRUD 動作 | 2026-06-21 (改訂) | 🟡 待機 |
+| Phase 1-D: MCP を Cloud Run へ | 2026-06-28 (改訂) | 🟡 待機 |
+| Phase 1 全体: 手動 Belvedere SaaS 完成 | 2026-06-28 (改訂) | 🟡 Day0 完了で公開 URL 入手、残作業は CRUD 接続 + MCP デプロイ |
+| ピッチデモ動画 (旧 Phase 1-E) | 2026-07-08 (Phase 3 末) | 🟡 待機 (Proto Pedia 提出と一緒に撮影) |
+| Phase 2: Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + Mock Agent + AI Panel) | 2026-06-30 | 🟡 配線設計済、Phase 1 完了が前提 |
+| Phase 3: Agent 本実装 (Gemini + ADK + Multimodal + RAG + GitHub 連携) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち。**応募提出 7/10 はこの中盤** |
 | Phase 4: 仕上げ + ピッチ (a11y / OWASP / 動画 / リハ) | 2026-08-19 | 🔴 ピッチ素材未着手 |
 
 ---
@@ -220,3 +233,4 @@
 | 2026-05-06 | **Phase 1-A 完了**: ① WIF (Workload Identity Federation) で GitHub Actions ↔ GCP の鍵レス CI/CD を有効化 (`belvedere-ci-pool` / `belvedere-ci-github` Provider / `belvedere-deployer` SA + 6 ロール / principalSet で `KaedeAatou/belvedere` repo に絞込) ② `.github/workflows/deploy-api.yml` の `WIF_PROVIDER` / `WIF_SA` を実値に置換 + push トリガ復活 ③ `infra/cloudbuild.yaml` に `_TAG` substitution 追加 (`gcloud builds submit` 経由では `${SHORT_SHA}` が空になる罠の回避) ④ `apps/api/Dockerfile` の旧 `@kazaguruma/api` 残骸を `@belvedere/api` に統一 + single-stage 化 (multi-stage では pnpm workspace の per-package symlink が runtime に届かず `ERR_MODULE_NOT_FOUND` になる罠の回避) ⑤ `belvedere-api-dev` が `asia-northeast1` で起動、`/health` 200 を確認。GCP リソース命名は `belvedere-` プレフィックスに統一済 (旧 `github-actions` SA / `github-pool` / `github-provider` は完全削除 + dangling 残骸 cleanup 済)。 |
 | 2026-05-06 (夜) | **Notion 再取得で応募方法 / スケジュール完全公開を検知** (`hackathon-compliance-auditor` Subagent 監査): ① **中間提出は無し** — 7/10 一発提出 ② 応募 STEP③ で **公開** GitHub URL 必須 → `KaedeAatou/belvedere` (private) を遅くとも 7/10 直前までに public 化必要 ③ Proto Pedia 必須項目に **動画 (YouTube/Vimeo)** + **システムアーキテクチャ図** + ストーリー 3 要素 + `findy_hackathon` タグ ④ 賞金確定 (最優秀 50 万 / 優秀 30 万 ×3 / 特別 10 万 ×6 / 総額 200 万) ⑤ 一次審査 7/13-17 / 二次審査 7/21-24 / 通知 7/30 ⑥ 公開リスク対処として `ui-mockups-v3/` 内の旧名 (`風車` / `kazaguruma`) 3 箇所を `Belvedere` / `belvedere` に置換 (廃止語残骸 0 件確認) ⑦ ARCHITECTURE.md / Eraser 図に実装ステータス色分け導入で「審査時点でどこが本当に動いているか」を視覚化済 (緑=API/CI-CD/Logging / 黄=Web/MCP/Orchestrator/5 Agents/Firestore / 灰=Tool Server/IAP/Gemini/ADK/Vector Search 等)。 |
 | 2026-05-06 (夜2) | **GitHub リポジトリ public 化完了**: ① 8 観点の安全チェック全クリア (会社情報なし / 廃止語残骸ゼロ / API key ハードコードなし / 鍵ファイル commit なし / `.gitignore` で `.env` `*.key` `*.pem` 除外済 / README.md 187 行 / PROJECT_NUMBER 露出は WIF + repo owner 制約で実害なし) ② MIT LICENSE 追加 (copyright: KaedeAatou) ③ `gh repo edit --visibility public` で公開化 → `https://github.com/KaedeAatou/belvedere` ④ ハッカソン応募 STEP③ の「公開 GitHub URL」要件を 9 週間前倒しで充足 (提出 7/10 まで public 履歴が thread として育つ → B-5 実装力評価に効く狙い)。残: GitHub repo の About / Topics / Website 設定はユーザーが Web UI で実施。 |
+| 2026-06-08 | **32 日コミットゼロ期間の監査**: ① Notion API で `rules` / `schedule` タブを完全再取得 → 開発要件 / 審査5基準 / 参加要件 / 9 マイルストーンの全て `HACKATHON_COMPLIANCE.md` 記載と一致 (差分ゼロ) ② Cloud Run `/health` 200 OK (159ms) を再確認、Phase 1-A 完了状態は保全 ③ `gh repo view KaedeAatou/belvedere` で public + MIT + 個人アカウント維持を再確認 ④ `pnpm typecheck` 11/11 全通過、`grep` で `Kazaguruma` / `風車` / `WindEvent` / 翼 のコード残骸ゼロ + `***company-redacted***` / `***company-account-redacted***` の混入ゼロを再確認 ⑤ Phase 1-B (5/22) / 1-C (5/29) / 1-D (6/3) / 1-E (6/9) が全て未着手 (期限超過 5〜17 日)、Phase 1 全体 (6/9) は達成不能 → 縮退ライン発動 or 一気通貫リプラン (7/10 まで 32 日) の判断が必要 ⑥ Notion 「お知らせ」欄に応募方法変更告知なし (5/26 Elasticsearch Bootcamp が最新) — STEP②/③ の詳細は前回監査 (5/6 夜) で確定済の記述で十分。 |
