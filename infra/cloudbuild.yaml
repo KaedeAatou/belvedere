@@ -16,6 +16,7 @@ substitutions:
   _ENV: dev
   _RUNTIME_SA: belvedere-runtime
   _LLM_PROVIDER: mock      # GCPセットアップ完了後に gemini に切替
+  _REPO_BACKEND: firestore # Phase 1-B (2026-06-09) で memory → firestore に切替。runtime SA は datastore.user 保有
   _TAG: latest             # CI から GITHUB_SHA::7 を渡す。SHORT_SHA は gcloud builds submit 経由では空のため _TAG で代替
 
 # image tag は _TAG (= short SHA) を使う
@@ -56,7 +57,7 @@ steps:
       - --platform=managed
       - --allow-unauthenticated   # Cloud Run の IAM は最終形でも allUsers (世界公開) のまま。エンドユーザー認証は Phase 1-B (5/18-22) で導入する Firebase Auth 検証ミドルウェアがアプリ層で担当する設計 (Cloud Run + Firebase Auth の標準パターン)。/health は監視用に最終形でも公開、/login は認証画面自体公開、/api/* はアプリ層で JWT 必須
       - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
-      - --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=memory,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
+      - --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=${_REPO_BACKEND},GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
       - --memory=512Mi
       - --cpu=1
       - --timeout=300s
