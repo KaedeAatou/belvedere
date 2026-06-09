@@ -67,6 +67,33 @@ describe('memory backend - tickets where filters', () => {
     const all = await repo.tickets.list({});
     expect(all.length).toBe(12);
   });
+
+  // F1: firestore.ts との契約一致 (memory ⇔ firestore TicketQuery divergence 修正)
+  it('filters by projectId (parity with FsTicketRepo)', async () => {
+    const all = await repo.tickets.list();
+    const someProjectId = all.find((t) => t.projectId)?.projectId;
+    // seed が projectId を持つチケットを少なくとも 1 件含むことが前提
+    expect(someProjectId).toBeDefined();
+    if (!someProjectId) return;
+    const xs = await repo.tickets.list({ projectId: someProjectId });
+    expect(xs.length).toBeGreaterThan(0);
+    expect(xs.every((t) => t.projectId === someProjectId)).toBe(true);
+  });
+
+  it('filters by storyId via parentTicketId (parity with FsTicketRepo)', async () => {
+    // storyId は親 ticket (User Story) を指す。WC-101..112 の seed に parentTicketId を持つチケットがあれば
+    // それで検索、無ければ任意の文字列でゼロ件返却を確認
+    const all = await repo.tickets.list();
+    const someParent = all.find((t) => t.parentTicketId)?.parentTicketId;
+    if (someParent) {
+      const xs = await repo.tickets.list({ storyId: someParent });
+      expect(xs.every((t) => t.parentTicketId === someParent)).toBe(true);
+    } else {
+      // parentTicketId を持つ seed が無い場合: 任意 ID でフィルタするとゼロ件
+      const xs = await repo.tickets.list({ storyId: 'NOT-A-REAL-STORY' });
+      expect(xs.length).toBe(0);
+    }
+  });
 });
 
 describe('memory backend - get / upsert / delete', () => {

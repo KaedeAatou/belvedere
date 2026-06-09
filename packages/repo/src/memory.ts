@@ -35,10 +35,15 @@ class MemTicketRepo implements TicketRepository {
   }
   async list(q: TicketQuery = {}): Promise<Ticket[]> {
     let xs = [...this.store.values()];
+    // フィルタは firestore.ts (FsTicketRepo.list) と契約一致させること。
+    // 片側だけにフィルタを追加すると backend 切替で結果が変わる silent バグ。
+    if (q.projectId) xs = xs.filter((t) => t.projectId === q.projectId);
     if (q.sprintId) xs = xs.filter((t) => t.sprintId === q.sprintId);
     if (q.status) xs = xs.filter((t) => t.status === q.status);
     if (q.assigneeId) xs = xs.filter((t) => t.assigneeId === q.assigneeId);
     if (q.ritual) xs = xs.filter((t) => t.ritual === q.ritual);
+    // storyId は Ticket.parentTicketId へマップ (User Story → 子 Task の親子関係)。
+    if (q.storyId) xs = xs.filter((t) => t.parentTicketId === q.storyId);
     return xs;
   }
   async get(id: string): Promise<Ticket | null> { return this.store.get(id) ?? null; }
