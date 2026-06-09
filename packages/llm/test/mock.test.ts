@@ -65,6 +65,80 @@ describe('MockLLMProvider role detection (system prompt → role)', () => {
   });
 });
 
+describe('MockLLMProvider tool-call decision tree (C3: deferred branches)', () => {
+  const fakeTools = [
+    { name: 'ticket.list', description: '', parameters: {} },
+    { name: 'sprint.get', description: '', parameters: {} },
+    { name: 'epic.list', description: '', parameters: {} },
+    { name: 'ticket.quality.check', description: '', parameters: {} },
+  ];
+
+  // alreadyCalled / markCalled の動作担保。
+  // 同じ sessionKey (= req.messages.length) で 2 度目に呼ばれた時、planToolCalls が
+  // 同じ tool を再発行しないこと。
+  it('does not re-issue the same tool calls when sessionKey is unchanged', async () => {
+    const provider = new MockLLMProvider();
+    const req: LLMRequest = {
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: 'Your role: Planner Agent\nYour responsibility: Planning 支援。' },
+        { role: 'user', content: 'plan it' },
+      ],
+      tools: fakeTools,
+    };
+    // 1 回目: tool_calls を返す
+    const first = await provider.generate(req);
+    expect(first.stop.type).toBe('tool_calls');
+    if (first.stop.type !== 'tool_calls') return;
+    const firstToolNames = first.stop.calls.map((c) => c.name);
+    expect(firstToolNames.length).toBeGreaterThan(0);
+
+    // 2 回目: 全く同じ messages → 同じ sessionKey → markCalled 済の tool は除外 → calls 空 → final text へ
+    const second = await provider.generate(req);
+    expect(second.stop.type).toBe('stop');
+    // unknown role の fallback ではなく Planner の最終応答に到達している
+    expect(second.text).toContain('【プランニング補助 (Planner / Mock)】');
+  });
+
+  // responseSchema 経路: JSON で返ること
+  it('returns structured JSON when responseSchema is provided (no tools)', async () => {
+    const provider = new MockLLMProvider();
+    const res = await provider.generate({
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: 'Your role: Refinement Agent\nYour responsibility: Refinement 支援。' },
+        { role: 'user', content: 'refine' },
+      ],
+      responseSchema: { type: 'object' },
+      // tools 未指定 → planToolCalls 経路を抜けて即 composeFinalAnswer (構造化分岐)
+    });
+    expect(res.stop.type).toBe('stop');
+    // JSON parseable
+    const parsed = JSON.parse(res.text) as { summary?: string; findings?: unknown[] };
+    expect(parsed).toBeTypeOf('object');
+    // Refinement の構造化出力には findings 配列があるはず (mock.ts getStructuredOutput より)
+    expect(Array.isArray(parsed.findings)).toBe(true);
+  });
+
+  // justGotToolResult 分岐: 直前 message が tool ならツール呼び出しをスキップして即 final
+  it('returns final answer immediately when last message is a tool result', async () => {
+    const provider = new MockLLMProvider();
+    const res = await provider.generate({
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: 'Your role: Planner Agent\nYour responsibility: Planning 支援。' },
+        { role: 'user', content: 'plan' },
+        { role: 'assistant', content: '' },
+        // 直前が tool result → justGotToolResult=true → planToolCalls スキップ
+        { role: 'tool', content: '[]', toolCallId: 'call_x', toolName: 'ticket.list' },
+      ],
+      tools: fakeTools,
+    });
+    expect(res.stop.type).toBe('stop');
+    expect(res.text).toContain('【プランニング補助 (Planner / Mock)】');
+  });
+});
+
 describe('MockLLMProvider seed consistency (C2 fix: avoid fabricated values)', () => {
   // ピッチデモで Web UI が seed の値 (Sprint 13 capacity=32pt / US-201 等) を表示する横で、
   // Mock LLM 応答が異なる数値や fabricated ID を吐くと矛盾露呈する。本テストは
