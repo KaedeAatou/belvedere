@@ -4,6 +4,8 @@ import { specsOf, type ToolRegistry } from './tool';
 
 export interface AgentRuntimeOpts {
   agentName: AgentName;
+  /** Phase 1-B IDOR fix で必須化 (2026-06-10)。AgentRun.workspaceId に転記され、配下の Tool 呼び出しの workspaceId も captureした closure 経由で同値になる前提 */
+  workspaceId: string;
   llm: LLMProvider;
   model: string;
   systemPrompt: string;
@@ -129,6 +131,7 @@ export async function runAgent(
 
     return {
       id: runId,
+      workspaceId: opts.workspaceId,
       agentName: opts.agentName,
       trigger: opts.trigger ?? 'human',
       startedAt,
@@ -148,6 +151,7 @@ export async function runAgent(
     const err = e as Error;
     return {
       id: runId,
+      workspaceId: opts.workspaceId,
       agentName: opts.agentName,
       trigger: opts.trigger ?? 'human',
       startedAt,
