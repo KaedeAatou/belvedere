@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   ts-typecheck:
-    name: TypeScript typecheck
+    name: TypeScript typecheck + test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
+      - name: Test (vitest)
+        run: pnpm test
 
   py-lint:
     name: Python lint + type

@@ -41,7 +41,7 @@ pnpm --filter @belvedere/mcp-server dev                     # stdio MCP server (
 cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 8081
 ```
 
-`pnpm test` は何も実行しない (テスト未整備、fabrication 禁止)。
+`pnpm test` で全 workspace のテストを vitest 経由で実行 (2026-06-09 〜)。現状 `packages/llm` (Mock LLM 役割判定) + `packages/repo` (memory backend where) が test を持つ。新規 package を作る時は `"test": "vitest run"` script を package.json に追加する (`--if-present` で skip される)。
 
 ## Architecture (フォルダ構成 + 層分離)
 
