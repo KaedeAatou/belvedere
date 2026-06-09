@@ -32,6 +32,19 @@ export default defineNuxtConfig({
   // Belvedere デザイントークン (styles.css) + 画面別 CSS (screens.css)
   css: ['~/assets/css/styles.css', '~/assets/css/screens.css'],
 
+  // Phase 1-B (2026-06-10): Firebase Auth + API クライアント設定
+  // - public は SSR / クライアント両方から見える (Firebase config は public で機密ではない)
+  // - apiBaseUrl は dev / prod で切替 (環境変数 NUXT_PUBLIC_API_BASE_URL)
+  runtimeConfig: {
+    public: {
+      firebaseApiKey: 'AIzaSyCwtYyHcGwuspL_TWyw6qN6PHxvuLGW3AA',
+      firebaseAuthDomain: 'belvedere-dev-atrium.firebaseapp.com',
+      firebaseProjectId: 'belvedere-dev-atrium',
+      firebaseAppId: '1:876087923874:web:898d399e0f1d74e39f73fb',
+      apiBaseUrl: 'https://belvedere-api-dev-cpszmcqmuq-an.a.run.app',
+    },
+  },
+
   app: {
     head: {
       title: 'Belvedere — Spiral PM',
