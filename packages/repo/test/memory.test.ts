@@ -80,6 +80,34 @@ describe('memory backend - tickets where filters', () => {
     expect(xs.every((t) => t.projectId === someProjectId)).toBe(true);
   });
 
+  // F8: firestore.ts (ignoreUndefinedProperties: true) との shape parity
+  it('upsert strips undefined fields (parity with Firestore ignoreUndefinedProperties)', async () => {
+    await repo.tickets.upsert({
+      id: 'TEST-PARITY-1',
+      title: 'parity check',
+      status: 'todo',
+      priority: 'low',
+      // 以下は intentionally undefined
+      valueImpact: undefined,
+      ritual: undefined,
+      sourceQuote: undefined,
+      createdAt: '2026-06-09T00:00:00Z',
+      updatedAt: '2026-06-09T00:00:00Z',
+      createdBy: 'human',
+    });
+    const got = await repo.tickets.get('TEST-PARITY-1');
+    expect(got).not.toBeNull();
+    if (!got) return;
+    // undefined フィールドはキーごと消える (Firestore と同じ shape)
+    expect('valueImpact' in got).toBe(false);
+    expect('ritual' in got).toBe(false);
+    expect('sourceQuote' in got).toBe(false);
+    // 必須フィールドは残る
+    expect('title' in got).toBe(true);
+    expect(got.title).toBe('parity check');
+    await repo.tickets.delete('TEST-PARITY-1');
+  });
+
   it('filters by storyId via parentTicketId (parity with FsTicketRepo)', async () => {
     // storyId は親 ticket (User Story) を指す。WC-101..112 の seed に parentTicketId を持つチケットがあれば
     // それで検索、無ければ任意の文字列でゼロ件返却を確認
