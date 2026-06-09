@@ -304,7 +304,7 @@ ai-agent-hackathon/
 ## 8. セキュリティ (審査基準⑤ + WC-110対応)
 
 - Secret Manager で API key / Slack token 管理 (リポジトリには絶対置かない)
-- **Firebase Auth (個人 Google) で Web / API / MCP HTTP 認証** (`ROADMAP.md` Phase 1-B、5/18-22 着手) — IAP は本番ドメイン取得後に検討 (Phase 4)
+- **Firebase Auth (個人 Google) で Web / API / MCP HTTP 認証** (`ROADMAP.md` Phase 1-B、6/9-14 着手予定 — Firestore データ層は 6/9 実装完了、認証は残作業) — IAP は本番ドメイン取得後に検討 (Phase 4)
 - Firestore セキュリティルールで個人 Google アカウントだけが read/write できるよう制限 (個人参加要件のエビデンス)
 - MCP HTTP は OAuth 2.1 (個人 Google アカウント、`ROADMAP.md` Phase 1-D)
 - WIF (Workload Identity Federation) で GitHub Actions ↔ GCP デプロイ時の鍵レス認証 (= ユーザー認証ではなく CI 認証)

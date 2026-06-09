@@ -89,19 +89,21 @@ gantt
 - [x] Cloud Build → Cloud Run CI (WIF 経由) 動作確認済
 - [x] **GCP クレジット適用済** (2026-05-09): ハッカソンクーポン ¥47,867 + Free Trial ¥47,847 = 計 ¥95,714
 
-#### Phase 1-Day0: Web を Cloud Run にデプロイ (2026-06-08 ← **今夜**)
-- [ ] **`apps/web/Dockerfile` + `infra/cloudbuild.web.yaml` 作成** (6/8 着手)
-- [ ] **`gcloud builds submit` で Web を Cloud Run にデプロイ** (4〜6 分)
-- [ ] `https://belvedere-web-dev-XXXX-an.a.run.app/` で 5 儀式 UI が見える状態 (Mock データ)
-- [ ] 動く SaaS 公開 URL 入手 → ハッカソン審査用デモ URL の初期版
+#### Phase 1-Day0: Web を Cloud Run にデプロイ (2026-06-08 → ✅ 完了)
+- [x] **`apps/web/Dockerfile` + `infra/cloudbuild.web.yaml` 作成** (commit `1f1129b`)
+- [x] **`gcloud builds submit` で Web を Cloud Run にデプロイ** (1m59s 完了)
+- [x] `https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/` で 5 儀式 UI が見える状態 (Mock データ)
+- [x] 動く SaaS 公開 URL 入手 → ハッカソン審査用デモ URL の初期版
+- [x] **(追加 2026-06-09)** `.github/workflows/deploy-web.yml` で push 時自動デプロイ化 (commit `af417d1`)
 
 > なぜこれを最初に: UI は既に Mock データで動いている (17 SFC 実装済)。Firestore より先にデプロイすれば「動く SaaS の公開 URL」が今夜手に入る。Firestore 接続 (Phase 1-B) は明日以降でも、見た目は今夜から動く。
 
 #### Phase 1-B: データ層 + 認証 (6/9-14)
-- [ ] **Firestore データ層** (`packages/repo/src/firestore.ts` 実装、現状 throw)
+- [x] **Firestore データ層** (`packages/repo/src/firestore.ts` 実装 2026-06-09 / commit `ccc9983`)
+- [x] seed の Firestore 投入スクリプト + 読出検証 (`scripts/seed-firestore.ts` + `check-firestore.ts` / commit `e932a2f`)
+- [x] **Cloud Run API を REPO_BACKEND=firestore で再デプロイ + `/health` / `/epics` で実データ返却確認** (commit `9d2aed5`)
 - [ ] Firestore セキュリティルール (個人 Google アカウントだけ read/write)
-- [ ] **Firebase Auth (個人 Google)** で UI / API / MCP を保護
-- [ ] seed の Firestore 投入スクリプト
+- [ ] **Firebase Auth (個人 Google)** で UI / API / MCP を保護 ← Phase 1-B 残作業
 
 #### Phase 1-C: Web UI で CRUD 動作 (6/15-21)
 - [ ] チケット詳細画面で **編集 / status 変更 / Epic 紐付け / SP 設定** が UI でできる
