@@ -32,10 +32,9 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
       return c.json({ error: 'auth_middleware_not_applied' }, 500);
     }
 
-    // 現状の MemberRepository は list() で全件返すので、ここで userId フィルタする。
-    // Phase 1-B 認証完了後に Member.list({ userId }) シグネチャ拡張を検討。
-    const allMembers = await repo.members.list();
-    const memberships = allMembers.filter((m) => m.userId === user.userId);
+    // user.userId で全 Workspace 横断検索 (Phase 1-B / 2026-06-10 で listByUserId を新設)。
+    // この時点ではまだ workspace 未確定なので、workspaceId 縛りの list() は使えない。
+    const memberships = await repo.members.listByUserId(user.userId);
 
     if (memberships.length === 0) {
       return c.json(

@@ -2,12 +2,16 @@
 // 最小エンドポイント:
 //   GET  /              ping (認証不要)
 //   GET  /health        health check (認証不要)
-//   GET  /tickets       全チケット (Phase 1-B 末で /api/* 配下に移動して保護予定)
-//   GET  /sprints/:id   スプリント情報 (同上)
-//   GET  /epics         Epic 一覧 (同上)
-//   GET  /epics/:id     Epic 詳細 (同上)
-//   POST /agents/:name  エージェント実行 (同上)
-//   GET  /api/whoami    認証経路 smoke test (Phase 1-B / 2026-06-10 追加、認証必須)
+//
+// 以下はすべて /api/* 配下 (Phase 1-B / 2026-06-10 / 認証 + workspace 解決必須):
+//   GET  /api/whoami        認証経路 smoke test
+//   GET  /api/tickets       チケット一覧 (workspaceId フィルタ済)
+//   GET  /api/sprints       スプリント一覧
+//   GET  /api/sprints/:id   スプリント詳細
+//   GET  /api/epics         Epic 一覧
+//   GET  /api/epics/:id     Epic 詳細
+//   GET  /api/members       メンバ一覧 (自分の Workspace のみ)
+//   POST /api/agents/:name  エージェント実行 (workspaceId スコープで動く)
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
@@ -29,47 +33,16 @@ const app = new Hono<{
 
 const repo = await createRepoContainer(process.env.REPO_BACKEND);
 const llm = createLLMProvider(process.env.LLM_PROVIDER);
-const tools = buildRegistry(buildTools(repo));
 
-// ------- Health / Root -------
+// ------- Health / Root (認証不要) -------
 app.get('/', (c) => c.json({ name: 'belvedere-api', version: '0.0.1' }));
 // factory.ts は REPO_BACKEND が undefined / null / '' の場合 memory backend を返すので、
 // /health の表示も同じ規約に揃える (?? は null/undefined しか coalesce しないため `||` を使う)。
 app.get('/health', (c) => c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND || 'memory' }));
 
-// ------- Read-only data endpoints -------
-app.get('/tickets', async (c) => {
-  const sprintId = c.req.query('sprintId');
-  const status = c.req.query('status');
-  const ts = await repo.tickets.list({
-    ...(sprintId && { sprintId }),
-    ...(status && { status: status as Parameters<typeof repo.tickets.list>[0] extends infer U ? U extends { status?: infer S } ? S : never : never }),
-  });
-  return c.json(ts);
-});
-
-app.get('/sprints', async (c) => c.json(await repo.sprints.list()));
-
-app.get('/sprints/:id', async (c) => {
-  const s = await repo.sprints.get(c.req.param('id'));
-  if (!s) return c.json({ error: 'not found' }, 404);
-  return c.json(s);
-});
-
-app.get('/epics', async (c) => c.json(await repo.epics.list()));
-
-app.get('/epics/:id', async (c) => {
-  const e = await repo.epics.get(c.req.param('id'));
-  if (!e) return c.json({ error: 'not found' }, 404);
-  return c.json(e);
-});
-
-app.get('/members', async (c) => c.json(await repo.members.list()));
-
 // ------- /api/* は認証必須 (Phase 1-B / 2026-06-10) -------
 // authMiddleware: Authorization: Bearer <ID token> を Firebase Admin SDK で検証 → c.user
 // workspaceMiddleware: members から user の所属 Workspace を解決 → c.workspaceId / c.role
-// 既存の /tickets 等は Phase 1-B 末に /api/* 配下に移動して同様に保護する (段階的移行)
 app.use('/api/*', authMiddleware);
 app.use('/api/*', workspaceMiddleware(repo));
 
@@ -100,10 +73,57 @@ app.get('/api/whoami', (c) => {
   });
 });
 
-// ------- Agent invocation -------
+// ------- /api/* read-only data endpoints -------
+// すべて c.get('workspaceId') 由来の workspace スコープで動く (IDOR fix)。
+app.get('/api/tickets', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  const sprintId = c.req.query('sprintId');
+  const status = c.req.query('status');
+  const ts = await repo.tickets.list({
+    workspaceId,
+    ...(sprintId && { sprintId }),
+    ...(status && { status: status as Parameters<typeof repo.tickets.list>[0] extends infer U ? U extends { status?: infer S } ? S : never : never }),
+  });
+  return c.json(ts);
+});
+
+app.get('/api/sprints', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  return c.json(await repo.sprints.list({ workspaceId }));
+});
+
+app.get('/api/sprints/:id', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  const s = await repo.sprints.get(c.req.param('id'));
+  if (!s) return c.json({ error: 'not found' }, 404);
+  // IDOR ガード: 別 workspace の sprint は「存在しない」扱い
+  if (s.workspaceId !== workspaceId) return c.json({ error: 'not found' }, 404);
+  return c.json(s);
+});
+
+app.get('/api/epics', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  return c.json(await repo.epics.list({ workspaceId }));
+});
+
+app.get('/api/epics/:id', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  const e = await repo.epics.get(c.req.param('id'));
+  if (!e) return c.json({ error: 'not found' }, 404);
+  if (e.workspaceId !== workspaceId) return c.json({ error: 'not found' }, 404);
+  return c.json(e);
+});
+
+app.get('/api/members', async (c) => {
+  const workspaceId = c.get('workspaceId');
+  return c.json(await repo.members.list({ workspaceId }));
+});
+
+// ------- /api/agents/:name (エージェント実行) -------
 const VALID_AGENTS: ReadonlyArray<AgentName> = ['orchestrator', 'planner', 'daily', 'refinement', 'reviewer', 'retrospective'];
 
-app.post('/agents/:name', async (c) => {
+app.post('/api/agents/:name', async (c) => {
+  const workspaceId = c.get('workspaceId');
   const name = c.req.param('name') as AgentName;
   if (!VALID_AGENTS.includes(name)) {
     return c.json({ error: `unknown agent: ${name}`, valid: VALID_AGENTS }, 400);
@@ -111,9 +131,14 @@ app.post('/agents/:name', async (c) => {
   const body: { prompt?: string } = await c.req.json<{ prompt?: string }>().catch(() => ({}));
   const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
+  // workspaceId を closure cap した tools を毎リクエストで作成 (request-scoped)。
+  // global にすると他 Workspace のリクエストで前回 workspaceId が漏れる。
+  const tools = buildRegistry(buildTools(repo, workspaceId));
+
   const run = await runAgent(
     {
       agentName: name,
+      workspaceId,
       llm,
       model: 'gemini-2.5-pro',
       systemPrompt: buildSystemPrompt(name),

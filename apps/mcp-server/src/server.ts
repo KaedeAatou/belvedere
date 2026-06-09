@@ -5,7 +5,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
 import { createLLMProvider } from '@belvedere/llm';
 import { buildTools } from '@belvedere/tools';
-import { createRepoContainer } from '@belvedere/repo';
+import { createRepoContainer, type TicketQuery } from '@belvedere/repo';
 import type {
   AgentName,
   Status,
@@ -18,9 +18,12 @@ import type {
 import { MCP_TOOLS } from './tools';
 
 // シングルトン (リクエスト毎に再初期化しない)
+// MCP server は単一ユーザー (Claude Code ホスト) 経由なので、単一 Workspace 前提でよい。
+// WORKSPACE_ID env で切替可能 (Phase 1-B / 2026-06-10)。
 const llm = createLLMProvider(process.env.LLM_PROVIDER);
 const repo = await createRepoContainer(process.env.REPO_BACKEND);
-const internalTools = buildTools(repo);
+const workspaceId = process.env.WORKSPACE_ID ?? 'ws-belvedere';
+const internalTools = buildTools(repo, workspaceId);
 const registry = buildRegistry(internalTools);
 
 export function listTools() {
@@ -35,13 +38,7 @@ export async function callTool(
     switch (name) {
       // ========== 読み取り系 ==========
       case 'belvedere_ticket_list': {
-        const q: {
-          projectId?: string;
-          sprintId?: string;
-          status?: Status;
-          assigneeId?: string;
-          ritual?: Ritual;
-        } = {};
+        const q: TicketQuery = { workspaceId };
         if (typeof args.sprintId === 'string') q.sprintId = args.sprintId;
         if (typeof args.status === 'string') q.status = args.status as Status;
         if (typeof args.projectId === 'string') q.projectId = args.projectId;
@@ -55,18 +52,20 @@ export async function callTool(
         const id = mustString(args.id, 'id');
         const ticket = await repo.tickets.get(id);
         if (!ticket) return errorResult(`ticket not found: ${id}`);
+        // IDOR ガード: 別 workspace のチケットは「存在しない」扱い
+        if (ticket.workspaceId !== workspaceId) return errorResult(`ticket not found: ${id}`);
         return textResult(JSON.stringify(ticket, null, 2));
       }
 
       case 'belvedere_epic_list': {
-        const opts: { projectId?: string } = {};
+        const opts: { workspaceId: string; projectId?: string } = { workspaceId };
         if (typeof args.projectId === 'string') opts.projectId = args.projectId;
         const epics = await repo.epics.list(opts);
         return textResult(JSON.stringify({ count: epics.length, epics }, null, 2));
       }
 
       case 'belvedere_member_list': {
-        const members = await repo.members.list();
+        const members = await repo.members.list({ workspaceId });
         return textResult(JSON.stringify({ count: members.length, members }, null, 2));
       }
 
@@ -103,6 +102,7 @@ export async function callTool(
         const run = await runAgent(
           {
             agentName,
+            workspaceId,
             llm,
             model: 'gemini-2.5-pro',
             systemPrompt: buildSystemPrompt(agentName),
@@ -127,6 +127,7 @@ export async function callTool(
         const id = (args.id as string) ?? generateTicketId();
         const ticket: Ticket = {
           id,
+          workspaceId,
           title,
           status: (args.status as Status) ?? 'backlog',
           priority: (args.priority as Priority) ?? 'medium',
