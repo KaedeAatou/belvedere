@@ -10,8 +10,13 @@ import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse, LLMToolCall } fr
 export class MockLLMProvider implements LLMProvider {
   readonly name = 'mock';
 
-  // 状態: 同じ会話で同じツールを2回呼ばないようにする
+  // 状態: 同じ会話で同じツールを2回呼ばないようにする (sessionKey ベース)。
+  // apps/api と apps/mcp-server では const llm = createLLMProvider(...) で
+  // module singleton として保持されるため、長時間動作する Cloud Run instance で
+  // 無制限に成長すると memory leak になる。MAX_CALLCOUNT_ENTRIES を上限に
+  // FIFO eviction (Map の insertion order を利用)。
   private callCount = new Map<string, number>();
+  private static readonly MAX_CALLCOUNT_ENTRIES = 200;
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
     const sessionKey = req.messages.length.toString();
@@ -113,7 +118,22 @@ export class MockLLMProvider implements LLMProvider {
   }
 
   private markCalled(sessionKey: string, toolName: string): void {
-    this.callCount.set(`${sessionKey}:${toolName}`, 1);
+    const key = `${sessionKey}:${toolName}`;
+    // 容量上限を超えていれば、最も古い entry を 1 件削除してから挿入する。
+    // Map は insertion order を保つので keys().next() で FIFO eviction が成立。
+    if (
+      !this.callCount.has(key) &&
+      this.callCount.size >= MockLLMProvider.MAX_CALLCOUNT_ENTRIES
+    ) {
+      const oldest = this.callCount.keys().next().value;
+      if (oldest !== undefined) this.callCount.delete(oldest);
+    }
+    this.callCount.set(key, 1);
+  }
+
+  /** テスト用: 現在の callCount サイズを覗く (本番コードからは呼ばない) */
+  _callCountSize(): number {
+    return this.callCount.size;
   }
 
   private fakeUsage(req: LLMRequest, outputLen: number) {
