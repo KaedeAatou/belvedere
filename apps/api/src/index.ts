@@ -22,6 +22,15 @@ import { buildTools } from '@belvedere/tools';
 import type { AgentName } from '@belvedere/shared';
 import { authMiddleware, type AuthenticatedUser } from './middleware/auth';
 import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspace';
+import {
+  createTicket,
+  patchTicket,
+  changeTicketStatus,
+  deleteTicket,
+  type HandlerContext,
+  type HandlerResult,
+} from './handlers/ticket-handlers';
+import { createEpic, patchEpic } from './handlers/epic-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -117,6 +126,52 @@ app.get('/api/epics/:id', async (c) => {
 app.get('/api/members', async (c) => {
   const workspaceId = c.get('workspaceId');
   return c.json(await repo.members.list({ workspaceId }));
+});
+
+// ------- /api/* CRUD endpoints (Phase 1-C / 2026-06-11) -------
+// すべて c.get('workspaceId') / c.get('user') を HandlerContext に詰めて純粋関数 handler に委譲。
+// handler の HandlerResult から Hono レスポンスに変換するヘルパ。
+
+function buildCtx(c: import('hono').Context): HandlerContext {
+  return {
+    workspaceId: c.get('workspaceId'),
+    user: c.get('user'),
+  };
+}
+
+function respond<T>(c: import('hono').Context, r: HandlerResult<T>): Response {
+  // Hono の c.json は status code のリテラル union を要求するので、201/400/404/200 を明示的に分岐
+  if (r.ok) {
+    if (r.status === 201) return c.json(r.body, 201);
+    return c.json(r.body, 200);
+  }
+  if (r.status === 400) return c.json(r.body, 400);
+  return c.json(r.body, 404);
+}
+
+app.post('/api/tickets', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createTicket(repo, buildCtx(c), body));
+});
+app.patch('/api/tickets/:id', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchTicket(repo, buildCtx(c), c.req.param('id'), body));
+});
+app.patch('/api/tickets/:id/status', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await changeTicketStatus(repo, buildCtx(c), c.req.param('id'), body));
+});
+app.delete('/api/tickets/:id', async (c) => {
+  return respond(c, await deleteTicket(repo, buildCtx(c), c.req.param('id')));
+});
+
+app.post('/api/epics', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createEpic(repo, buildCtx(c), body));
+});
+app.patch('/api/epics/:id', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchEpic(repo, buildCtx(c), c.req.param('id'), body));
 });
 
 // ------- /api/agents/:name (エージェント実行) -------
