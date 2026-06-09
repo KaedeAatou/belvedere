@@ -28,15 +28,19 @@ function header(title: string): void {
 async function runFor(agent: AgentName, prompt: string): Promise<void> {
   const llm = createLLMProvider(process.env.LLM_PROVIDER);
   const repo = await createRepoContainer(process.env.REPO_BACKEND);
-  const tools = buildRegistry(buildTools(repo));
+  // CLI は単一 Workspace 前提 (demo / seed の 'ws-belvedere')。
+  // 他 Workspace の demo が必要になったら WORKSPACE_ID env で切替可能にする (Phase 1-B / 2026-06-10)
+  const workspaceId = process.env.WORKSPACE_ID ?? 'ws-belvedere';
+  const tools = buildRegistry(buildTools(repo, workspaceId));
 
   header(`Belvedere ▸ ${agent} agent`);
-  console.log(`provider: ${llm.name} / model: gemini-2.5-pro (mocked)`);
+  console.log(`provider: ${llm.name} / model: gemini-2.5-pro (mocked) / workspace: ${workspaceId}`);
   console.log(`prompt  : ${prompt}\n`);
 
   const run = await runAgent(
     {
       agentName: agent,
+      workspaceId,
       llm,
       model: 'gemini-2.5-pro',
       systemPrompt: buildSystemPrompt(agent),
