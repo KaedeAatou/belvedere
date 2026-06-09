@@ -73,9 +73,12 @@ jobs:
       - name: Submit Cloud Build
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
+          # _LLM_PROVIDER / _REPO_BACKEND は cloudbuild.yaml のデフォルトに依存せず明示的に渡す
+          # (silent な default 切替で本番挙動が変わる事故を防止)。Phase 3 で本物 Gemini に切替時は
+          # _LLM_PROVIDER=gemini に変える。
           gcloud builds submit \
             --config infra/cloudbuild.yaml \
-            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=mock,_TAG=$SHORT_SHA \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=mock,_REPO_BACKEND=firestore,_TAG=$SHORT_SHA \
             --project=${{ steps.target.outputs.project }} \
             .
 
