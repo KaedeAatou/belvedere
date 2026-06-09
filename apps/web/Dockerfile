@@ -17,16 +17,15 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json tsconfig.base.json ./
 COPY apps/web/package.json ./apps/web/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/seed/package.json ./packages/seed/
-COPY packages/repo/package.json ./packages/repo/
 
 # web に必要な範囲だけインストール (... で transitive 含む)
+# 注: @belvedere/repo は web 側で参照しないため deps から外している (Firestore SDK の流入防止)。
 RUN pnpm install --frozen-lockfile --filter @belvedere/web...
 
 # --- 実ソース投入 ---
 COPY apps/web ./apps/web
 COPY packages/shared ./packages/shared
 COPY packages/seed ./packages/seed
-COPY packages/repo ./packages/repo
 
 # Nuxt build (.output/server/index.mjs を生成)
 RUN pnpm --filter @belvedere/web build

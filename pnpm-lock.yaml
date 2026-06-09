@@ -101,9 +101,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@belvedere/repo':
-        specifier: workspace:*
-        version: link:../../packages/repo
       '@belvedere/seed':
         specifier: workspace:*
         version: link:../../packages/seed
