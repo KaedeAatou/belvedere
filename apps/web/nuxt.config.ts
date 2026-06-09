@@ -17,8 +17,10 @@ export default defineNuxtConfig({
   },
 
   // workspace パッケージを Nitro バンドルに含める (.js extension なし問題回避)
+  // @belvedere/repo は web から参照しないため除外 (Firestore SDK + grpc 50MB+ の transitive
+  // 流入を防止)。将来 web から repo を使う場合 (Phase 1-C 以降) は再度追加する。
   build: {
-    transpile: ['@belvedere/shared', '@belvedere/seed', '@belvedere/repo'],
+    transpile: ['@belvedere/shared', '@belvedere/seed'],
   },
 
   // components/ サブディレクトリの prefix を無効化
