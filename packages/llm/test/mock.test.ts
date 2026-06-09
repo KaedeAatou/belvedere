@@ -65,6 +65,23 @@ describe('MockLLMProvider role detection (system prompt → role)', () => {
   });
 });
 
+describe('MockLLMProvider seed consistency (C2 fix: avoid fabricated values)', () => {
+  // ピッチデモで Web UI が seed の値 (Sprint 13 capacity=32pt / US-201 等) を表示する横で、
+  // Mock LLM 応答が異なる数値や fabricated ID を吐くと矛盾露呈する。本テストは
+  // 過去の不一致を回帰させないための seed parity guard。
+  it('Planner 応答の Sprint 13 capacity は seed の 32pt と一致する (旧 30pt fabricated を回帰防止)', async () => {
+    const text = await callMock('Your role: Planner Agent\nYour responsibility: Sprint Planning 支援。');
+    expect(text).toContain('Capacity 32pt');
+    expect(text).not.toContain('Capacity 30pt');
+  });
+
+  it('Planner 応答は WC-104 → US-201 を提案する (旧 US-401 は seed にも PRODUCT_BRIEF にも存在しない)', async () => {
+    const text = await callMock('Your role: Planner Agent\nYour responsibility: Sprint Planning 支援。');
+    expect(text).toContain('US-201');
+    expect(text).not.toContain('US-401');
+  });
+});
+
 describe('MockLLMProvider callCount LRU cap (memory leak prevention)', () => {
   it('does not exceed MAX_CALLCOUNT_ENTRIES (200) regardless of session count', async () => {
     // module singleton として長時間動作する Cloud Run instance を模した負荷シナリオ:
