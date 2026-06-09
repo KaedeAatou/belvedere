@@ -1,0 +1,95 @@
+name: Deploy Web to Cloud Run
+
+# トリガ:
+# - push to main (apps/web / 共有 packages / infra/cloudbuild.web.yaml が変わった時のみ)
+# - 手動 (workflow_dispatch / dev or prod 切替)
+#
+# 認証は Workload Identity Federation 経由 (deploy-api.yml と同じ pool / provider / deployer SA)。
+# 事前設定: docs/setup-github-wif.md
+#
+# 注意: web は apps/api と異なり LLM_PROVIDER / REPO_BACKEND を使わない (Mock データ表示)。
+# Firestore 接続は Phase 1-C で web → api 接続として実装予定。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/**'
+      - 'packages/shared/**'
+      - 'packages/seed/**'
+      - 'packages/repo/**'
+      - 'infra/cloudbuild.web.yaml'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "deploy target env"
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write   # WIF に必要
+
+env:
+  GCP_PROJECT_DEV: belvedere-dev-atrium
+  GCP_PROJECT_PROD: belvedere-prod-atrium
+  GCP_REGION: asia-northeast1
+  REPO: belvedere
+  SERVICE: belvedere-web
+  WIF_PROVIDER: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
+  RUNTIME_SA_NAME: belvedere-runtime
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target project
+        id: target
+        run: |
+          if [ "${{ github.event.inputs.env || 'dev' }}" = "prod" ]; then
+            echo "project=$GCP_PROJECT_PROD" >> $GITHUB_OUTPUT
+          else
+            echo "project=$GCP_PROJECT_DEV"  >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ steps.target.outputs.project }}
+
+      - name: Submit Cloud Build
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          gcloud builds submit \
+            --config infra/cloudbuild.web.yaml \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_TAG=$SHORT_SHA \
+            --project=${{ steps.target.outputs.project }} \
+            .
+
+      - name: Output service URL
+        run: |
+          URL=$(gcloud run services describe ${{ env.SERVICE }}-${{ github.event.inputs.env || 'dev' }} \
+            --region=${{ env.GCP_REGION }} \
+            --project=${{ steps.target.outputs.project }} \
+            --format='value(status.url)')
+          echo "🌬  Deployed to: $URL"
+          echo "$URL" > url.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deploy-url-${{ github.event.inputs.env || 'dev' }}
+          path: url.txt
