@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "seed:firestore": "tsx scripts/seed-firestore.ts"
+    "seed:firestore": "tsx scripts/seed-firestore.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@belvedere/seed": "workspace:*",
