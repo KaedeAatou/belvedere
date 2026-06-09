@@ -85,8 +85,11 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('video.extractIssues', { recordingId: 'rec-s13-review' });
         break;
       case 'retrospective':
-        // ふりかえり: 前スプリント情報 + 全チケットの品質充足率
+        // ふりかえり: 前スプリント情報 + メンバ一覧 (Try owner 割当に必要) + 全チケットの品質充足率
+        // prompts.ts の Retrospective Agent 責務に「member.list を参照して owner 候補を割り当て」
+        // と明記されているため、戦略でも対応 tool を呼ぶ。
         tryCall('sprint.get', { id: 'sprint-12' });
+        tryCall('member.list', {});
         tryCall('ticket.list', { sprintId: 'sprint-12' });
         break;
       case 'orchestrator':
@@ -177,7 +180,7 @@ function getStructuredOutput(role: AgentRole): unknown {
         agendaItems: [
           { topic: 'Sprint 12 ふりかえり Try (3件) のレビュー', source: 'agent', durationMin: 8 },
           { topic: 'バックログ品質チェック: DoD/SP/US紐付け不足のチケット 3件', source: 'agent', durationMin: 10, ticketIds: ['WC-101', 'WC-104', 'WC-109'] },
-          { topic: 'Sprint 13 容量計画 (Capacity 30pt / Selected 24pt)', source: 'agent', durationMin: 6 },
+          { topic: 'Sprint 13 容量計画 (Capacity 32pt / Selected 24pt)', source: 'agent', durationMin: 6 },
           { topic: 'Epic 進捗確認: EP-1 / EP-2 / EP-3 / EP-4', source: 'agent', durationMin: 6 },
         ],
         qualityIssues: [
@@ -280,12 +283,12 @@ function getNaturalOutput(role: AgentRole): string {
         '◆ 議題候補 (4件 / 合計 30min):',
         '  1. Sprint 12 ふりかえり Try (3件) のレビュー (8min)',
         '  2. バックログ品質チェック: DoD/SP/US紐付け不足 3件 (10min) — WC-101 / WC-104 / WC-109',
-        '  3. Sprint 13 容量計画 (Capacity 30pt / Selected 24pt) (6min)',
+        '  3. Sprint 13 容量計画 (Capacity 32pt / Selected 24pt) (6min)',
         '  4. Epic 進捗確認: EP-1 / EP-2 / EP-3 / EP-4 (6min)',
         '',
         '◆ 品質要修正のチケット (AI が候補を準備):',
         '  - WC-101: DoD 候補3件と SP=3pt を提案 (L2 承認後に反映)',
-        '  - WC-104: 既存 US-401 への紐付けを提案',
+        '  - WC-104: 既存 US-201 への紐付けを提案',
         '  - WC-109: DoD 候補3件を提案',
         '',
         'Plannerからの提案: 上記提案を会議の冒頭3分で承認すれば、議題2が短縮できます。',
