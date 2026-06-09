@@ -135,13 +135,16 @@ type AgentRole =
 
 function detectRole(messages: LLMMessage[]): AgentRole {
   const sys = messages.find((m) => m.role === 'system')?.content ?? '';
-  // 英語 Agent 名で判定
-  if (/Planner Agent/i.test(sys)) return 'planner';
-  if (/Refinement Agent/i.test(sys)) return 'refinement';
-  if (/Daily Agent/i.test(sys)) return 'daily';
-  if (/Reviewer Agent/i.test(sys)) return 'reviewer';
-  if (/Retrospective Agent/i.test(sys)) return 'retrospective';
-  if (/Orchestrator/i.test(sys)) return 'orchestrator';
+  // buildSystemPrompt (packages/agent/src/prompts.ts) は `Your role: <Role>` 形式で
+  // role を埋め込むので、それを anchor に判定する。
+  // 文中の incidental mention (例: Reviewer が「Daily Agent との連携を取りつつ」と
+  // 書いた箇所) で誤ルーティングしないよう、'Your role: ' 直後に限定する。
+  if (/Your role: Planner Agent/i.test(sys)) return 'planner';
+  if (/Your role: Refinement Agent/i.test(sys)) return 'refinement';
+  if (/Your role: Daily Agent/i.test(sys)) return 'daily';
+  if (/Your role: Reviewer Agent/i.test(sys)) return 'reviewer';
+  if (/Your role: Retrospective Agent/i.test(sys)) return 'retrospective';
+  if (/Your role: Orchestrator/i.test(sys)) return 'orchestrator';
   return 'unknown';
 }
 
