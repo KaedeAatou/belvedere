@@ -224,6 +224,9 @@ class FsMemberRepo implements MemberRepository {
     const snap = await db().collection(COL.members).where('userId', '==', userId).get();
     return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
+  async upsert(m: Member): Promise<void> {
+    await db().collection(COL.members).doc(m.userId).set(m);
+  }
 }
 
 class FsCeremonyRepo implements CeremonyRepository {

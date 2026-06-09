@@ -67,6 +67,11 @@ export interface MemberRepository {
    * 個人情報は userId / email / workspaceId / role に限定すること (PII リーク防止)。
    */
   listByUserId(userId: string): Promise<Member[]>;
+  /**
+   * 招待 UI (Phase 1-E) / 初回 owner 自動登録 (Phase 1-B / 2026-06-10) で使う。
+   * doc id = userId なので、既存ユーザの role 変更は同じ userId で再投入する形になる。
+   */
+  upsert(m: Member): Promise<void>;
 }
 
 export interface CeremonyRepository {

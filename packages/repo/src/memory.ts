@@ -120,6 +120,7 @@ class MemMemberRepo implements MemberRepository {
   async listByUserId(userId: string): Promise<Member[]> {
     return [...this.store.values()].filter((m) => m.userId === userId);
   }
+  async upsert(m: Member): Promise<void> { this.store.set(m.userId, stripUndefined({ ...m })); }
 }
 
 class MemCeremonyRepo implements CeremonyRepository {
