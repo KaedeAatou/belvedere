@@ -35,7 +35,7 @@ graph TB
     end
 
     subgraph CICD["🔧 Build & Deploy (鍵レス CI/CD)"]
-        GH["GitHub Actions<br/>(deploy-api.yml)"]
+        GH["GitHub Actions<br/>(deploy-api.yml + deploy-web.yml)"]
         WIF["Workload Identity<br/>belvedere-ci-pool<br/>belvedere-ci-github"]
         CB["Cloud Build<br/>(_TAG = short SHA)"]
         AR["Artifact Registry<br/>belvedere/api"]
@@ -262,7 +262,9 @@ ai-agent-hackathon/
 │   └── cloudbuild.yaml   # Cloud Build パイプライン (--allow-unauthenticated は Phase 1-A だけ)
 ├── .github/workflows/
 │   ├── ci.yml            # TS typecheck + Python lint+type
-│   └── deploy-api.yml    # WIF 経由 Cloud Run デプロイ (Phase 1 終盤で push トリガ復活)
+│   ├── deploy-api.yml    # WIF 経由 Cloud Run デプロイ (apps/api / packages 配下変更時)
+│   ├── deploy-web.yml    # WIF 経由 Cloud Run デプロイ (apps/web 変更時 / 2026-06-09 追加)
+│   └── ci.yml            # typecheck + vitest (push / PR で自動実行)
 ├── docs/
 │   ├── setup-gcp.md      # GCP 11 ステップ (Step 1-10 完了 / 5/6)
 │   ├── setup-mcp.md      # Claude Code から MCP 接続手順
