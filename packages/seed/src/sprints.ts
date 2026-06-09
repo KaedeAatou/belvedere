@@ -1,8 +1,11 @@
 import type { Sprint } from '@belvedere/shared';
 
+// workspaceId は 'ws-belvedere' (projects.ts / members.ts と一致)
+// Phase 1-B IDOR fix で全 entity が workspaceId を持つ必要があるため追加 (2026-06-10)
 export const seedSprints: Sprint[] = [
   {
     id: 'sprint-12',
+    workspaceId: 'ws-belvedere',
     number: 12,
     startsAt: '2026-04-08T00:00:00+09:00',
     endsAt: '2026-04-21T23:59:59+09:00',
@@ -13,6 +16,7 @@ export const seedSprints: Sprint[] = [
   },
   {
     id: 'sprint-13',
+    workspaceId: 'ws-belvedere',
     number: 13,
     startsAt: '2026-04-22T00:00:00+09:00',
     endsAt: '2026-05-05T23:59:59+09:00',
@@ -22,6 +26,7 @@ export const seedSprints: Sprint[] = [
   },
   {
     id: 'sprint-14',
+    workspaceId: 'ws-belvedere',
     number: 14,
     startsAt: '2026-05-06T00:00:00+09:00',
     endsAt: '2026-05-19T23:59:59+09:00',

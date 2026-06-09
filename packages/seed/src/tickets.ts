@@ -11,6 +11,7 @@ const NOW = '2026-04-29T03:00:00+09:00';
 export const seedTickets: Ticket[] = [
   {
     id: 'WC-101',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'プランニング会議の議事録テンプレ刷新',
     description: '前スプリントのプランニングで議事フォーマットがブレていた。DoD/SP/US紐付けが必須項目として埋まるテンプレに差し替える。',
@@ -33,6 +34,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-102',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'デイリースクラム要約BotをSlackに常駐',
     description: 'デイリーAgentをSlackに常駐させ、開始5分前リマインドと終了後サマリを投稿する。',
@@ -54,6 +56,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-103',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'スプリントレビューのデモ環境をCloud Runに統一',
     description: 'PRごとのpreview revision URLを Reviewer Agent が発行し、レビュー時にステークホルダに送る。',
@@ -75,6 +78,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-104',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'ふりかえりのTryを翌スプリントWIPに自動転記',
     description: 'Retrospective Agent がTryを抽出し、次スプリントのWIPチケットとして起票する。owner未指定の場合は人間に確認。',
@@ -97,6 +101,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-105',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'チケット品質スコアのヘッダ常設化',
     description: 'バックログ全体の品質充足率 (DoD/SP/US紐付けが揃っているチケットの割合) を Web UI ヘッダに常時表示する。',
@@ -119,6 +124,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-106',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'PRレビューLLMの誤検出を5%以下にチューニング',
     description: '前スプリントで10%まで下がった誤検出率を5%以下に。Eval setを増強しfew-shot+rubricで改善。',
@@ -141,6 +147,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-107',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'ベロシティ計測を3スプリント移動平均に変更',
     description: '単発スプリントの数字に振り回されないため、ベロシティを直近3スプリントの移動平均で表示。',
@@ -163,6 +170,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-108',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'Cloud Build → Cloud Deploy のパイプライン分離',
     description: 'ビルドとデプロイの責務分離。CB はイメージ作成まで、CD が dev → prod プロモーション。',
@@ -184,6 +192,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-109',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'スクラム形骸化の自動検出ルール v2',
     description: '儀式が形骸化している兆候 (出席率低下/onTime低下/Try未消化など) を検出し警告する。',
@@ -206,6 +215,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-110',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'リリースゲートにOWASP Top 10自動チェック',
     description: 'CD のプロモーション直前に OWASP の自動チェックを通す。落ちたらリリース停止。',
@@ -227,6 +237,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-111',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: 'ペアプロ音声をGeminiで要約しチケット化',
     description: 'ペアプロ中の音声を Speech-to-Text → Gemini 要約 → チケット化。L2で人間確認後保存。',
@@ -248,6 +259,7 @@ export const seedTickets: Ticket[] = [
   },
   {
     id: 'WC-112',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     title: '儀式健全性ダッシュボード公開',
     description: '儀式の健全性スコア (5儀式) を Web UI に公開。Sprint比較とトレンド線。',
