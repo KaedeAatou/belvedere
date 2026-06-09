@@ -14,16 +14,25 @@
 
 ## 動いているもの (今すぐ触れる)
 
+> **DevOps × AI Agent Hackathon 2026 応募作品** — 7/10 提出予定 / 8/19 最終ピッチ (渋谷ストリーム)
+> 公開 URL は審査用デモ環境。Firestore に seed の 12 チケット + 4 Epic + 5 メンバが投入済で、API から実データが返ってきます。
+
 | 種類 | URL / 場所 |
 |---|---|
-| 🟢 **Cloud Run /health** (動作確認) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health) |
-| 🟢 **Cloud Run /tickets** (seed の 12 チケット) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets) |
+| 🟢 **Web (Nuxt 3 SSR)** — 5 儀式 UI が見える | [https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/](https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/) |
+| 🟢 **API /health** (Firestore 接続状態) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health) |
+| 🟢 **API /epics** (Firestore 実データ) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics) |
+| 🟢 **API /tickets** (seed の 12 チケット) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets) |
 | 🟢 **アーキテクチャ図** (Eraser) | [https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa](https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) |
-| 🟢 **GitHub Actions (鍵レス deploy)** | [`.github/workflows/deploy-api.yml`](./.github/workflows/deploy-api.yml) |
+| 🟢 **GitHub Actions (鍵レス WIF deploy)** | [`deploy-api.yml`](./.github/workflows/deploy-api.yml) / [`deploy-web.yml`](./.github/workflows/deploy-web.yml) |
 
 ```bash
 curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health
-# {"status":"ok","llm":"mock","repo":"memory"}
+# {"status":"ok","llm":"mock","repo":"firestore"}
+
+# Firestore から本物データが返ってくる (Phase 1-B 完了 / 2026-06-09):
+curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
+# 4
 ```
 
 ---
@@ -32,10 +41,10 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health
 
 ![Architecture](./docs/images/architecture.png)
 
-**色凡例 (実装ステータス / 2026-05-06 時点)**:
-- 🟢 **緑** = Cloud Run / GCP で動作確認済 (deployed) — API / GitHub Actions / WIF / Cloud Build / Artifact Registry / Cloud Logging
-- 🟡 **黄** = コードあり / ローカル動作 / 空インスタンス (implemented) — Web (Nuxt 3) / MCP / Orchestrator + 5 Agent / Firestore
-- ⚪ **灰** = 未実装、Phase 1-B 以降に着手予定 (planned) — Tool Server / IAP / Gemini / ADK / Vector Search / Pub/Sub
+**色凡例 (実装ステータス / 2026-06-09 時点)**:
+- 🟢 **緑** = Cloud Run / GCP で動作確認済 (deployed) — Web / API / Firestore backend / GitHub Actions (deploy-api + deploy-web) / WIF / Cloud Build / Artifact Registry / Cloud Logging
+- 🟡 **黄** = コードあり / ローカル動作 / 空インスタンス (implemented) — MCP (stdio) / Orchestrator + 5 Agent (Mock LLM で動作中)
+- ⚪ **灰** = 未実装、Phase 2 以降に着手予定 (planned) — Tool Server / IAP / Gemini 本物推論 / ADK ランタイム / Vector Search / Pub/Sub / Cloud Scheduler / Firebase Auth
 
 詳細: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 
