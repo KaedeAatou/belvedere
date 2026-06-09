@@ -19,6 +19,24 @@ import {
 
 async function main(): Promise<void> {
   const projectId = process.env.GCP_PROJECT;
+
+  // 🛑 prod プロジェクトへの誤投入ガード:
+  // GCP_PROJECT に 'prod' を含む値 (例: belvedere-prod-atrium) が渡された場合は throw。
+  // 本当に prod に投入したい時のみ FORCE_PROD=1 で override する。
+  // ADC default project が prod に設定されている (gcloud config set project) 時の事故も
+  // 防ぐため、projectId が未指定でも警告 (`(ADC default)` の場合は別途確認推奨)。
+  if (projectId?.includes('prod') && process.env.FORCE_PROD !== '1') {
+    console.error(
+      `\n🛑 GCP_PROJECT="${projectId}" は prod project の可能性。\n` +
+        '   seed は immutable demo fixture を batch.set で上書きします。\n' +
+        '   本当に prod に投入する場合のみ:\n' +
+        '     FORCE_PROD=1 GCP_PROJECT=' +
+        projectId +
+        ' pnpm --filter @belvedere/repo seed:firestore\n',
+    );
+    process.exit(1);
+  }
+
   const db = new Firestore({
     ...(projectId ? { projectId } : {}),
     ignoreUndefinedProperties: true,
