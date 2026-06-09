@@ -24,7 +24,9 @@ const tools = buildRegistry(buildTools(repo));
 
 // ------- Health / Root -------
 app.get('/', (c) => c.json({ name: 'belvedere-api', version: '0.0.1' }));
-app.get('/health', (c) => c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND ?? 'memory' }));
+// factory.ts は REPO_BACKEND が undefined / null / '' の場合 memory backend を返すので、
+// /health の表示も同じ規約に揃える (?? は null/undefined しか coalesce しないため `||` を使う)。
+app.get('/health', (c) => c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND || 'memory' }));
 
 // ------- Read-only data endpoints -------
 app.get('/tickets', async (c) => {
