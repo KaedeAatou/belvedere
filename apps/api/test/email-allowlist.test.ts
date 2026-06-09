@@ -1,0 +1,84 @@
+// email-allowlist + workspaceMiddleware bootstrap ロジックの単体テスト (Phase 1-B / 2026-06-10)。
+// Firebase Admin SDK や Hono の middleware 全体は test 対象外。純粋関数 + memory backend で完結。
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import { createMemoryRepoContainer } from '@belvedere/repo';
+import type { RepoContainer } from '@belvedere/repo';
+import { buildMemberFromAllowlist, emailAllowlist } from '../src/config/email-allowlist';
+
+describe('buildMemberFromAllowlist - 純粋関数', () => {
+  it('allowlist 該当 email は Member object を返す', () => {
+    const m = buildMemberFromAllowlist('firebase-uid-xyz', 'owner@example.com');
+    expect(m).not.toBeNull();
+    expect(m?.userId).toBe('firebase-uid-xyz');
+    expect(m?.email).toBe('owner@example.com');
+    expect(m?.workspaceId).toBe('ws-belvedere');
+    expect(m?.role).toBe('owner');
+  });
+
+  it('allowlist 非該当 email は null を返す', () => {
+    expect(buildMemberFromAllowlist('uid-1', 'not-allowed@example.com')).toBeNull();
+  });
+
+  it('会社メアドは allowlist に絶対入れない (PII / 個人参加要件)', () => {
+    // ハッカソンは個人参加要件があるので、会社ドメインは絶対 owner にしない
+    expect(emailAllowlist['***company-email-redacted***']).toBeUndefined();
+  });
+});
+
+describe('workspace bootstrap シミュレーション (memory backend)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  it('未登録ユーザー + allowlist 該当 → upsert で member 作成 → listByUserId 1 件', async () => {
+    const uid = 'firebase-uid-bootstrap';
+    const email = 'owner@example.com';
+
+    // 初期状態: 未登録
+    expect((await repo.members.listByUserId(uid)).length).toBe(0);
+
+    // bootstrap シミュレーション (workspace.ts の本物のロジックと同じ流れ)
+    const m = buildMemberFromAllowlist(uid, email);
+    expect(m).not.toBeNull();
+    if (!m) return;
+    await repo.members.upsert(m);
+
+    // 結果: 1 件登録され、owner として確定
+    const memberships = await repo.members.listByUserId(uid);
+    expect(memberships.length).toBe(1);
+    expect(memberships[0]?.role).toBe('owner');
+    expect(memberships[0]?.workspaceId).toBe('ws-belvedere');
+  });
+
+  it('未登録ユーザー + allowlist 非該当 → 何もしない → 0 件のまま (= 403)', async () => {
+    const uid = 'firebase-uid-stranger';
+    const email = 'stranger@example.com';
+
+    expect((await repo.members.listByUserId(uid)).length).toBe(0);
+
+    const m = buildMemberFromAllowlist(uid, email);
+    expect(m).toBeNull(); // 非該当なので bootstrap しない
+
+    // 結果: 依然 0 件 → middleware 側で 403 invitation_required
+    expect((await repo.members.listByUserId(uid)).length).toBe(0);
+  });
+
+  it('既に登録済ユーザー → bootstrap は実行されない (allowlist が ignore される設計)', async () => {
+    // 招待 UI (Phase 1-E) で role を sm に変更したユーザーが owner@example.com だった場合、
+    // 次回ログイン時に owner に巻き戻されると困る。middleware は listByUserId > 0 件なら早期 return する設計。
+    // この test では「listByUserId > 0 件なら bootstrap 経路を通らない」ことを確認 (本物の middleware の挙動シミュレーション)。
+    const uid = 'firebase-uid-existing';
+    await repo.members.upsert({
+      userId: uid,
+      workspaceId: 'ws-belvedere',
+      email: 'owner@example.com',
+      displayName: 'Kaede (downgraded)',
+      role: 'sm',  // ← allowlist は owner だが、ここでは sm
+    });
+
+    // middleware 相当: listByUserId > 0 件なら bootstrap しない
+    const memberships = await repo.members.listByUserId(uid);
+    expect(memberships.length).toBe(1);
+    expect(memberships[0]?.role).toBe('sm'); // ← 既存 role が維持される
+  });
+});

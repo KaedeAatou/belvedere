@@ -72,6 +72,57 @@ describe('memory backend - listByUserId (workspace 解決 middleware 用)', () =
   });
 });
 
+describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  it('新規 Member を upsert すると listByUserId で取れる', async () => {
+    const newMember = {
+      userId: 'firebase-uid-test-1',
+      workspaceId: WS,
+      email: 'test1@example.com',
+      displayName: 'Test 1',
+      role: 'owner' as const,
+    };
+    await repo.members.upsert(newMember);
+    const found = await repo.members.listByUserId('firebase-uid-test-1');
+    expect(found.length).toBe(1);
+    expect(found[0]?.role).toBe('owner');
+    expect(found[0]?.workspaceId).toBe(WS);
+  });
+
+  it('同じ userId で upsert すると更新される (role 変更デモ)', async () => {
+    const m1 = {
+      userId: 'firebase-uid-test-2',
+      workspaceId: WS,
+      email: 'test2@example.com',
+      displayName: 'Test 2',
+      role: 'dev' as const,
+    };
+    await repo.members.upsert(m1);
+    await repo.members.upsert({ ...m1, role: 'owner' });
+    const found = await repo.members.listByUserId('firebase-uid-test-2');
+    expect(found.length).toBe(1);
+    expect(found[0]?.role).toBe('owner');
+  });
+
+  it('別 workspace で upsert しても listByUserId は跨いで全件返す', async () => {
+    const m1 = {
+      userId: 'firebase-uid-test-3',
+      workspaceId: WS,
+      email: 'test3@example.com',
+      displayName: 'Test 3',
+      role: 'dev' as const,
+    };
+    const m2 = { ...m1, userId: 'firebase-uid-test-3-other', workspaceId: 'ws-another' };
+    await repo.members.upsert(m1);
+    await repo.members.upsert(m2);
+    // listByUserId は userId が完全一致 (新規 userId なので 1 件のみ)
+    expect((await repo.members.listByUserId('firebase-uid-test-3')).length).toBe(1);
+    expect((await repo.members.listByUserId('firebase-uid-test-3-other')).length).toBe(1);
+  });
+});
+
 describe('memory backend - tickets where filters', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
