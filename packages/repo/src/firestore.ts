@@ -9,6 +9,7 @@
 //   ソート / limit はクライアント側 (.sort / .slice) で行い、初回 index 設定を不要にする。
 // - ignoreUndefinedProperties: true で optional フィールドの undefined を吸収 (conditional spread 不要)。
 // - 認証は ADC (ローカルは `gcloud auth application-default login`、Cloud Run は runtime SA)。
+// - Phase 1-B (2026-06-10): 全 list は workspaceId where を必須に。memory.ts と契約一致。
 
 import { Firestore, type Query } from '@google-cloud/firestore';
 import type {
@@ -127,8 +128,8 @@ const COL = {
 } as const;
 
 class FsTicketRepo implements TicketRepository {
-  async list(q: TicketQuery = {}): Promise<Ticket[]> {
-    let query: Query = db().collection(COL.tickets);
+  async list(q: TicketQuery): Promise<Ticket[]> {
+    let query: Query = db().collection(COL.tickets).where('workspaceId', '==', q.workspaceId);
     if (q.projectId) query = query.where('projectId', '==', q.projectId);
     if (q.sprintId) query = query.where('sprintId', '==', q.sprintId);
     if (q.status) query = query.where('status', '==', q.status);
@@ -151,8 +152,8 @@ class FsTicketRepo implements TicketRepository {
 }
 
 class FsSprintRepo implements SprintRepository {
-  async list(): Promise<Sprint[]> {
-    const snap = await db().collection(COL.sprints).get();
+  async list(opts: { workspaceId: string }): Promise<Sprint[]> {
+    const snap = await db().collection(COL.sprints).where('workspaceId', '==', opts.workspaceId).get();
     return parseList<Sprint>(COL.sprints, snap.docs, SprintSchema);
   }
   async get(id: string): Promise<Sprint | null> {
@@ -165,8 +166,8 @@ class FsSprintRepo implements SprintRepository {
 }
 
 class FsProjectRepo implements ProjectRepository {
-  async list(): Promise<Project[]> {
-    const snap = await db().collection(COL.projects).get();
+  async list(opts: { workspaceId: string }): Promise<Project[]> {
+    const snap = await db().collection(COL.projects).where('workspaceId', '==', opts.workspaceId).get();
     return parseList<Project>(COL.projects, snap.docs, ProjectSchema);
   }
   async get(id: string): Promise<Project | null> {
@@ -176,8 +177,8 @@ class FsProjectRepo implements ProjectRepository {
 }
 
 class FsEpicRepo implements EpicRepository {
-  async list(opts: { projectId?: string } = {}): Promise<Epic[]> {
-    let query: Query = db().collection(COL.epics);
+  async list(opts: { workspaceId: string; projectId?: string }): Promise<Epic[]> {
+    let query: Query = db().collection(COL.epics).where('workspaceId', '==', opts.workspaceId);
     if (opts.projectId) query = query.where('projectId', '==', opts.projectId);
     const snap = await query.get();
     return parseList<Epic>(COL.epics, snap.docs, EpicSchema);
@@ -192,8 +193,8 @@ class FsEpicRepo implements EpicRepository {
 }
 
 class FsUserStoryRepo implements UserStoryRepository {
-  async list(opts: { projectId?: string; epicId?: string } = {}): Promise<UserStory[]> {
-    let query: Query = db().collection(COL.stories);
+  async list(opts: { workspaceId: string; projectId?: string; epicId?: string }): Promise<UserStory[]> {
+    let query: Query = db().collection(COL.stories).where('workspaceId', '==', opts.workspaceId);
     if (opts.projectId) query = query.where('projectId', '==', opts.projectId);
     if (opts.epicId) query = query.where('epicId', '==', opts.epicId);
     const snap = await query.get();
@@ -207,19 +208,31 @@ class FsUserStoryRepo implements UserStoryRepository {
 
 class FsMemberRepo implements MemberRepository {
   // doc id は userId (memory.ts と揃える)
-  async list(): Promise<Member[]> {
-    const snap = await db().collection(COL.members).get();
+  async list(opts: { workspaceId: string }): Promise<Member[]> {
+    const snap = await db().collection(COL.members).where('workspaceId', '==', opts.workspaceId).get();
     return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
   async get(userId: string): Promise<Member | null> {
     const doc = await db().collection(COL.members).doc(userId).get();
     return doc.exists ? parseOne<Member>(COL.members, userId, doc.data(), MemberSchema) : null;
   }
+  /**
+   * userId で全 Workspace 横断検索 (workspace 解決ミドルウェア用)。
+   * 個人ユーザーが複数 Workspace 所属しているケースで使う。
+   */
+  async listByUserId(userId: string): Promise<Member[]> {
+    const snap = await db().collection(COL.members).where('userId', '==', userId).get();
+    return parseList<Member>(COL.members, snap.docs, MemberSchema);
+  }
 }
 
 class FsCeremonyRepo implements CeremonyRepository {
-  async list(sprintId: string): Promise<Ceremony[]> {
-    const snap = await db().collection(COL.ceremonies).where('sprintId', '==', sprintId).get();
+  async list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]> {
+    const snap = await db()
+      .collection(COL.ceremonies)
+      .where('workspaceId', '==', opts.workspaceId)
+      .where('sprintId', '==', opts.sprintId)
+      .get();
     return parseList<Ceremony>(COL.ceremonies, snap.docs, CeremonySchema);
   }
   async get(id: string): Promise<Ceremony | null> {
@@ -232,10 +245,10 @@ class FsCeremonyRepo implements CeremonyRepository {
 }
 
 class FsAgentRunRepo implements AgentRunRepository {
-  async list(opts: { agentName?: string; status?: AgentRun['status']; limit?: number } = {}): Promise<AgentRun[]> {
-    let query: Query = db().collection(COL.agentRuns);
+  async list(opts: { workspaceId: string; agentName?: string; status?: AgentRun['status']; limit?: number }): Promise<AgentRun[]> {
+    let query: Query = db().collection(COL.agentRuns).where('workspaceId', '==', opts.workspaceId);
     // 注意: 2 つ以上の equality where を Firestore に投げると composite index が必要。
-    // agentRuns で agentName + status を同時に渡すと FAILED_PRECONDITION (index 不足) になりうる。
+    // agentRuns で workspaceId + agentName + status を同時に渡すと FAILED_PRECONDITION (index 不足) になりうる。
     // 必要な index は infra/firestore.indexes.json に宣言してあるので、prod では
     //   firebase deploy --only firestore:indexes
     // で展開する。ソート / limit はクライアント側で行い orderBy 由来の index 要求を回避。
@@ -259,8 +272,8 @@ class FsAgentRunRepo implements AgentRunRepository {
 }
 
 class FsCeremonyHealthRepo implements CeremonyHealthRepository {
-  async list(opts: { sprintId?: string; ritual?: Ritual } = {}): Promise<CeremonyHealthScore[]> {
-    let query: Query = db().collection(COL.ceremonyHealth);
+  async list(opts: { workspaceId: string; sprintId?: string; ritual?: Ritual }): Promise<CeremonyHealthScore[]> {
+    let query: Query = db().collection(COL.ceremonyHealth).where('workspaceId', '==', opts.workspaceId);
     if (opts.sprintId) query = query.where('sprintId', '==', opts.sprintId);
     if (opts.ritual) query = query.where('ritual', '==', opts.ritual);
     const snap = await query.get();
