@@ -113,7 +113,7 @@
 | 技術選定の納得度 | 🟢 | `ARCHITECTURE.md` で案A/B/C比較 / Cloud Run + Gemini + Firestore の理由言語化 |
 | 拡張性 | 🟢 | LLMプロバイダ抽象 (`packages/llm/`) / Repository抽象 (`packages/repo/` の RepoContainer = tickets/sprints/projects/epics/stories/members/ceremonies/agentRuns/ceremonyHealth) / Tool factory (`buildTools(repo)`) ですべて差し替え式 |
 | 実運用への配慮 | 🟡 | Secret Manager / WIF / Cloud Logging / 課金アラート / OWASP リリースゲート (WC-110) を設計 |
-| コード品質 | 🟡 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 9 ワークスペース通過 (2026-05-04 確認) / **テスト未実装** (`pnpm test` 無し、捏造しない) |
+| コード品質 | 🟢 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 11 ワークスペース通過 (2026-06-09 確認) / **vitest 29 件 pass** (llm 10 + repo 19) + GitHub Actions CI で `pnpm test` 自動実行 |
 | GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini (テキスト + Multimodal) / ADK / Firestore / **Cloud Storage (Sprint Review 録画)** / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
 | 多階層モノレポ構成 | 🟢 | TS workspace 9 packages + Python uv workspace 1 (orchestrator-py)。shared / seed / repo / tools / llm / agent の依存方向が一方向 (循環なし) |
 
