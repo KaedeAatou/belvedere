@@ -171,12 +171,17 @@ class FsCeremonyRepo implements CeremonyRepository {
 class FsAgentRunRepo implements AgentRunRepository {
   async list(opts: { agentName?: string; status?: AgentRun['status']; limit?: number } = {}): Promise<AgentRun[]> {
     let query: Query = db().collection(COL.agentRuns);
+    // 注意: 2 つ以上の equality where を Firestore に投げると composite index が必要。
+    // agentRuns で agentName + status を同時に渡すと FAILED_PRECONDITION (index 不足) になりうる。
+    // 必要な index は infra/firestore.indexes.json に宣言してあるので、prod では
+    //   firebase deploy --only firestore:indexes
+    // で展開する。ソート / limit はクライアント側で行い orderBy 由来の index 要求を回避。
     if (opts.agentName) query = query.where('agentName', '==', opts.agentName);
     if (opts.status) query = query.where('status', '==', opts.status);
     const snap = await query.get();
-    // ソート / limit はクライアント側 (composite index 回避)
     let xs = snap.docs.map((d) => d.data() as AgentRun);
-    xs.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    // startedAt 欠落の不正ドキュメント混入時もクラッシュさせない。
+    xs.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
     if (opts.limit) xs = xs.slice(0, opts.limit);
     return xs;
   }
