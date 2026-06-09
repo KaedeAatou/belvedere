@@ -15,6 +15,7 @@ const NOW = '2026-04-29T03:00:00+09:00';
 export const seedEpics: Epic[] = [
   {
     id: 'EP-1',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     name: 'スクラム儀式の運営をAIに委ねる',
     description:
@@ -31,6 +32,7 @@ export const seedEpics: Epic[] = [
   },
   {
     id: 'EP-2',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     name: 'チケット品質の底上げ',
     description:
@@ -47,6 +49,7 @@ export const seedEpics: Epic[] = [
   },
   {
     id: 'EP-3',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     name: 'デリバリーパイプラインの信頼化',
     description:
@@ -61,6 +64,7 @@ export const seedEpics: Epic[] = [
   },
   {
     id: 'EP-4',
+    workspaceId: 'ws-belvedere',
     projectId: DEFAULT_PROJECT_ID,
     name: '儀式の健全性可視化',
     description:
