@@ -1,0 +1,33 @@
+// Belvedere — Firestore Security Rules (Phase 1-B / 2026-06-10)
+// =============================================================
+//
+// 設計方針: 「API 経由を強制、クライアント直叩きは全部拒否」のラストガード。
+//
+// Belvedere は API (Cloud Run の belvedere-runtime SA) から Firestore Admin SDK 経由で
+// アクセスする設計。Admin SDK は Security Rules を bypass するので、API のリクエストは
+// 通常通り動作する。これらの Rules は「攻撃者がブラウザから直接 Firestore SDK で
+// データを抜こうとした場合」のラストガード。
+//
+// Phase 1-C 以降 (UI から直接 onSnapshot で読み取りリアルタイム同期を実装する場合) は
+// 該当コレクションを workspace ベースで read だけ allow する形に緩める想定。
+// 現状は完全に block して API 経由を強制。
+//
+// Deploy 手順 (個人 GCP アカウントで):
+//   firebase use belvedere-dev-atrium
+//   firebase deploy --only firestore:rules
+//
+// (runtime SA は roles/firebaserules.admin を意図的に持っていないため User がやる)
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 全コレクションをクライアント直叩きから完全保護。
+    // Admin SDK (API / Cloud Functions / 管理スクリプト) は Rules を bypass するので影響なし。
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}
