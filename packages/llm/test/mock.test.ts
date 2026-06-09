@@ -64,3 +64,32 @@ describe('MockLLMProvider role detection (system prompt → role)', () => {
     expect(text).not.toContain('【デイリースクラム要約 (Daily / Mock)】');
   });
 });
+
+describe('MockLLMProvider callCount LRU cap (memory leak prevention)', () => {
+  it('does not exceed MAX_CALLCOUNT_ENTRIES (200) regardless of session count', async () => {
+    // module singleton として長時間動作する Cloud Run instance を模した負荷シナリオ:
+    // 300 個の異なる sessionKey で planToolCalls を発火させ、Map が 200 を超えないことを担保
+    const provider = new MockLLMProvider();
+    const fakeTools = [
+      { name: 'ticket.list', description: '', parameters: {} },
+      { name: 'sprint.get', description: '', parameters: {} },
+    ];
+    for (let i = 0; i < 300; i++) {
+      // sessionKey は req.messages.length なので message 数を変えて毎回ユニークにする
+      const messages = Array.from({ length: i + 2 }, (_, j) => ({
+        role: 'user' as const,
+        content: `m${j}`,
+      }));
+      messages.unshift({ role: 'user' as const, content: 'Your role: Planner Agent\nYour responsibility: ...' });
+      // 最初の system message として差し込み (provider.ts の LLMMessage 型に従う)
+      const sysMsg = { role: 'system' as const, content: 'Your role: Planner Agent\nYour responsibility: ...' };
+      await provider.generate({
+        model: 'mock-model',
+        messages: [sysMsg, ...messages.slice(1)],
+        tools: fakeTools,
+      });
+    }
+    // FIFO eviction で 200 件を上限に維持されている
+    expect(provider._callCountSize()).toBeLessThanOrEqual(200);
+  });
+});
