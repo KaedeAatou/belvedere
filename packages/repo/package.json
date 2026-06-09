@@ -16,6 +16,7 @@
   "dependencies": {
     "@belvedere/seed": "workspace:*",
     "@belvedere/shared": "workspace:*",
-    "@google-cloud/firestore": "^8.6.0"
+    "@google-cloud/firestore": "^8.6.0",
+    "zod": "^4.4.3"
   }
 }

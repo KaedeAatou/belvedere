@@ -23,6 +23,18 @@ import type {
   Project,
   Ritual,
 } from '@belvedere/shared';
+import {
+  TicketSchema,
+  SprintSchema,
+  ProjectSchema,
+  EpicSchema,
+  UserStorySchema,
+  MemberSchema,
+  CeremonySchema,
+  AgentRunSchema,
+  CeremonyHealthScoreSchema,
+} from '@belvedere/shared';
+import { z } from 'zod';
 import type {
   TicketRepository,
   SprintRepository,
@@ -50,6 +62,57 @@ function db(): Firestore {
   return _db;
 }
 
+/**
+ * Firestore は schema-less なので、d.data() を `as T` でキャストすると schema 進化や
+ * 手動投入ミスでフィールドが欠けた不正データが silent に呼び出し側に流れ、
+ * 例えば `ticket.status.toUpperCase()` で TypeError を起こす。本ヘルパは zod schema で
+ * safeParse し、不正データは console.warn 出力 + skip して安全側に倒す。
+ *
+ * 注: zod 4 の `.optional()` は `T | undefined` を返すが、shared/types.ts の interface は
+ * `key?: T` (exactOptionalPropertyTypes 前提)。drift check (schemas.ts の _check_*) で
+ * 型整合性は compile-time に担保されているため、戻り値は呼出側の domain T で型付けする。
+ * schema と T の対応 (TicketSchema ↔ Ticket 等) は callsite で1対1に書く運用ルール。
+ */
+function parseList<T>(
+  collection: string,
+  docs: Array<{ id: string; data: () => unknown }>,
+  schema: z.ZodType<unknown>,
+): T[] {
+  const valid: T[] = [];
+  for (const d of docs) {
+    const parsed = schema.safeParse(d.data());
+    if (parsed.success) {
+      valid.push(parsed.data as T);
+    } else {
+      console.warn(
+        `[firestore] invalid document at ${collection}/${d.id} — skipped. ` +
+          `Reason: ${parsed.error.issues.map((i) => `${i.path.join('.')}=${i.message}`).join(' / ')}`,
+      );
+    }
+  }
+  return valid;
+}
+
+/**
+ * 単一 doc 用。get で見つかったが schema が一致しない場合は null を返し、
+ * 同時に WARN を出す。「存在しない」と「不正データ」を呼び出し側で区別したい場合は
+ * 戻り値からは判別不能 (両方 null) なので、必要なら呼び出し側で schema parse する。
+ */
+function parseOne<T>(
+  collection: string,
+  id: string,
+  data: unknown,
+  schema: z.ZodType<unknown>,
+): T | null {
+  const parsed = schema.safeParse(data);
+  if (parsed.success) return parsed.data as T;
+  console.warn(
+    `[firestore] invalid document at ${collection}/${id} — returned null. ` +
+      `Reason: ${parsed.error.issues.map((i) => `${i.path.join('.')}=${i.message}`).join(' / ')}`,
+  );
+  return null;
+}
+
 /** コレクション名定数 (フラット構造)。 */
 const COL = {
   tickets: 'tickets',
@@ -73,11 +136,11 @@ class FsTicketRepo implements TicketRepository {
     if (q.ritual) query = query.where('ritual', '==', q.ritual);
     if (q.storyId) query = query.where('parentTicketId', '==', q.storyId);
     const snap = await query.get();
-    return snap.docs.map((d) => d.data() as Ticket);
+    return parseList<Ticket>(COL.tickets, snap.docs, TicketSchema);
   }
   async get(id: string): Promise<Ticket | null> {
     const doc = await db().collection(COL.tickets).doc(id).get();
-    return doc.exists ? (doc.data() as Ticket) : null;
+    return doc.exists ? parseOne<Ticket>(COL.tickets, id, doc.data(), TicketSchema) : null;
   }
   async upsert(t: Ticket): Promise<void> {
     await db().collection(COL.tickets).doc(t.id).set(t);
@@ -90,11 +153,11 @@ class FsTicketRepo implements TicketRepository {
 class FsSprintRepo implements SprintRepository {
   async list(): Promise<Sprint[]> {
     const snap = await db().collection(COL.sprints).get();
-    return snap.docs.map((d) => d.data() as Sprint);
+    return parseList<Sprint>(COL.sprints, snap.docs, SprintSchema);
   }
   async get(id: string): Promise<Sprint | null> {
     const doc = await db().collection(COL.sprints).doc(id).get();
-    return doc.exists ? (doc.data() as Sprint) : null;
+    return doc.exists ? parseOne<Sprint>(COL.sprints, id, doc.data(), SprintSchema) : null;
   }
   async upsert(s: Sprint): Promise<void> {
     await db().collection(COL.sprints).doc(s.id).set(s);
@@ -104,11 +167,11 @@ class FsSprintRepo implements SprintRepository {
 class FsProjectRepo implements ProjectRepository {
   async list(): Promise<Project[]> {
     const snap = await db().collection(COL.projects).get();
-    return snap.docs.map((d) => d.data() as Project);
+    return parseList<Project>(COL.projects, snap.docs, ProjectSchema);
   }
   async get(id: string): Promise<Project | null> {
     const doc = await db().collection(COL.projects).doc(id).get();
-    return doc.exists ? (doc.data() as Project) : null;
+    return doc.exists ? parseOne<Project>(COL.projects, id, doc.data(), ProjectSchema) : null;
   }
 }
 
@@ -117,11 +180,11 @@ class FsEpicRepo implements EpicRepository {
     let query: Query = db().collection(COL.epics);
     if (opts.projectId) query = query.where('projectId', '==', opts.projectId);
     const snap = await query.get();
-    return snap.docs.map((d) => d.data() as Epic);
+    return parseList<Epic>(COL.epics, snap.docs, EpicSchema);
   }
   async get(id: string): Promise<Epic | null> {
     const doc = await db().collection(COL.epics).doc(id).get();
-    return doc.exists ? (doc.data() as Epic) : null;
+    return doc.exists ? parseOne<Epic>(COL.epics, id, doc.data(), EpicSchema) : null;
   }
   async upsert(e: Epic): Promise<void> {
     await db().collection(COL.epics).doc(e.id).set(e);
@@ -134,11 +197,11 @@ class FsUserStoryRepo implements UserStoryRepository {
     if (opts.projectId) query = query.where('projectId', '==', opts.projectId);
     if (opts.epicId) query = query.where('epicId', '==', opts.epicId);
     const snap = await query.get();
-    return snap.docs.map((d) => d.data() as UserStory);
+    return parseList<UserStory>(COL.stories, snap.docs, UserStorySchema);
   }
   async get(id: string): Promise<UserStory | null> {
     const doc = await db().collection(COL.stories).doc(id).get();
-    return doc.exists ? (doc.data() as UserStory) : null;
+    return doc.exists ? parseOne<UserStory>(COL.stories, id, doc.data(), UserStorySchema) : null;
   }
 }
 
@@ -146,22 +209,22 @@ class FsMemberRepo implements MemberRepository {
   // doc id は userId (memory.ts と揃える)
   async list(): Promise<Member[]> {
     const snap = await db().collection(COL.members).get();
-    return snap.docs.map((d) => d.data() as Member);
+    return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
   async get(userId: string): Promise<Member | null> {
     const doc = await db().collection(COL.members).doc(userId).get();
-    return doc.exists ? (doc.data() as Member) : null;
+    return doc.exists ? parseOne<Member>(COL.members, userId, doc.data(), MemberSchema) : null;
   }
 }
 
 class FsCeremonyRepo implements CeremonyRepository {
   async list(sprintId: string): Promise<Ceremony[]> {
     const snap = await db().collection(COL.ceremonies).where('sprintId', '==', sprintId).get();
-    return snap.docs.map((d) => d.data() as Ceremony);
+    return parseList<Ceremony>(COL.ceremonies, snap.docs, CeremonySchema);
   }
   async get(id: string): Promise<Ceremony | null> {
     const doc = await db().collection(COL.ceremonies).doc(id).get();
-    return doc.exists ? (doc.data() as Ceremony) : null;
+    return doc.exists ? parseOne<Ceremony>(COL.ceremonies, id, doc.data(), CeremonySchema) : null;
   }
   async upsert(c: Ceremony): Promise<void> {
     await db().collection(COL.ceremonies).doc(c.id).set(c);
@@ -179,15 +242,16 @@ class FsAgentRunRepo implements AgentRunRepository {
     if (opts.agentName) query = query.where('agentName', '==', opts.agentName);
     if (opts.status) query = query.where('status', '==', opts.status);
     const snap = await query.get();
-    let xs = snap.docs.map((d) => d.data() as AgentRun);
-    // startedAt 欠落の不正ドキュメント混入時もクラッシュさせない。
+    let xs: AgentRun[] = parseList<AgentRun>(COL.agentRuns, snap.docs, AgentRunSchema);
+    // startedAt 欠落の不正ドキュメント混入時もクラッシュさせない (schema レベルでも startedAt は
+    // 必須なので parseList が落とすが、保険として null-safe sort も残す)。
     xs.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
     if (opts.limit) xs = xs.slice(0, opts.limit);
     return xs;
   }
   async get(id: string): Promise<AgentRun | null> {
     const doc = await db().collection(COL.agentRuns).doc(id).get();
-    return doc.exists ? (doc.data() as AgentRun) : null;
+    return doc.exists ? parseOne<AgentRun>(COL.agentRuns, id, doc.data(), AgentRunSchema) : null;
   }
   async add(r: AgentRun): Promise<void> {
     await db().collection(COL.agentRuns).doc(r.id).set(r);
@@ -200,7 +264,7 @@ class FsCeremonyHealthRepo implements CeremonyHealthRepository {
     if (opts.sprintId) query = query.where('sprintId', '==', opts.sprintId);
     if (opts.ritual) query = query.where('ritual', '==', opts.ritual);
     const snap = await query.get();
-    return snap.docs.map((d) => d.data() as CeremonyHealthScore);
+    return parseList<CeremonyHealthScore>(COL.ceremonyHealth, snap.docs, CeremonyHealthScoreSchema);
   }
   async add(s: CeremonyHealthScore): Promise<void> {
     await db().collection(COL.ceremonyHealth).doc(s.id).set(s);
