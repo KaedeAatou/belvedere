@@ -9,13 +9,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@belvedere/shared": "workspace:*",
-    "@belvedere/seed": "workspace:*",
-    "@belvedere/repo": "workspace:*",
-    "@belvedere/llm": "workspace:*",
     "@belvedere/agent": "workspace:*",
+    "@belvedere/llm": "workspace:*",
+    "@belvedere/repo": "workspace:*",
+    "@belvedere/seed": "workspace:*",
+    "@belvedere/shared": "workspace:*",
     "@belvedere/tools": "workspace:*",
     "@hono/node-server": "^1.13.7",
+    "firebase-admin": "^14.0.0",
     "hono": "^4.6.14",
     "tsx": "^4.19.2"
   }
