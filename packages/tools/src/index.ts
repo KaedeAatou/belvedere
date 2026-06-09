@@ -2,10 +2,13 @@ import type { AgentTool } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
 
 /**
- * Tool ファクトリ。RepoContainer を注入してすべての Tool を作る。
- * これで Tool 群はリポジトリ実装 (memory / firestore) に依存しない。
+ * Tool ファクトリ。RepoContainer + workspaceId を closure cap し、各 Tool の
+ * repo.*.list 呼び出しに workspaceId を自動注入する (Phase 1-B IDOR fix / 2026-06-10)。
+ *
+ * Tool 自体は workspaceId を引数として受け取らない (LLM が任意の値を入れて越境するのを防ぐ)。
+ * 呼出側 (api / cli / mcp-server) で「認証済みの workspaceId」を渡す責務を持つ。
  */
-export function buildTools(repo: RepoContainer): AgentTool[] {
+export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[] {
   const ticketListTool: AgentTool<{ sprintId?: string; status?: string; assigneeId?: string }, unknown> = {
     spec: {
       name: 'ticket.list',
@@ -21,6 +24,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     },
     async invoke(args) {
       const ts = await repo.tickets.list({
+        workspaceId,
         ...(args.sprintId && { sprintId: args.sprintId }),
         ...(args.status && { status: args.status as Parameters<typeof repo.tickets.list>[0] extends infer U ? U extends { status?: infer S } ? S : never : never }),
         ...(args.assigneeId && { assigneeId: args.assigneeId }),
@@ -60,7 +64,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
       parameters: { type: 'object', properties: {} },
     },
     async invoke() {
-      const xs = await repo.projects.list();
+      const xs = await repo.projects.list({ workspaceId });
       return xs.map((p) => ({ id: p.id, name: p.name, idPrefix: p.idPrefix, ownerId: p.ownerId }));
     },
   };
@@ -76,6 +80,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     },
     async invoke(args) {
       const xs = await repo.epics.list({
+        workspaceId,
         ...(args.projectId !== undefined && { projectId: args.projectId }),
       });
       return xs.map((e) => ({
@@ -106,6 +111,8 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     async invoke({ ticketId }) {
       const t = await repo.tickets.get(ticketId);
       if (!t) return { error: `ticket not found: ${ticketId}` };
+      // IDOR ガード: 他 workspace の ticket を get した時は「存在しない」と同じレスポンスを返す。
+      if (t.workspaceId !== workspaceId) return { error: `ticket not found: ${ticketId}` };
       const issues: string[] = [];
       if (!t.acceptanceCriteria || t.acceptanceCriteria.length === 0) issues.push('DoD (acceptanceCriteria) が空');
       if (t.estimatePt === undefined) issues.push('Story Point (estimatePt) 未定');
@@ -151,6 +158,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
     },
     async invoke({ sprintId, projectId }) {
       const tickets = await repo.tickets.list({
+        workspaceId,
         ...(sprintId !== undefined && { sprintId }),
         ...(projectId !== undefined && { projectId }),
       });
@@ -223,6 +231,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
 
       // 第6観点: 戦略整合性 — Epic.rationale (戦略意図 / Why) が空のものを警告
       const epics = await repo.epics.list({
+        workspaceId,
         ...(projectId !== undefined && { projectId }),
       });
       for (const e of epics) {
@@ -251,7 +260,7 @@ export function buildTools(repo: RepoContainer): AgentTool[] {
       parameters: { type: 'object', properties: {} },
     },
     async invoke() {
-      const ms = await repo.members.list();
+      const ms = await repo.members.list({ workspaceId });
       return ms.map((m) => ({ userId: m.userId, displayName: m.displayName, role: m.role }));
     },
   };
