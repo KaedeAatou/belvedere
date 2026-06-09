@@ -50,6 +50,7 @@ export const AgentSourceSchema = z.union([
 // === Ticket ===
 export const TicketSchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   projectId: z.string().optional(),
   title: z.string(),
   description: z.string().optional(),
@@ -76,6 +77,7 @@ export const TicketSchema = z.object({
 // === Sprint ===
 export const SprintSchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   number: z.number(),
   startsAt: z.string(),
   endsAt: z.string(),
@@ -99,6 +101,7 @@ export const ProjectSchema = z.object({
 // === Epic ===
 export const EpicSchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   projectId: z.string().optional(),
   name: z.string(),
   description: z.string().optional(),
@@ -114,6 +117,7 @@ export const EpicSchema = z.object({
 // === UserStory ===
 export const UserStorySchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   projectId: z.string().optional(),
   epicId: z.string(),
   role: z.string(),
@@ -157,6 +161,7 @@ const TryItemSchema = z.object({
 
 export const CeremonySchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   ritual: RitualSchema,
   sprintId: z.string(),
   scheduledAt: z.string(),
@@ -182,6 +187,7 @@ const AgentStepSchema = z.object({
 
 export const AgentRunSchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   agentName: AgentNameSchema,
   trigger: z.enum(['schedule', 'event', 'human']),
   startedAt: z.string(),
@@ -213,6 +219,7 @@ export const AgentRunSchema = z.object({
 // === CeremonyHealthScore ===
 export const CeremonyHealthScoreSchema = z.object({
   id: z.string(),
+  workspaceId: z.string(),
   sprintId: z.string(),
   ritual: RitualSchema,
   score: z.number(),

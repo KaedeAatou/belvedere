@@ -50,6 +50,7 @@ export interface Project {
 // === Sprint ===
 export interface Sprint {
   id: string;
+  workspaceId: string;
   number: number;
   startsAt: string;
   endsAt: string;
@@ -62,6 +63,8 @@ export interface Sprint {
 // === Ticket ===
 export interface Ticket {
   id: string;
+  /** 所属 Workspace (IDOR fix 用、Phase 1-B / 2026-06-10 で必須化)。projectId から導けるが where 1-hop で済ますために denormalize */
+  workspaceId: string;
   /** 所属 Project (省略時は Workspace のデフォルト Project = Belvedere Core を指す) */
   projectId?: string;
   title: string;
@@ -136,6 +139,7 @@ export interface TryItem {
 
 export interface Ceremony {
   id: string;
+  workspaceId: string;
   ritual: Ritual;
   sprintId: string;
   scheduledAt: string;
@@ -153,6 +157,8 @@ export interface Ceremony {
 // === Epic / Story ===
 export interface Epic {
   id: string;
+  /** 所属 Workspace (IDOR fix 用、Phase 1-B / 2026-06-10 で必須化) */
+  workspaceId: string;
   /** 所属 Project (省略時は Workspace のデフォルト Project) */
   projectId?: string;
   name: string;
@@ -178,6 +184,8 @@ export interface Epic {
 
 export interface UserStory {
   id: string;
+  /** 所属 Workspace (IDOR fix 用、Phase 1-B / 2026-06-10 で必須化) */
+  workspaceId: string;
   /** 所属 Project (省略時は Workspace のデフォルト Project) */
   projectId?: string;
   epicId: string;
@@ -198,6 +206,7 @@ export interface UserStory {
 // === CeremonyHealthScore ===
 export interface CeremonyHealthScore {
   id: string;
+  workspaceId: string;
   sprintId: string;
   ritual: Ritual;
   score: number; // 0-100
@@ -223,6 +232,7 @@ export interface AgentStep {
 
 export interface AgentRun {
   id: string;
+  workspaceId: string;
   agentName: AgentName;
   trigger: 'schedule' | 'event' | 'human';
   startedAt: string;

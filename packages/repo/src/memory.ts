@@ -48,10 +48,10 @@ class MemTicketRepo implements TicketRepository {
   constructor(seed: Ticket[]) {
     for (const t of seed) this.store.set(t.id, stripUndefined({ ...t }));
   }
-  async list(q: TicketQuery = {}): Promise<Ticket[]> {
+  async list(q: TicketQuery): Promise<Ticket[]> {
     let xs = [...this.store.values()];
-    // フィルタは firestore.ts (FsTicketRepo.list) と契約一致させること。
-    // 片側だけにフィルタを追加すると backend 切替で結果が変わる silent バグ。
+    // workspaceId は Phase 1-B IDOR fix で必須。firestore.ts (FsTicketRepo.list) と契約一致。
+    xs = xs.filter((t) => t.workspaceId === q.workspaceId);
     if (q.projectId) xs = xs.filter((t) => t.projectId === q.projectId);
     if (q.sprintId) xs = xs.filter((t) => t.sprintId === q.sprintId);
     if (q.status) xs = xs.filter((t) => t.status === q.status);
@@ -69,7 +69,9 @@ class MemTicketRepo implements TicketRepository {
 class MemSprintRepo implements SprintRepository {
   private store = new Map<string, Sprint>();
   constructor(seed: Sprint[]) { for (const s of seed) this.store.set(s.id, stripUndefined({ ...s })); }
-  async list(): Promise<Sprint[]> { return [...this.store.values()]; }
+  async list(opts: { workspaceId: string }): Promise<Sprint[]> {
+    return [...this.store.values()].filter((s) => s.workspaceId === opts.workspaceId);
+  }
   async get(id: string): Promise<Sprint | null> { return this.store.get(id) ?? null; }
   async upsert(s: Sprint): Promise<void> { this.store.set(s.id, stripUndefined({ ...s })); }
 }
@@ -77,15 +79,17 @@ class MemSprintRepo implements SprintRepository {
 class MemProjectRepo implements ProjectRepository {
   private store = new Map<string, Project>();
   constructor(seed: Project[]) { for (const p of seed) this.store.set(p.id, stripUndefined({ ...p })); }
-  async list(): Promise<Project[]> { return [...this.store.values()]; }
+  async list(opts: { workspaceId: string }): Promise<Project[]> {
+    return [...this.store.values()].filter((p) => p.workspaceId === opts.workspaceId);
+  }
   async get(id: string): Promise<Project | null> { return this.store.get(id) ?? null; }
 }
 
 class MemEpicRepo implements EpicRepository {
   private store = new Map<string, Epic>();
   constructor(seed: Epic[]) { for (const e of seed) this.store.set(e.id, stripUndefined({ ...e })); }
-  async list(opts: { projectId?: string } = {}): Promise<Epic[]> {
-    let xs = [...this.store.values()];
+  async list(opts: { workspaceId: string; projectId?: string }): Promise<Epic[]> {
+    let xs = [...this.store.values()].filter((e) => e.workspaceId === opts.workspaceId);
     if (opts.projectId) xs = xs.filter((e) => e.projectId === opts.projectId);
     return xs;
   }
@@ -97,8 +101,8 @@ class MemUserStoryRepo implements UserStoryRepository {
   // UI側 (apps/web/composables/useDemoData.ts) で静的定義しているものを将来的にここに移管予定。
   // 現状は空実装でリポジトリ抽象だけ確保しておく。
   private store = new Map<string, UserStory>();
-  async list(opts: { projectId?: string; epicId?: string } = {}): Promise<UserStory[]> {
-    let xs = [...this.store.values()];
+  async list(opts: { workspaceId: string; projectId?: string; epicId?: string }): Promise<UserStory[]> {
+    let xs = [...this.store.values()].filter((s) => s.workspaceId === opts.workspaceId);
     if (opts.projectId) xs = xs.filter((s) => s.projectId === opts.projectId);
     if (opts.epicId) xs = xs.filter((s) => s.epicId === opts.epicId);
     return xs;
@@ -109,14 +113,21 @@ class MemUserStoryRepo implements UserStoryRepository {
 class MemMemberRepo implements MemberRepository {
   private store = new Map<string, Member>();
   constructor(seed: Member[]) { for (const m of seed) this.store.set(m.userId, stripUndefined({ ...m })); }
-  async list(): Promise<Member[]> { return [...this.store.values()]; }
+  async list(opts: { workspaceId: string }): Promise<Member[]> {
+    return [...this.store.values()].filter((m) => m.workspaceId === opts.workspaceId);
+  }
   async get(userId: string): Promise<Member | null> { return this.store.get(userId) ?? null; }
+  async listByUserId(userId: string): Promise<Member[]> {
+    return [...this.store.values()].filter((m) => m.userId === userId);
+  }
 }
 
 class MemCeremonyRepo implements CeremonyRepository {
   private store = new Map<string, Ceremony>();
-  async list(sprintId: string): Promise<Ceremony[]> {
-    return [...this.store.values()].filter((c) => c.sprintId === sprintId);
+  async list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]> {
+    return [...this.store.values()].filter(
+      (c) => c.workspaceId === opts.workspaceId && c.sprintId === opts.sprintId,
+    );
   }
   async get(id: string): Promise<Ceremony | null> { return this.store.get(id) ?? null; }
   async upsert(c: Ceremony): Promise<void> { this.store.set(c.id, stripUndefined({ ...c })); }
@@ -124,8 +135,8 @@ class MemCeremonyRepo implements CeremonyRepository {
 
 class MemAgentRunRepo implements AgentRunRepository {
   private store = new Map<string, AgentRun>();
-  async list(opts: { agentName?: string; status?: AgentRun['status']; limit?: number } = {}): Promise<AgentRun[]> {
-    let xs = [...this.store.values()];
+  async list(opts: { workspaceId: string; agentName?: string; status?: AgentRun['status']; limit?: number }): Promise<AgentRun[]> {
+    let xs = [...this.store.values()].filter((r) => r.workspaceId === opts.workspaceId);
     if (opts.agentName) xs = xs.filter((r) => r.agentName === opts.agentName);
     if (opts.status) xs = xs.filter((r) => r.status === opts.status);
     // firestore.ts と契約一致: startedAt 欠落の不正データでも crash させない
@@ -139,8 +150,8 @@ class MemAgentRunRepo implements AgentRunRepository {
 
 class MemCeremonyHealthRepo implements CeremonyHealthRepository {
   private store: CeremonyHealthScore[] = [];
-  async list(opts: { sprintId?: string; ritual?: Ritual } = {}): Promise<CeremonyHealthScore[]> {
-    let xs = [...this.store];
+  async list(opts: { workspaceId: string; sprintId?: string; ritual?: Ritual }): Promise<CeremonyHealthScore[]> {
+    let xs = this.store.filter((s) => s.workspaceId === opts.workspaceId);
     if (opts.sprintId) xs = xs.filter((s) => s.sprintId === opts.sprintId);
     if (opts.ritual) xs = xs.filter((s) => s.ritual === opts.ritual);
     return xs;

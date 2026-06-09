@@ -1,5 +1,9 @@
 // Repository インタフェース
 // メモリ実装を最初に提供。後で Firestore 実装に差し替え可能。
+//
+// Phase 1-B (2026-06-10): IDOR fix のため、全 list メソッドは workspaceId を必須引数化。
+// Firestore Security Rules はラストガードだが、API 層で自前 enforcement する設計
+// (API caller → buildTools(repo, workspaceId) → tools → repo.*.list({ workspaceId, ... }))。
 
 import type {
   Ticket,
@@ -16,6 +20,7 @@ import type {
 } from '@belvedere/shared';
 
 export interface TicketQuery {
+  workspaceId: string;
   projectId?: string;
   sprintId?: string;
   status?: Status;
@@ -25,53 +30,59 @@ export interface TicketQuery {
 }
 
 export interface TicketRepository {
-  list(q?: TicketQuery): Promise<Ticket[]>;
+  list(q: TicketQuery): Promise<Ticket[]>;
   get(id: string): Promise<Ticket | null>;
   upsert(t: Ticket): Promise<void>;
   delete(id: string): Promise<void>;
 }
 
 export interface SprintRepository {
-  list(): Promise<Sprint[]>;
+  list(opts: { workspaceId: string }): Promise<Sprint[]>;
   get(id: string): Promise<Sprint | null>;
   upsert(s: Sprint): Promise<void>;
 }
 
 export interface ProjectRepository {
-  list(): Promise<Project[]>;
+  list(opts: { workspaceId: string }): Promise<Project[]>;
   get(id: string): Promise<Project | null>;
 }
 
 export interface EpicRepository {
-  list(opts?: { projectId?: string }): Promise<Epic[]>;
+  list(opts: { workspaceId: string; projectId?: string }): Promise<Epic[]>;
   get(id: string): Promise<Epic | null>;
   upsert(e: Epic): Promise<void>;
 }
 
 export interface UserStoryRepository {
-  list(opts?: { projectId?: string; epicId?: string }): Promise<UserStory[]>;
+  list(opts: { workspaceId: string; projectId?: string; epicId?: string }): Promise<UserStory[]>;
   get(id: string): Promise<UserStory | null>;
 }
 
 export interface MemberRepository {
-  list(): Promise<Member[]>;
+  list(opts: { workspaceId: string }): Promise<Member[]>;
   get(userId: string): Promise<Member | null>;
+  /**
+   * 認証ミドルウェアが「この user は どの Workspace に所属しているか」を解決する用。
+   * workspaceMiddleware の前段で呼ばれるため workspaceId 縛りが効かない (まだ workspace 未確定)。
+   * 個人情報は userId / email / workspaceId / role に限定すること (PII リーク防止)。
+   */
+  listByUserId(userId: string): Promise<Member[]>;
 }
 
 export interface CeremonyRepository {
-  list(sprintId: string): Promise<Ceremony[]>;
+  list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]>;
   get(id: string): Promise<Ceremony | null>;
   upsert(c: Ceremony): Promise<void>;
 }
 
 export interface AgentRunRepository {
-  list(opts?: { agentName?: string; status?: AgentRun['status']; limit?: number }): Promise<AgentRun[]>;
+  list(opts: { workspaceId: string; agentName?: string; status?: AgentRun['status']; limit?: number }): Promise<AgentRun[]>;
   get(id: string): Promise<AgentRun | null>;
   add(r: AgentRun): Promise<void>;
 }
 
 export interface CeremonyHealthRepository {
-  list(opts?: { sprintId?: string; ritual?: Ritual }): Promise<CeremonyHealthScore[]>;
+  list(opts: { workspaceId: string; sprintId?: string; ritual?: Ritual }): Promise<CeremonyHealthScore[]>;
   add(s: CeremonyHealthScore): Promise<void>;
 }
 
