@@ -17,10 +17,28 @@ export interface ApiClient {
 
 export const useApiClient = (): ApiClient => {
   const config = useRuntimeConfig();
-  const { idToken } = useAuth();
+  const { idToken, isInitialized } = useAuth();
   const baseUrl = config.public.apiBaseUrl as string;
 
+  /**
+   * Page navigation (hard reload) 直後は Firebase auth インスタンスが再初期化され、
+   * IndexedDB から currentUser を復元するのに少し時間がかかる (非同期)。
+   * その間に onMounted の fetchMe / fetchTickets が走ると idToken=null → missing_token に。
+   * isInitialized が true になる (= onAuthStateChanged の初回 callback 完了) を待つ。
+   * これにより全 composable (useMe / useTickets / etc) が一律 auth 確定を保証される。
+   */
+  async function waitAuthReady(timeoutMs = 10_000): Promise<void> {
+    if (isInitialized.value) return;
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => { stop(); resolve(); }, timeoutMs);
+      const stop = watch(isInitialized, (v) => {
+        if (v) { clearTimeout(timer); stop(); resolve(); }
+      });
+    });
+  }
+
   async function call<T>(path: string, opts: NitroFetchOptions<string>): Promise<T> {
+    await waitAuthReady();
     const token = await idToken();
     const headers: Record<string, string> = {
       ...(opts.headers as Record<string, string> | undefined),
