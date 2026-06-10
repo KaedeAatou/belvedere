@@ -17,6 +17,7 @@ import {
   ValueImpactSchema,
   stripUndefinedPartial,
   generateId,
+  applyStatusTransition,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 
@@ -112,15 +113,20 @@ export async function patchTicket(
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
-  const updated: Ticket = {
+  const now = new Date().toISOString();
+  let updated: Ticket = {
     ...existing,
     ...stripUndefinedPartial(parsed.data),
     id: existing.id,                       // 変更不可
     workspaceId: existing.workspaceId,     // 変更不可
     createdAt: existing.createdAt,         // 変更不可
     createdBy: existing.createdBy,         // 変更不可
-    updatedAt: new Date().toISOString(),
+    updatedAt: now,
   };
+  // patch に status 変更が含まれる場合は startedAt / completedAt も自動記録 (changeTicketStatus と同じ経路)
+  if (parsed.data.status !== undefined && parsed.data.status !== existing.status) {
+    updated = applyStatusTransition(updated, parsed.data.status, now);
+  }
   await repo.tickets.upsert(updated);
   return { ok: true, status: 200, body: updated };
 }
@@ -139,11 +145,8 @@ export async function changeTicketStatus(
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
-  const updated: Ticket = {
-    ...existing,
-    status: parsed.data.status,
-    updatedAt: new Date().toISOString(),
-  };
+  // applyStatusTransition が startedAt (初回 in-progress) / completedAt (初回 done) を自動記録
+  const updated = applyStatusTransition(existing, parsed.data.status, new Date().toISOString());
   await repo.tickets.upsert(updated);
   return { ok: true, status: 200, body: { from: existing.status, to: parsed.data.status, ticket: updated } };
 }
