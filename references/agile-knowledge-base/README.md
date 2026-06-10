@@ -37,6 +37,7 @@ LLM の hallucination (もっともらしいウソ) を防ぐため、Belvedere 
 | `retrospective.md` | Esther Derby & Diana Larsen "Agile Retrospectives" + KPT / Mad-Sad-Glad / 4Ls / 5 Whys | Retrospective | 250 行 |
 | `definition-of-done.md` | Scrum Guide §3 + Atlassian DoD ガイド | Planner / Refinement / Reviewer | 150 行 |
 | `story-points.md` | Mike Cohn "Agile Estimating" + Planning Poker | Planner / Refinement | 150 行 |
+| `ticket-types.md` | Scrum Guide + Scrum.org + Mike Cohn + ITIL/SRE (2026-06-10 追加) | 全 Agent (ルールエンジンの出典) | 120 行 |
 
 ---
 
