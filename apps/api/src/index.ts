@@ -34,6 +34,13 @@ import {
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
 import { getFindings } from './handlers/finding-handlers';
+import {
+  startEstimation,
+  getEstimation,
+  voteEstimation,
+  revealEstimation,
+  adoptEstimation,
+} from './handlers/estimation-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -167,16 +174,19 @@ function buildCtx(c: import('hono').Context): HandlerContext {
   return {
     workspaceId: c.get('workspaceId'),
     user: c.get('user'),
+    role: c.get('role'),
   };
 }
 
 function respond<T>(c: import('hono').Context, r: HandlerResult<T>): Response {
-  // Hono の c.json は status code のリテラル union を要求するので、201/400/404/200 を明示的に分岐
+  // Hono の c.json は status code のリテラル union を要求するので明示的に分岐
   if (r.ok) {
     if (r.status === 201) return c.json(r.body, 201);
     return c.json(r.body, 200);
   }
   if (r.status === 400) return c.json(r.body, 400);
+  if (r.status === 403) return c.json(r.body, 403);
+  if (r.status === 409) return c.json(r.body, 409);
   return c.json(r.body, 404);
 }
 
@@ -210,6 +220,27 @@ app.get('/api/me', async (c) => respond(c, await getMe(repo, buildCtx(c))));
 app.patch('/api/members/:userId', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
   return respond(c, await patchMember(repo, buildCtx(c), c.req.param('userId'), body));
+});
+
+// ------- 見積もりポーカー (T6) -------
+// 開始/開示/採用は owner/sm/po (handler 内で role ゲート)、投票/取得は member。
+// voting 中の GET は他人の票を返さない (estimation-handlers の serializeForViewer が隠蔽強制)。
+app.post('/api/tickets/:id/estimation', async (c) =>
+  respond(c, await startEstimation(repo, buildCtx(c), c.req.param('id'), new Date().toISOString())),
+);
+app.get('/api/tickets/:id/estimation', async (c) =>
+  respond(c, await getEstimation(repo, buildCtx(c), c.req.param('id'))),
+);
+app.put('/api/tickets/:id/estimation/vote', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await voteEstimation(repo, buildCtx(c), c.req.param('id'), body, new Date().toISOString()));
+});
+app.post('/api/tickets/:id/estimation/reveal', async (c) =>
+  respond(c, await revealEstimation(repo, buildCtx(c), c.req.param('id'), new Date().toISOString())),
+);
+app.post('/api/tickets/:id/estimation/adopt', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await adoptEstimation(repo, buildCtx(c), c.req.param('id'), body, new Date().toISOString()));
 });
 
 // ------- /api/agents/:name (エージェント実行) -------
