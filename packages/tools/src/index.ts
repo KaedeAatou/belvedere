@@ -1,5 +1,17 @@
 import type { AgentTool } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
+import type { Ritual } from '@belvedere/shared';
+import { runTicketRules, buildRuleContext } from './ticket-rules';
+
+// ルールエンジンを外部 (apps/api の finding-handlers 等) からも使えるよう re-export
+export {
+  runTicketRules,
+  buildRuleContext,
+  ticketRules,
+  type TicketFinding,
+  type TicketRule,
+  type RuleContext,
+} from './ticket-rules';
 
 /**
  * Tool ファクトリ。RepoContainer + workspaceId を closure cap し、各 Tool の
@@ -244,11 +256,23 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
         }
       }
 
+      // 種別ルールエンジン (ticket-rules.ts) の refinement findings を additive に合成する。
+      // 既存 6 観点はそのまま、type/Spike/Bug/Incident 系の新観点を上乗せ (T4 / 2026-06-11)。
+      const [allTickets, sprints, estimations] = await Promise.all([
+        repo.tickets.list({ workspaceId }),
+        repo.sprints.list({ workspaceId }),
+        repo.estimations.list({ workspaceId }),
+      ]);
+      const ruleCtx = buildRuleContext(new Date().toISOString(), allTickets, sprints, estimations);
+      const ruleFindings = runTicketRules('refinement', ruleCtx);
+
       return {
         scanned: tickets.length,
         scannedEpics: epics.length,
         findingCount: findings.length,
         findings,
+        // 種別ルール由来 (ruleId / severity / action 付き)
+        ruleFindings,
       };
     },
   };
@@ -300,6 +324,33 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     },
   };
 
+  // 種別ルールエンジン汎用ツール (T4)。儀式を指定すると該当ルールの findings を返す。
+  // Refinement/Planner/Daily の各 Agent が呼べる。UI バッジ / AI Integrity Panel も同じ結果を使う。
+  const ticketRulesCheckTool: AgentTool<{ ceremony: string }, unknown> = {
+    spec: {
+      name: 'ticket.rules.check',
+      description:
+        'チケット種別ルールを儀式単位で実行し findings を返す。ceremony=refinement/planning/daily/review/retrospective。種別 (story/task/spike/bug/incident) 別の品質・停滞・容量・見積もり割れを検出。',
+      parameters: {
+        type: 'object',
+        properties: {
+          ceremony: { type: 'string', enum: ['planning', 'daily', 'refinement', 'review', 'retrospective'] },
+        },
+        required: ['ceremony'],
+      },
+    },
+    async invoke({ ceremony }) {
+      const [allTickets, sprints, estimations] = await Promise.all([
+        repo.tickets.list({ workspaceId }),
+        repo.sprints.list({ workspaceId }),
+        repo.estimations.list({ workspaceId }),
+      ]);
+      const ruleCtx = buildRuleContext(new Date().toISOString(), allTickets, sprints, estimations);
+      const findings = runTicketRules(ceremony as Ritual, ruleCtx);
+      return { ceremony, findingCount: findings.length, findings };
+    },
+  };
+
   return [
     ticketListTool,
     sprintGetTool,
@@ -307,6 +358,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     epicListTool,
     ticketQualityCheckTool,
     backlogRefinementCheckTool,
+    ticketRulesCheckTool,
     memberListTool,
     slackPostTool,
     humanAskTool,
