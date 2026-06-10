@@ -3,9 +3,9 @@
 
 import { z } from 'zod';
 import type { Epic } from '@belvedere/shared';
-import { ValueImpactSchema } from '@belvedere/shared';
+import { ValueImpactSchema, stripUndefinedPartial, generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
-import { stripUndefined, type HandlerContext, type HandlerResult } from './ticket-handlers';
+import type { HandlerContext, HandlerResult } from './ticket-handlers';
 
 export const EpicCreateBodySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -21,10 +21,6 @@ export const EpicCreateBodySchema = z.object({
 
 export const EpicPatchBodySchema = EpicCreateBodySchema.partial();
 
-function generateEpicId(): string {
-  return `EP-${Date.now().toString(36).toUpperCase()}`;
-}
-
 export async function createEpic(
   repo: RepoContainer,
   ctx: HandlerContext,
@@ -35,7 +31,7 @@ export async function createEpic(
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
   const e: Epic = {
-    id: generateEpicId(),
+    id: generateId('EP'),
     workspaceId: ctx.workspaceId,
     name: parsed.data.name,
     status: parsed.data.status ?? 'planned',
@@ -68,7 +64,7 @@ export async function patchEpic(
   }
   const updated: Epic = {
     ...existing,
-    ...stripUndefined(parsed.data),
+    ...stripUndefinedPartial(parsed.data),
     id: existing.id,                       // 変更不可
     workspaceId: existing.workspaceId,     // 変更不可
     createdAt: existing.createdAt,         // 変更不可

@@ -11,26 +11,16 @@ import {
   patchTicket,
   changeTicketStatus,
   deleteTicket,
-  stripUndefined,
 } from '../src/handlers/ticket-handlers';
 import { createEpic, patchEpic } from '../src/handlers/epic-handlers';
+
+// stripUndefined / stripUndefinedPartial の単体 test は @belvedere/shared 側
+// (packages/shared/test/utils.test.ts / R2 で移設) に移管した。
 
 const WS = 'ws-belvedere';
 const OTHER_WS = 'ws-attacker';
 const CTX = { workspaceId: WS, user: { userId: 'firebase-uid-test', email: 'test@example.com' } };
 const OTHER_CTX = { workspaceId: OTHER_WS, user: { userId: 'firebase-uid-attacker', email: 'attacker@example.com' } };
-
-describe('stripUndefined ヘルパ', () => {
-  it('undefined キーを除去する', () => {
-    const result = stripUndefined({ a: 'x', b: undefined, c: 1 });
-    expect('a' in result).toBe(true);
-    expect('b' in result).toBe(false);
-    expect('c' in result).toBe(true);
-  });
-  it('全部 undefined なら空 object', () => {
-    expect(stripUndefined({ a: undefined, b: undefined })).toEqual({});
-  });
-});
 
 describe('createTicket', () => {
   let repo: RepoContainer;

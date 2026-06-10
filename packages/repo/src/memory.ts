@@ -13,6 +13,7 @@ import type {
   Project,
   Ritual,
 } from '@belvedere/shared';
+import { stripUndefined } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
 import type {
   TicketRepository,
@@ -28,20 +29,10 @@ import type {
   RepoContainer,
 } from './types';
 
+// stripUndefined は @belvedere/shared に集約 (R2 / 2026-06-10)。
 // Firestore backend (firestore.ts) は `ignoreUndefinedProperties: true` で write 時に
-// undefined フィールドを silent drop する。memory backend が `{ ...t }` で undefined を
-// 保持してしまうと、同じ Ticket を upsert → get したときに
-//   - memory: 'assigneeId' in ticket === true (undefined キーが残る)
-//   - firestore: 'assigneeId' in ticket === false (キーごと消える)
-// となり、`'key' in obj` / Object.keys() / JSON.stringify の長さ等が backend で乖離する。
-// shape を揃えるため memory 側でも write 時に undefined キーを除去する。
-function stripUndefined<T extends Record<string, unknown>>(obj: T): T {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) result[k] = v;
-  }
-  return result as T;
-}
+// undefined フィールドを silent drop するため、memory backend も write 時に undefined キーを
+// 除去して shape を揃える (そうしないと 'key' in obj / Object.keys / JSON 長が backend で乖離)。
 
 class MemTicketRepo implements TicketRepository {
   private store = new Map<string, Ticket>();
