@@ -26,8 +26,12 @@ const initials = computed(() => {
 });
 
 // マウント時に /api/me を取得 (まだ取得していなければ)
+// 注: useApiClient が waitAuthReady で auth 復元を待つので、user.value が
+// 立つ前に呼んでも問題ない (await fetchMe の内部で待つ)。
+// page navigation (hard reload) 直後は user.value が null のまま onMounted が
+// 走るため、user.value チェックを入れると fetchMe が呼ばれず me が永遠に null になる。
 onMounted(async () => {
-  if (!me.value && user.value) await fetchMe();
+  if (!me.value) await fetchMe();
 });
 
 // 外側クリックで閉じる
