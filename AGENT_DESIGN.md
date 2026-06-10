@@ -3,8 +3,8 @@
 > 審査基準①「AIエージェントが価値の中心になっているか」に対する答え。
 > 2026-04-30 改訂: 「風 (WindEvent)」概念を廃止。
 > 2026-05-03 改訂: **Refinement Agent (5番目) を追加** + Project エンティティ + valueImpact 軸 を導入。Agent の役割を「チケット品質補助 + 5儀式運営補助」に拡張。
-> 2026-05-04 改訂: **Reviewer Agent に「Sprint Review 録画 → 指摘抽出 → Ticket 起票候補」機能を追加** (Gemini 2.5 Pro Multimodal で動画を直接読み取り)。これに伴い `ReviewRecording` エンティティ + `video.extractIssues` Tool を新設。「議事録音声 → Speech-to-Text」経由は廃止 (Gemini Multimodal が音声・映像を統合処理するため)。
 > 2026-05-05 改訂: **Refinement Agent の診断観点を 5 → 6 に拡張**。第 6 観点「戦略整合性 (Strategic Intent Drift)」を追加 — Epic に `rationale` / `successMetric` / `strategicTheme` を新設し、rationale 欠落の Epic を「配下チケットが Why を見失う形骸化サイン」として警告する。「戦略があるから開発するはずだが、その戦略が開発者に伝わっていない」課題への直接対応。
+> 2026-06-11 改訂: **Reviewer Multimodal (録画 → 指摘抽出 / ReviewRecording / video.extractIssues) を縮退削除** (2026-06-10)。代わりに **チケット種別 (Story/Task/Spike/Bug/Incident) + ルールエンジン (17 観点) + 見積もりポーカー** を導入。Refinement に第 7 観点「種別ルール」を追加。差別化の中心は **Orchestrator マルチエージェント (ADK で 5 Agent を編成)**。
 > 2026-05-05 (夜) 改訂: **MCP (Model Context Protocol) サーバ追加** — `apps/mcp-server` で Belvedere の Tool / Agent を MCP 形式で外部公開。Phase 0 で stdio mode + 11 Tools (読み取り 6 + invoke_agent + CRUD 4 全実装)、Smoke test 14/14 pass。Phase 1-D で HTTP transport + Cloud Run + Firestore + OAuth 2.1。書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (MCP server 側に dryRun ロジックを持たない)。
 
 ---
@@ -92,7 +92,7 @@
 | 主な Tool | `project.list`, `epic.list`, `ticket.list`, `backlog.refinement.check` (6観点を一括診断する専用 Tool) |
 | 自律性 | L2 (提案 → 人が承認後に反映) |
 
-**6観点診断の中身** (`packages/tools/src/index.ts:140-230` で実装):
+**6観点診断の中身** (`packages/tools/src/index.ts` の `backlogRefinementCheckTool` で実装。種別ルール (第7観点) は `packages/tools/src/ticket-rules.ts` の 17 ルールと合成):
 1. **Story 粒度過大**: `estimatePt > 8` → 分割候補を提案 (例: BLV-106 SP=13 → ①Eval set拡充 / ②few-shot rubric / ③コスト計測)
 2. **依存関係未整理**: `parentTicketId` (US- 紐付け) も `blockedBy` も空 → 整理を促す
 3. **valueImpact 未設定**: プロダクトゴール貢献度が空 → PO に確認推奨
@@ -110,22 +110,18 @@
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | (a) レビュー会用デモ準備 (デモシナリオ / preview URL 集) — レビュー会 *前* / (b) **Sprint Review 録画から指摘を抽出して Ticket 起票候補を生成** — レビュー会 *後* |
-| 起動 | レビュー 1営業日前 (a) / `topic.review_recording.uploaded` (b) |
-| 入力 | (a) 完了/レビュー中チケット, デプロイ履歴 (+ Phase 3 で関連 PR 差分を追加予定) / (b) `ReviewRecording.videoUrl` (Cloud Storage 上の MP4), 参加メンバ一覧, Sprint Goal |
-| 出力 | (a) デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知 / (b) **指摘 → Ticket 起票候補リスト** (`sourceRecordingId` / `sourceTimestampSec` / `sourceQuote` / `sourceSpeakerId` 紐付き) |
-| LLM | **gemini-2.5-pro (Multimodal)** — 動画ファイルを直接入力可、Speech-to-Text を経由しない |
-| 主な Tool | `cloudrun.previewUrl`, `slack.notify`, **`video.extractIssues`** (録画 → 指摘抽出専用 Tool), `github.pr.diff` (Phase 3) |
-| 自律性 | L2 (デモシナリオ・指摘 → チケット転記とも人間確認後に確定) |
+| 役割 | レビュー会用デモ準備 (デモシナリオ / preview URL 集 / ステークホルダ通知) — レビュー会 *前* |
+| 起動 | レビュー 1営業日前 |
+| 入力 | 完了/レビュー中チケット, デプロイ履歴 (+ Phase 3 で関連 PR 差分を追加予定), 参加メンバ一覧, Sprint Goal |
+| 出力 | デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知 |
+| LLM | gemini-2.5-pro |
+| 主な Tool | `cloudrun.previewUrl`, `slack.notify`, `github.pr.diff` (Phase 3) |
+| 自律性 | L2 (デモシナリオは人間確認後に確定) |
 
-**動画 → 指摘抽出の中身** (Phase 2 で実装):
-1. **発言検出**: 録画内で「ここの色が見えづらい」「並び順を変えて」「この表記やめて」など、改善要望を含む発言を検出
-2. **発言者特定**: 参加メンバ一覧と照合して発言者を特定 (`Member.userId`)
-3. **指摘の構造化**: `{ timestampSec, quote, speakerId, suggestedTitle, suggestedDoD[], suggestedSP }` 形式に変換
-4. **重複排除**: 同じ指摘が複数回言及された場合は最初の timestamp に集約
-5. **Ticket 候補生成**: `sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId` 紐付きで Ticket 候補オブジェクトを返す (人が Apply で確定 → Firestore 書込)
-
-> 競合との差別化: Atlassian Intelligence / Notion AI は動画 → チケットを持たない。Gemini Multimodal の独擅場であり、PITCH 質疑「他 LLM でなく Gemini である必然性」への直接回答になる。
+> 2026-06-10 縮退: Sprint Review 録画 → 指摘抽出 (Multimodal) 機能は削除。差別化の中心は
+> **Orchestrator マルチエージェント (ADK で 5 Agent を儀式の時刻で編成) + チケット種別ルールエンジン
+> (17 観点) + 見積もりポーカー** に置換。「他 LLM でなく Gemini である必然性」は ADK で
+> Orchestrator + 5 Agent を宣言的に編成できる点で回答する (PITCH §5 / 質疑参照)。
 
 ### 2-5. Retrospective Agent
 
@@ -160,7 +156,7 @@
 | `firestore.query` | Firestore クエリ | SA |
 | `firestore.write` | Firestore 書込 | SA |
 | `cloudrun.previewUrl` | preview revision URL 発行 | SA |
-| `video.extractIssues` | **Sprint Review 録画 → 指摘抽出 → Ticket 候補** (Gemini Multimodal) | SA |
+| `ticket.rules.check` | チケット種別ルール (17 観点) を儀式単位で実行 | SA |
 | `vector.search` | Vector Search クエリ | SA |
 | `human.ask` | (HITL) 不確実な時に人間に投げる | Slack |
 
