@@ -25,11 +25,13 @@ export interface HandlerContext {
   workspaceId: string;
   /** authMiddleware で確定したログインユーザ (createdBy 採番 + audit 用) */
   user: { userId: string; email: string };
+  /** workspaceMiddleware が解決した role (見積もりポーカーの開示/採用ゲート用、T6)。省略時は権限なし扱い */
+  role?: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
 }
 
 export type HandlerResult<T = unknown> =
   | { ok: true; status: 200 | 201; body: T }
-  | { ok: false; status: 400 | 404; body: { error: string; details?: unknown } };
+  | { ok: false; status: 400 | 403 | 404 | 409; body: { error: string; details?: unknown } };
 
 // stripUndefinedPartial / generateId は @belvedere/shared に集約 (R2 / 2026-06-10)。
 
