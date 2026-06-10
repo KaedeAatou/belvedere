@@ -25,6 +25,7 @@ import type {
   Ceremony,
   AgentRun,
   CeremonyHealthScore,
+  EstimationSession,
 } from './types';
 
 // === enum: domain literal unions ===
@@ -46,6 +47,7 @@ export const AgentSourceSchema = z.union([
     (val) => typeof val === 'string' && val.startsWith('agent:'),
   ),
 ]);
+export const TicketTypeSchema = z.enum(['story', 'task', 'spike', 'bug', 'incident']);
 
 // === Ticket ===
 export const TicketSchema = z.object({
@@ -65,6 +67,12 @@ export const TicketSchema = z.object({
   labels: z.array(z.string()).optional(),
   parentTicketId: z.string().optional(),
   blockedBy: z.array(z.string()).optional(),
+  type: TicketTypeSchema.optional(),
+  epicId: z.string().optional(),
+  relatedIncidentId: z.string().optional(),
+  timeboxHours: z.number().optional(),
+  startedAt: z.string().optional(),
+  completedAt: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
   createdBy: AgentSourceSchema,
@@ -229,6 +237,34 @@ export const CeremonyHealthScoreSchema = z.object({
   computedAt: z.string(),
 });
 
+// === EstimationSession (見積もりポーカー) ===
+export const EstimationValueSchema = z.union([
+  z.literal(1),
+  z.literal(2),
+  z.literal(3),
+  z.literal(5),
+  z.literal(8),
+  z.literal(13),
+  z.literal('?'),
+]);
+export const EstimationVoteSchema = z.object({
+  userId: z.string(),
+  value: EstimationValueSchema,
+  submittedAt: z.string(),
+});
+export const EstimationSessionSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  ticketId: z.string(),
+  status: z.enum(['voting', 'revealed', 'adopted', 'discarded']),
+  votes: z.array(EstimationVoteSchema),
+  adoptedValue: z.number().optional(),
+  createdAt: z.string(),
+  createdBy: z.string(),
+  revealedAt: z.string().optional(),
+  adoptedAt: z.string().optional(),
+});
+
 // === Compile-time drift detection ===
 // 各 schema の output と TypeScript interface が双方向に互換であることを compile 時に保証する。
 // drift したら下の `_check_*` の代入で typecheck エラーが起き CI が落ちる。
@@ -244,6 +280,7 @@ const _check_Member: Equal<z.infer<typeof MemberSchema>, Member> = true;
 const _check_Ceremony: Equal<z.infer<typeof CeremonySchema>, Ceremony> = true;
 const _check_AgentRun: Equal<z.infer<typeof AgentRunSchema>, AgentRun> = true;
 const _check_CeremonyHealth: Equal<z.infer<typeof CeremonyHealthScoreSchema>, CeremonyHealthScore> = true;
+const _check_EstimationSession: Equal<z.infer<typeof EstimationSessionSchema>, EstimationSession> = true;
 
 // 未使用変数の typecheck warning を抑止 (本来の使い道は compile-time の側面)
 void _check_Ticket;
@@ -255,3 +292,4 @@ void _check_Member;
 void _check_Ceremony;
 void _check_AgentRun;
 void _check_CeremonyHealth;
+void _check_EstimationSession;

@@ -23,6 +23,7 @@ import type {
   UserStory,
   Project,
   Ritual,
+  EstimationSession,
 } from '@belvedere/shared';
 import {
   TicketSchema,
@@ -34,6 +35,7 @@ import {
   CeremonySchema,
   AgentRunSchema,
   CeremonyHealthScoreSchema,
+  EstimationSessionSchema,
 } from '@belvedere/shared';
 import { z } from 'zod';
 import type {
@@ -46,6 +48,7 @@ import type {
   CeremonyRepository,
   AgentRunRepository,
   CeremonyHealthRepository,
+  EstimationRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -125,6 +128,7 @@ const COL = {
   ceremonies: 'ceremonies',
   agentRuns: 'agentRuns',
   ceremonyHealth: 'ceremonyHealth',
+  estimationSessions: 'estimationSessions',
 } as const;
 
 class FsTicketRepo implements TicketRepository {
@@ -287,6 +291,25 @@ class FsCeremonyHealthRepo implements CeremonyHealthRepository {
   }
 }
 
+class FsEstimationRepo implements EstimationRepository {
+  async list(opts: { workspaceId: string; ticketId?: string; status?: EstimationSession['status'] }): Promise<EstimationSession[]> {
+    let query: Query = db().collection(COL.estimationSessions).where('workspaceId', '==', opts.workspaceId);
+    if (opts.ticketId) query = query.where('ticketId', '==', opts.ticketId);
+    if (opts.status) query = query.where('status', '==', opts.status);
+    const snap = await query.get();
+    return parseList<EstimationSession>(COL.estimationSessions, snap.docs, EstimationSessionSchema);
+  }
+  async get(id: string): Promise<EstimationSession | null> {
+    const doc = await db().collection(COL.estimationSessions).doc(id).get();
+    return doc.exists
+      ? parseOne<EstimationSession>(COL.estimationSessions, id, doc.data(), EstimationSessionSchema)
+      : null;
+  }
+  async upsert(s: EstimationSession): Promise<void> {
+    await db().collection(COL.estimationSessions).doc(s.id).set(s);
+  }
+}
+
 export function createFirestoreRepoContainer(): RepoContainer {
   return {
     tickets: new FsTicketRepo(),
@@ -298,5 +321,6 @@ export function createFirestoreRepoContainer(): RepoContainer {
     ceremonies: new FsCeremonyRepo(),
     agentRuns: new FsAgentRunRepo(),
     ceremonyHealth: new FsCeremonyHealthRepo(),
+    estimations: new FsEstimationRepo(),
   };
 }

@@ -6,6 +6,11 @@ export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 /** プロダクトゴール (Workspace.productGoal) への貢献度。priority (緊急度寄り) と独立した軸 */
 export type ValueImpact = 'low' | 'medium' | 'high';
 export type Ritual = 'planning' | 'daily' | 'refinement' | 'review' | 'retrospective';
+/**
+ * チケット種別 (2026-06-10 導入)。PBI (story/spike/bug) と How (task) と 計画外 (incident) を区別。
+ * 詳細: references/agile-knowledge-base/ticket-types.md / docs/design-ticket-types.md
+ */
+export type TicketType = 'story' | 'task' | 'spike' | 'bug' | 'incident';
 
 export type AgentName =
   | 'orchestrator'
@@ -82,9 +87,49 @@ export interface Ticket {
   parentTicketId?: string;
   /** 依存先チケット ID (このチケットを進めるために先行で完了が必要) */
   blockedBy?: string[];
+  /** チケット種別 (2026-06-10)。未設定は TYPE_MISSING ルールが検出する */
+  type?: TicketType;
+  /** type='story' の親 Epic (Story を Epic に直結。UserStory entity は経由しない) */
+  epicId?: string;
+  /** type='bug' が Incident の根本対応である場合、その Incident チケットの id */
+  relatedIncidentId?: string;
+  /** type='spike' のタイムボックス (時間)。超過は SPIKE_TIMEBOX_OVER が検出 */
+  timeboxHours?: number;
+  /** 初めて in-progress に遷移した時刻 (status 変更処理が自動記録。手入力しない) */
+  startedAt?: string;
+  /** done に遷移した時刻 (同上) */
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: AgentSource;
+}
+
+// === EstimationSession (見積もりポーカー / 2026-06-10) ===
+export const FIBONACCI_POINTS = [1, 2, 3, 5, 8, 13] as const;
+/** 投票値。'?' = 情報不足で見積もれない */
+export type EstimationValue = (typeof FIBONACCI_POINTS)[number] | '?';
+
+export interface EstimationVote {
+  userId: string;
+  value: EstimationValue;
+  submittedAt: string;
+}
+
+/**
+ * 見積もりポーカーのセッション。Story の estimatePt を Workspace メンバの
+ * 隠蔽投票 → 一斉開示 → 採用 で決める。開示前はサーバが他人の vote を返さない (隠蔽強制)。
+ */
+export interface EstimationSession {
+  id: string;
+  workspaceId: string;
+  ticketId: string;
+  status: 'voting' | 'revealed' | 'adopted' | 'discarded';
+  votes: EstimationVote[];
+  adoptedValue?: number;
+  createdAt: string;
+  createdBy: string;
+  revealedAt?: string;
+  adoptedAt?: string;
 }
 
 // === Ceremony ===

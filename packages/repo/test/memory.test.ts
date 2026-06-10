@@ -282,3 +282,24 @@ describe('memory backend - Refinement 第6観点デモ前提', () => {
     expect(missing.map((e) => e.id)).toEqual(['EP-3']);
   });
 });
+
+describe('memory backend - estimations (見積もりポーカー / T2)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  it('upsert → get / ticketId・status フィルタ / workspace 分離', async () => {
+    await repo.estimations.upsert({
+      id: 'EST-1',
+      workspaceId: WS,
+      ticketId: 'WC-101',
+      status: 'voting',
+      votes: [{ userId: 'kaede', value: 5, submittedAt: '2026-06-11T00:00:00Z' }],
+      createdAt: '2026-06-11T00:00:00Z',
+      createdBy: 'kaede',
+    });
+    expect((await repo.estimations.get('EST-1'))?.ticketId).toBe('WC-101');
+    expect((await repo.estimations.list({ workspaceId: WS, ticketId: 'WC-101' })).length).toBe(1);
+    expect((await repo.estimations.list({ workspaceId: WS, status: 'revealed' })).length).toBe(0);
+    expect((await repo.estimations.list({ workspaceId: 'ws-other' })).length).toBe(0);
+  });
+});
