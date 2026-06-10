@@ -10,7 +10,9 @@ import type { NitroFetchOptions } from 'nitropack';
 
 export interface ApiClient {
   get<T>(path: string, opts?: NitroFetchOptions<string>): Promise<T>;
-  post<T>(path: string, body?: unknown, opts?: NitroFetchOptions<string>): Promise<T>;
+  post<T>(path: string, body?: Record<string, unknown>, opts?: NitroFetchOptions<string>): Promise<T>;
+  patch<T>(path: string, body?: Record<string, unknown>, opts?: NitroFetchOptions<string>): Promise<T>;
+  delete<T>(path: string, opts?: NitroFetchOptions<string>): Promise<T>;
 }
 
 export const useApiClient = (): ApiClient => {
@@ -32,5 +34,9 @@ export const useApiClient = (): ApiClient => {
       call<T>(path, { ...opts, method: 'GET' }),
     post: <T>(path: string, body?: Record<string, unknown>, opts: NitroFetchOptions<string> = {}) =>
       call<T>(path, { ...opts, method: 'POST', body }),
+    patch: <T>(path: string, body?: Record<string, unknown>, opts: NitroFetchOptions<string> = {}) =>
+      call<T>(path, { ...opts, method: 'PATCH', body }),
+    delete: <T>(path: string, opts: NitroFetchOptions<string> = {}) =>
+      call<T>(path, { ...opts, method: 'DELETE' }),
   };
 };

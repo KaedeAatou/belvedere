@@ -41,10 +41,10 @@ function setRailTab(t: 'backlog' | 'events') { emit('update:railTab', t); }
       <div class="header-actions">
         <button class="h-btn"><Icon name="search" /> <span>Search</span> <span class="kbd">⌘K</span></button>
         <button class="h-btn icon"><Icon name="bell" /></button>
-        <button class="h-btn icon"><Icon name="settings" /></button>
         <button class="h-btn" @click="emit('update:aiOpen', !aiOpen)">
           <Icon name="sparkle" /> <span>{{ aiOpen ? 'Hide AI' : 'Show AI' }}</span>
         </button>
+        <UserMenu />
       </div>
     </div>
 
