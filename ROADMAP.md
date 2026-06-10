@@ -97,7 +97,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [ ] **R2: stripUndefined / ID 採番の重複排除** (同上)
 - [ ] チケット詳細画面で **編集 / status 変更 / Epic 紐付け / SP 設定** が Firestore に永続化 (= R3 Demo/Live 統一)
 - [ ] Sprint 切替 / Epic 一覧 / メンバ表示が実データで動く (= R3)
-- [ ] **R4: チケット種別導入 (Story/Task/Spike/Bug/Incident) + Refinement 新 3 観点** (1-C 末尾)
+- [ ] **R4 → T1-T8: チケット種別 + ルールエンジン + 見積もりポーカー** (`docs/design-ticket-types.md` / 2026-06-10 設計確定。1-2 日あふれたら Phase 1-D を 6/22-24 に圧縮、3-A には食い込ませない)
 - [ ] AI Integrity Panel は **空の枠だけ** (Phase 2 で配線)
 
 ### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
