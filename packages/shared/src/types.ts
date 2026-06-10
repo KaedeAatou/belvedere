@@ -82,39 +82,9 @@ export interface Ticket {
   parentTicketId?: string;
   /** 依存先チケット ID (このチケットを進めるために先行で完了が必要) */
   blockedBy?: string[];
-  /** Sprint Review 録画から自動抽出された指摘の場合、出典の ReviewRecording.id */
-  sourceRecordingId?: string;
-  /** 録画内の発言タイムスタンプ (秒) — UI から動画の該当箇所にジャンプする用 */
-  sourceTimestampSec?: number;
-  /** 抽出元の発言テキスト (Reviewer Agent が文字起こし → 抜粋) */
-  sourceQuote?: string;
-  /** 発言者の Member.userId */
-  sourceSpeakerId?: string;
   createdAt: string;
   updatedAt: string;
   createdBy: AgentSource;
-}
-
-// === ReviewRecording (Sprint Review 録画 / 2026-05-04 追加) ===
-/**
- * Sprint Review の録画動画。Reviewer Agent が Gemini Multimodal で動画を読み取り、
- * 発言から指摘を抽出 → Ticket 候補 (sourceRecordingId 紐付き) を生成する。
- */
-export interface ReviewRecording {
-  id: string;
-  workspaceId: string;
-  projectId?: string;
-  sprintId: string;
-  /** Cloud Storage URL (gs://belvedere-{env}-review-recordings/...) */
-  videoUrl: string;
-  /** 動画長 (秒) */
-  durationSec?: number;
-  uploadedAt: string;
-  uploadedBy: string;
-  /** この動画から Reviewer Agent が生成した Ticket ID 一覧 */
-  extractedTicketIds?: string[];
-  /** 抽出処理のステータス */
-  extractionStatus?: 'pending' | 'running' | 'succeeded' | 'failed';
 }
 
 // === Ceremony ===

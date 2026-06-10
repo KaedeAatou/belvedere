@@ -31,8 +31,8 @@ import type {
 // Firestore backend (firestore.ts) は `ignoreUndefinedProperties: true` で write 時に
 // undefined フィールドを silent drop する。memory backend が `{ ...t }` で undefined を
 // 保持してしまうと、同じ Ticket を upsert → get したときに
-//   - memory: 'sourceQuote' in ticket === true (undefined キーが残る)
-//   - firestore: 'sourceQuote' in ticket === false (キーごと消える)
+//   - memory: 'assigneeId' in ticket === true (undefined キーが残る)
+//   - firestore: 'assigneeId' in ticket === false (キーごと消える)
 // となり、`'key' in obj` / Object.keys() / JSON.stringify の長さ等が backend で乖離する。
 // shape を揃えるため memory 側でも write 時に undefined キーを除去する。
 function stripUndefined<T extends Record<string, unknown>>(obj: T): T {

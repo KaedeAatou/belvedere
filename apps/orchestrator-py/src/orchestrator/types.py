@@ -53,31 +53,9 @@ class Ticket(BaseModel):
     labels: list[str] | None = None
     parent_ticket_id: str | None = Field(default=None, alias="parentTicketId")
     blocked_by: list[str] | None = Field(default=None, alias="blockedBy")
-    # Sprint Review 録画から AI が抽出した指摘の出典 (2026-05-04 追加)
-    source_recording_id: str | None = Field(default=None, alias="sourceRecordingId")
-    source_timestamp_sec: int | None = Field(default=None, alias="sourceTimestampSec")
-    source_quote: str | None = Field(default=None, alias="sourceQuote")
-    source_speaker_id: str | None = Field(default=None, alias="sourceSpeakerId")
     created_at: datetime = Field(alias="createdAt")
     updated_at: datetime = Field(alias="updatedAt")
     created_by: str = Field(alias="createdBy")
-
-
-class ReviewRecording(BaseModel):
-    """Sprint Review 録画 (Reviewer Agent が Multimodal で読む)。"""
-
-    id: str
-    workspace_id: str = Field(alias="workspaceId")
-    project_id: str | None = Field(default=None, alias="projectId")
-    sprint_id: str = Field(alias="sprintId")
-    video_url: str = Field(alias="videoUrl")
-    duration_sec: int | None = Field(default=None, alias="durationSec")
-    uploaded_at: datetime = Field(alias="uploadedAt")
-    uploaded_by: str = Field(alias="uploadedBy")
-    extracted_ticket_ids: list[str] | None = Field(default=None, alias="extractedTicketIds")
-    extraction_status: Literal["pending", "running", "succeeded", "failed"] | None = Field(
-        default=None, alias="extractionStatus"
-    )
 
 
 class Epic(BaseModel):
