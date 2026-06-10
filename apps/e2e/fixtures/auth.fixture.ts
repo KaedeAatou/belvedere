@@ -79,6 +79,18 @@ export const test = base.extend<AuthedFixtures>({
       throw new Error(`Firebase signInWithCustomToken failed: ${signInError} (projectId=${projectId})`);
     }
 
+    // signInWithCustomToken は Promise が resolve しても、auth.currentUser の確定までに
+    // 内部の token rotation / IndexedDB persistence が走る。後続の useApiClient が
+    // idToken() を呼んだ時に null になるのを防ぐため、currentUser.uid が立つまで待つ。
+    await page.waitForFunction(
+      () => {
+        const fb = (window as unknown as { __belvedereFirebase?: { auth?: { currentUser?: { uid?: string } } } }).__belvedereFirebase;
+        return typeof fb?.auth?.currentUser?.uid === 'string' && fb.auth.currentUser.uid.length > 0;
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
     // ログイン完了 → / に遷移して onAuthStateChanged の処理を確実に通す
     await page.goto('/', { waitUntil: 'networkidle' });
 
