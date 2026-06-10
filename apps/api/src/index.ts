@@ -15,6 +15,7 @@
 
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
 import { createLLMProvider } from '@belvedere/llm';
 import { createRepoContainer } from '@belvedere/repo';
@@ -49,6 +50,29 @@ app.get('/', (c) => c.json({ name: 'belvedere-api', version: '0.0.1' }));
 // factory.ts は REPO_BACKEND が undefined / null / '' の場合 memory backend を返すので、
 // /health の表示も同じ規約に揃える (?? は null/undefined しか coalesce しないため `||` を使う)。
 app.get('/health', (c) => c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND || 'memory' }));
+
+// ------- CORS (Phase 1-C / 2026-06-11) -------
+// Web (belvedere-web-dev-*) → API (belvedere-api-dev-*) はサブドメイン違いの別 origin。
+// ブラウザは Authorization ヘッダ付き fetch の preflight (OPTIONS) を投げるので、
+// 認証 middleware より先に CORS を入れて OPTIONS を素通しさせる。
+//
+// origin allowlist:
+//   - https://belvedere-web-dev-cpszmcqmuq-an.a.run.app (本番 Cloud Run)
+//   - http://localhost:3000 (ローカル Nuxt dev)
+// Phase 1-D 以降で MCP HTTP / staging を追加する時に env (ALLOWED_ORIGINS) 化を検討。
+app.use(
+  '/api/*',
+  cors({
+    origin: [
+      'https://belvedere-web-dev-cpszmcqmuq-an.a.run.app',
+      'http://localhost:3000',
+    ],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Authorization', 'Content-Type', 'X-Workspace-Id'],
+    maxAge: 600,
+    credentials: false,
+  }),
+);
 
 // ------- /api/* は認証必須 (Phase 1-B / 2026-06-10) -------
 // authMiddleware: Authorization: Bearer <ID token> を Firebase Admin SDK で検証 → c.user
