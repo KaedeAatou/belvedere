@@ -26,6 +26,15 @@ export const emailAllowlist: Record<string, AllowlistEntry> = {
     role: 'owner',
     displayName: 'Kaede',
   },
+  // e2e robot user (Stage 2 / 2026-06-11): 専用 workspace ws-e2e-test の owner として
+  // 本番 ws-belvedere を汚さずに CRUD 動作確認。Firebase Auth に user 作成不要、
+  // createCustomToken で任意 UID を identifier として token 発行 → signInWithCustomToken。
+  // email は emailAllowlist との突合に使うので、ここで指定した値と一致する必要がある。
+  'robot-e2e@belvedere.test': {
+    workspaceId: 'ws-e2e-test',
+    role: 'owner',
+    displayName: 'E2E Robot',
+  },
 };
 
 /**
