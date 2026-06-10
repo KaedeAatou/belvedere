@@ -4,8 +4,9 @@
 
 import { z } from 'zod';
 import type { Member } from '@belvedere/shared';
+import { stripUndefinedPartial } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
-import { stripUndefined, type HandlerContext, type HandlerResult } from './ticket-handlers';
+import type { HandlerContext, HandlerResult } from './ticket-handlers';
 
 export const MemberPatchBodySchema = z.object({
   displayName: z.string().min(1).max(80).optional(),
@@ -65,7 +66,7 @@ export async function patchMember(
   }
   const updated: Member = {
     ...existing,
-    ...stripUndefined(parsed.data),
+    ...stripUndefinedPartial(parsed.data),
     userId: existing.userId,             // 不変
     workspaceId: existing.workspaceId,   // 不変
     email: existing.email,               // 不変

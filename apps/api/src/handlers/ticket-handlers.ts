@@ -9,12 +9,14 @@
 // - IDOR ガード: get → workspaceId 照合、別 workspace のものは 404 扱い
 
 import { z } from 'zod';
-import type { Member, Status, Ticket } from '@belvedere/shared';
+import type { Status, Ticket } from '@belvedere/shared';
 import {
   PrioritySchema,
   RitualSchema,
   StatusSchema,
   ValueImpactSchema,
+  stripUndefinedPartial,
+  generateId,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 
@@ -28,20 +30,7 @@ export type HandlerResult<T = unknown> =
   | { ok: true; status: 200 | 201; body: T }
   | { ok: false; status: 400 | 404; body: { error: string; details?: unknown } };
 
-/**
- * zod の `.partial()` は `string | undefined` を返すので、そのまま spread すると
- * exactOptionalPropertyTypes に違反する (オプションキーに undefined を入れられない)。
- * undefined キーを削除し、戻り値の型から undefined union も除外して
- * `{...existing, ...stripUndefined(patch)}` で安全に merge できるようにする。
- */
-type NoUndefined<T> = { [K in keyof T]: Exclude<T[K], undefined> };
-export function stripUndefined<T extends Record<string, unknown>>(obj: T): Partial<NoUndefined<T>> {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) result[k] = v;
-  }
-  return result as Partial<NoUndefined<T>>;
-}
+// stripUndefinedPartial / generateId は @belvedere/shared に集約 (R2 / 2026-06-10)。
 
 // ------- リクエスト body schema -------
 
@@ -72,15 +61,6 @@ export const TicketStatusChangeBodySchema = z.object({
 
 // ------- 純粋関数ハンドラ -------
 
-/**
- * Ticket ID 生成 (Phase 1-C 最小実装)。
- * Phase 2 で Project.idPrefix と既存最大番号から `${idPrefix}-${n+1}` に置換予定。
- * 今は 'WC-...' で衝突しない値を返せれば十分。
- */
-function generateTicketId(): string {
-  return `WC-${Date.now().toString(36).toUpperCase()}`;
-}
-
 export async function createTicket(
   repo: RepoContainer,
   ctx: HandlerContext,
@@ -92,7 +72,7 @@ export async function createTicket(
   }
   const now = new Date().toISOString();
   const t: Ticket = {
-    id: generateTicketId(),
+    id: generateId('WC'),
     workspaceId: ctx.workspaceId,
     title: parsed.data.title,
     // Status / Priority のデフォルトは「backlog / medium」(POST 初期値の慣例)
@@ -134,7 +114,7 @@ export async function patchTicket(
   }
   const updated: Ticket = {
     ...existing,
-    ...stripUndefined(parsed.data),
+    ...stripUndefinedPartial(parsed.data),
     id: existing.id,                       // 変更不可
     workspaceId: existing.workspaceId,     // 変更不可
     createdAt: existing.createdAt,         // 変更不可
@@ -181,5 +161,3 @@ export async function deleteTicket(
   return { ok: true, status: 200, body: { deleted: id } };
 }
 
-// _Member 型を使わない実装になっているが、将来 createdBy に Member.displayName を埋め込む等で使うため import を残しておく
-export type _Member = Member;
