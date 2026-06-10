@@ -136,9 +136,11 @@
 □ テスト
   □ 単体テスト追加した? (handler / repo / 純粋関数)
   □ e2e シナリオに含めるべきか判断した? (Stage 2 以降)
+  □ pnpm test の exit code を確認した? (tail だけで判断しない)
 
 □ CI/CD
   □ GitHub Actions が緑になるか push 前に確認?
+  □ push 後に gh run watch で結果確認した? (post-push-check.sh hook が促す)
   □ 本番 smoke test (curl + 実ブラウザ) で確認?
 
 □ ドキュメント
@@ -146,6 +148,45 @@
   □ HACKATHON_COMPLIANCE.md §G History 追記?
   □ memory に「次回 Claude が知るべき設計判断」残した?
 ```
+
+---
+
+## 新パッケージ追加時のチェックリスト (2026-06-10 追加)
+
+新規 `apps/*` または `packages/*` を追加する時に必ず通す:
+
+```
+□ package.json
+  □ "test" script 名が既存 CI workflow と衝突しないか?
+    - 単体テスト (vitest 等)  → "test" (ci.yml の pnpm -r test に巻き込まれて OK)
+    - e2e / 統合テスト (重い) → "e2e" / "integration" 等の別名
+    - 失敗するもの (browser 必須等) は絶対 "test" にしない
+  □ "typecheck" script 必須 (pnpm typecheck で全 workspace 通る前提)
+
+□ root の pnpm scripts 影響
+  □ pnpm test を実行して、新パッケージが意図通り含まれる / 除外されるか確認
+  □ pnpm typecheck も同様
+
+□ 既存 CI workflow への影響
+  □ .github/workflows/ci.yml が "pnpm -r --if-present test" を使っているか確認
+  □ 失敗する可能性のあるテストは別 workflow に分離 (e2e.yml / integration.yml 等)
+  □ workflow_run トリガで連鎖起動する場合、トリガ元 workflow の paths フィルタ確認
+
+□ 新 workflow を追加する場合
+  □ on.push.paths フィルタで意図したファイル変更時のみ起動するか?
+  □ on.workflow_run.workflows で参照する workflow 名が正確か?
+  □ permissions が最小権限か?
+  □ secrets 必須なら README に明記
+
+□ Cloud Run / GCP リソース追加
+  □ infra/cloudbuild.{name}.yaml が要るか?
+  □ deploy-{name}.yml が要るか?
+  □ WIF SA に必要な role が揃っているか?
+```
+
+**2026-06-10 の教訓**: apps/e2e 追加時に `"test": "playwright test"` を設定したため
+ci.yml の `pnpm -r --if-present test` に巻き込まれて Playwright browser 未 install で
+CI 失敗。この checklist で再発防止する。
 
 ---
 
