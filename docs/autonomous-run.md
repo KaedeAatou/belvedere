@@ -49,3 +49,5 @@ docs/autonomous-run.md に従って夜間連続実行を開始して。
 | 2026-06-11 未明 | T2 | ✅ 完了 / CI 緑 | 4abb03e 系 (3 commit) | Ticket 6 フィールド + EstimationSession entity + applyStatusTransition (status 自動スタンプ 3 経路) + seed type 分類 (WC-108 未設定/WC-103 親なし task/WC-105 startedAt = デモ不備)。test 102/102。MISMATCH_SPIKE_TITLE の seed デモは title 変更不可のため見送り (rule は T3 で実装) |
 | 2026-06-11 未明 | T3 | ✅ 完了 / CI 緑 | 497d5df | ticket-rules.ts 17 ルール宣言的レジストリ + runTicketRules + unit test 33。tools に test script 追加。test 135/135 |
 | 2026-06-11 未明 | T4 | ✅ 完了 / CI 緑 | 3ea6f04 系 (2 commit) | ticket.rules.check ツール + backlogRefinement へ additive 合成 + GET /api/findings + prompts/agents.py 種別観点追記。mock-llm-reviewer / prompt-quality-reviewer 両 OK。test 140/140 |
+| 2026-06-11 未明 | T6 | ✅ 完了 / CI 緑 | 63dd6ff | 見積もりポーカー API 5 endpoint + estimation-handlers (隠蔽サーバ側強制 / role ゲート / IDOR) + 14 test。test 154/154 |
+| 2026-06-11 未明 | R3/T5/T7/T8 | ⏸ 意図的停止 | — | UI epic (DemoTicket→shared Ticket 18 ファイル置換 + 4 画面の実 API 化 + 種別バッジ + 見積もりパネル + e2e)。視覚判断を要し e2e カバレッジ限定のため、無人実行では押し切らずユーザーが画面を見ながら進める方が安全と判断 (§規約6 + 停止条件の精神)。バックエンドは完結済なので UI 接続のみが残る |
