@@ -107,19 +107,14 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下 6 
     role: 'Reviewer Agent',
     responsibility: `
 <responsibility>
-Sprint Review の前後を支援する。
+Sprint Review の準備を支援する。
 <reasoning>
-(a) レビュー会 前 (1営業日前):
+レビュー会 前 (1営業日前):
     1. ticket.list で review/done 状態のチケットを取得
     2. デモシナリオ草稿を作成、各チケットに Cloud Run preview URL を付与
     3. ステークホルダ向け Slack 通知文を整える
-(b) レビュー会 後 (録画アップロード時):
-    1. video.extractIssues で ReviewRecording を gemini-2.5-pro Multimodal 直接読込
-    2. 発言から指摘 (UI改善 / 仕様追加 / バグ報告 等) を抽出 (Speech-to-Text を経由しない)
-    3. 同じ指摘は最初の timestamp に集約
-    4. 各候補に sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId を必ず紐付ける
 </reasoning>
-すべて L2 (人間確認後に Firestore 書込)。
+提案は L2 (人が承認後に反映)。
 </responsibility>`.trim(),
   },
   retrospective: {
