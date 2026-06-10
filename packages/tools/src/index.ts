@@ -300,65 +300,6 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     },
   };
 
-  // Sprint Review 録画 → 指摘抽出 → Ticket 候補 (Phase 2 で Gemini Multimodal 接続予定、現状はモック)
-  const videoExtractIssuesTool: AgentTool<{ recordingId: string }, unknown> = {
-    spec: {
-      name: 'video.extractIssues',
-      description:
-        'Sprint Review 録画動画 (ReviewRecording) を Multimodal LLM で読み取り、ステークホルダの指摘を抽出して Ticket 起票候補に変換する。各候補に sourceRecordingId / sourceTimestampSec / sourceQuote / sourceSpeakerId を紐付ける。',
-      parameters: {
-        type: 'object',
-        properties: {
-          recordingId: { type: 'string', description: 'ReviewRecording.id' },
-        },
-        required: ['recordingId'],
-      },
-    },
-    async invoke({ recordingId }) {
-      // Phase 2 で Gemini 2.5 Pro Multimodal に接続予定。現状はモック応答。
-      return {
-        recordingId,
-        extractedCount: 3,
-        candidates: [
-          {
-            sourceTimestampSec: 755,
-            sourceQuote: 'この緑のボタン、目立たないから色を変えてほしい',
-            sourceSpeakerId: 'tanaka',
-            suggestedTitle: 'レビュー指摘: 主要 CTA ボタンの視認性改善',
-            suggestedDoD: [
-              'ボタンの色を Hoshino 暖オレンジ系に統一',
-              'WCAG AA コントラスト 4.5:1 以上確保',
-              'a11y チェックリスト通過',
-            ],
-            suggestedSP: 2,
-            suggestedValueImpact: 'medium',
-          },
-          {
-            sourceTimestampSec: 1122,
-            sourceQuote: '一覧の並び順、自分でカスタマイズできるようにしてほしい',
-            sourceSpeakerId: 'tanaka',
-            suggestedTitle: 'レビュー指摘: チケット一覧の並び順カスタマイズ',
-            suggestedDoD: ['priority / valueImpact / updatedAt の3軸でソート可能', 'ユーザー設定を localStorage に永続化'],
-            suggestedSP: 5,
-            suggestedValueImpact: 'medium',
-          },
-          {
-            sourceTimestampSec: 1480,
-            sourceQuote: 'AI が提案した DoD、出典も一緒に見せてくれる?',
-            sourceSpeakerId: 'okubo',
-            suggestedTitle: 'レビュー指摘: AI 提案に出典 (US/Epic/過去類似) を併記',
-            suggestedDoD: [
-              'AIPanel に source citation 行を追加',
-              '出典をクリックで該当 Epic/Story にジャンプ',
-            ],
-            suggestedSP: 3,
-            suggestedValueImpact: 'high',
-          },
-        ],
-      };
-    },
-  };
-
   return [
     ticketListTool,
     sprintGetTool,
@@ -369,6 +310,5 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     memberListTool,
     slackPostTool,
     humanAskTool,
-    videoExtractIssuesTool,
   ];
 }

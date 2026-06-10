@@ -79,10 +79,9 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('ticket.quality.check', { ticketId: 'WC-106' });
         break;
       case 'reviewer':
-        // レビュー会前: デモ準備 / レビュー会後: 録画から指摘抽出
+        // レビュー会前: デモシナリオ準備 (review/done チケット + メンバ一覧)
         tryCall('ticket.list', { sprintId: 'sprint-13', status: 'review' });
         tryCall('member.list', {});
-        tryCall('video.extractIssues', { recordingId: 'rec-s13-review' });
         break;
       case 'retrospective':
         // ふりかえり: 前スプリント情報 + メンバ一覧 (Try owner 割当に必要) + 全チケットの品質充足率
@@ -222,36 +221,6 @@ function getStructuredOutput(role: AgentRole): unknown {
         ],
         stakeholderNotice: 'Cloud Run preview URL 2件発行済。Slack #review-stakeholders に投稿予定 (1営業日前)。',
         risks: ['WC-103 の e2e テストがまだ unstable。バックアップ録画も用意'],
-        // レビュー会後の動画 → 指摘抽出 (Gemini Multimodal、Phase 2 で実装)
-        extractedFromRecording: {
-          recordingId: 'rec-s13-review',
-          ticketCandidates: [
-            {
-              sourceTimestampSec: 755,
-              sourceQuote: 'この緑のボタン、目立たないから色を変えてほしい',
-              sourceSpeakerId: 'tanaka',
-              suggestedTitle: 'レビュー指摘: 主要 CTA ボタンの視認性改善',
-              suggestedSP: 2,
-              suggestedValueImpact: 'medium',
-            },
-            {
-              sourceTimestampSec: 1122,
-              sourceQuote: '一覧の並び順、自分でカスタマイズできるようにしてほしい',
-              sourceSpeakerId: 'tanaka',
-              suggestedTitle: 'レビュー指摘: チケット一覧の並び順カスタマイズ',
-              suggestedSP: 5,
-              suggestedValueImpact: 'medium',
-            },
-            {
-              sourceTimestampSec: 1480,
-              sourceQuote: 'AI が提案した DoD、出典も一緒に見せてくれる?',
-              sourceSpeakerId: 'okubo',
-              suggestedTitle: 'レビュー指摘: AI 提案に出典 (US/Epic/過去類似) を併記',
-              suggestedSP: 3,
-              suggestedValueImpact: 'high',
-            },
-          ],
-        },
       };
     case 'retrospective':
       return {
@@ -346,35 +315,21 @@ function getNaturalOutput(role: AgentRole): string {
     case 'reviewer':
       return [
         '【スプリントレビュー支援 (Reviewer / Mock)】',
-        'Sprint 13 レビュー会 — 前後の支援を一括実行',
+        'Sprint 13 レビュー会 — 会前のデモ準備を支援',
         '',
-        '◆ (a) レビュー会 *前* — デモシナリオ草稿:',
+        '◆ デモシナリオ草稿 (review/done チケット):',
         '  1. WC-103 デモ環境 Cloud Run 統一 (5min)',
-        '       → preview URL: https://belvedere-pr-103-dev.run.app',
+        '       → preview URL: https://belvedere-pr-103-dev-asia-northeast1.run.app',
         '  2. WC-107 ベロシティ 3SP移動平均 (3min) [done]',
-        '       → preview URL: https://belvedere-pr-107-prod.run.app',
+        '       → preview URL: https://belvedere-pr-107-prod-asia-northeast1.run.app',
         '',
-        '  ステークホルダ通知: Slack #review-stakeholders に投稿予定',
-        '  リスク: WC-103 の e2e がまだ flaky → バックアップ録画を用意',
+        '◆ ステークホルダ通知:',
+        '  Cloud Run preview URL 2件を Slack #review-stakeholders に投稿予定 (1営業日前)。',
         '',
-        '◆ (b) レビュー会 *後* — 録画から指摘抽出 (Gemini Multimodal):',
-        '  録画: rec-s13-review (Cloud Storage 上の MP4)',
-        '  抽出: 3件の指摘 → Ticket 起票候補',
+        '◆ リスク:',
+        '  - WC-103 の e2e テストがまだ unstable。バックアップ録画も用意',
         '',
-        '  ① 12:35 田中 (PO):',
-        '     「この緑のボタン、目立たないから色を変えてほしい」',
-        '     → 候補: 主要 CTA ボタンの視認性改善 (SP=2 / valueImpact=medium)',
-        '       DoD 候補: 暖オレンジ系統一 / WCAG AA / a11y チェック通過',
-        '',
-        '  ② 18:42 田中 (PO):',
-        '     「一覧の並び順、自分でカスタマイズできるようにしてほしい」',
-        '     → 候補: チケット一覧の並び順カスタマイズ (SP=5 / valueImpact=medium)',
-        '',
-        '  ③ 24:40 大久保 (SM):',
-        '     「AI が提案した DoD、出典も一緒に見せてくれる?」',
-        '     → 候補: AI 提案に出典 (US/Epic/過去類似) を併記 (SP=3 / valueImpact=high)',
-        '',
-        '◆ 提案: 上記 3 候補を Apply (L2) で Ticket 化 → Sprint 14 候補へ',
+        '◆ 提案: 上記デモ順を L2 (人が承認後) で確定 → ステークホルダに通知',
       ].join('\n');
 
     case 'retrospective':
