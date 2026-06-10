@@ -15,6 +15,7 @@ import type {
   Ticket,
   Epic,
 } from '@belvedere/shared';
+import { generateId } from '@belvedere/shared';
 import { MCP_TOOLS } from './tools';
 
 // シングルトン (リクエスト毎に再初期化しない)
@@ -124,7 +125,7 @@ export async function callTool(
       case 'belvedere_ticket_create': {
         const title = mustString(args.title, 'title');
         const now = new Date().toISOString();
-        const id = (args.id as string) ?? generateTicketId();
+        const id = (args.id as string) ?? generateId('WC');
         const ticket: Ticket = {
           id,
           workspaceId,
@@ -210,14 +211,6 @@ export async function callTool(
     const err = e as Error;
     return errorResult(`tool execution failed: ${err.message}`);
   }
-}
-
-/**
- * チケット ID を生成。Phase 1 (memory repo) では既存 ID と衝突しない値を返せれば十分。
- * Phase 2 (Firestore) では Project.idPrefix と既存最大番号から採番する戦略に置き換える。
- */
-function generateTicketId(): string {
-  return `WC-${Date.now().toString(36).toUpperCase()}`;
 }
 
 // ========== ヘルパー ==========
