@@ -49,8 +49,8 @@
 | **ADK (Agents Development Kit)** | ✅ 採用 | 🟡 計画 | `apps/orchestrator-py/pyproject.toml` に `google-adk>=0.5` / `google-genai>=0.3` 依存追加済 / `agents.py` に5儀式 (planner/refinement/daily/reviewer/retrospective) + Orchestrator の INSTRUCTION 雛形完備 / `build_agents(use_real_adk=True)` で `NotImplementedError` raise (silent fallback なし)。本物実装は `USE_REAL_ADK=true` 切替待ち |
 | Gemini Enterprise Agent Platform (旧 Vertex AI) | — | ⚪ | Notion 公式リスト (2026-05-01 確認) では「旧Vertex AI」表記。Gemini API + ADK で十分。観測やデータ管理で必要なら追加 |
 | Vector Search | 🟡 検討 | ⚪ | 過去ふりかえり検索で使う案あり (`AGENT_DESIGN.md`)。Phase 2 後半で検討 |
-| **Gemini 2.5 Pro Multimodal (動画入力)** | ✅ 採用 (2026-05-04) | 🟡 計画 | **Reviewer Agent が Sprint Review 録画から指摘を抽出して Ticket 起票候補を生成** (`AGENT_DESIGN.md §2-4`)。Speech-to-Text を経由せず動画を直接入力。ピッチキラーシーン (デモ #5) |
-| Speech-to-Text / TTS | — | ⚪ 不採用 (2026-05-04) | Gemini Multimodal が音声 + 映像を統合処理するため不要。WC-111 (ペアプロ音声) の用途は別途要再検討 |
+| Gemini 2.5 Pro Multimodal (動画入力) | ⚪ 不採用 (2026-06-10 縮退) | — | Reviewer Multimodal (録画→指摘抽出) は縮退削除。キラーシーンは **Orchestrator マルチエージェント + チケット種別ルールエンジン (17 観点) + 見積もりポーカー** に置換 |
+| Speech-to-Text / TTS | — | ⚪ 不採用 | 録画機能の縮退により用途消滅 |
 | Gemma / Imagen / Vision / NLP / Translation | — | ⚪ | 必要に応じて追加 |
 
 **充足条件**: 本物の Gemini 推論が `apps/orchestrator-py` 経由で1回でも走る (= ADK Runner で実際にトークンが生成される) こと。
@@ -67,8 +67,8 @@
 | 単機能ではない (複数ツール組み合わせ) | 🟢 充足 (Mock) | `packages/agent/src/runtime.ts` で `thought → tool_call → tool_result → output` の反復ループ実装。Mock LLM が儀式別に複数 tool call sequence を返す |
 | 自律的な判断と実行 | 🟡 計画 | 自律性レベル L0-L4 を `AGENT_DESIGN.md §4` で設計。デフォルト Daily=L3 / Planner=L2 / Refinement=L2 / Reviewer=L2 / Retro=L2 (Refinement Agent は 2026-05 に追加した5番目の儀式 agent) |
 | 自律トリガ (時間/イベント/閾値) | 🟡 計画 | Cloud Scheduler + Pub/Sub で「儀式30分前」「障害発生」「停滞検出」などを起動条件に設計 |
-| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済。**Multimodal 軸 (動画→チケット) は Gemini 2.5 Pro の独擅場**で「他 LLM でなく Gemini である必然性」が明確 |
-| マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / **Reviewer (Multimodal対応)** / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
+| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済。**Orchestrator が儀式の時刻で 5 Agent を編成する ADK マルチエージェント**が「他 LLM でなく Gemini である必然性」(宣言的編成) |
+| マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / Reviewer / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。各 Agent はチケット種別ルールエンジン (17 観点) を共有。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
 | ピッチ用デモ動画 | 🔴 未撮影 | 「自律的に動いた結果」を 90秒で見せる動画素材が無い。基準①の最大リスク |
 
 **リスク**: ピッチ時に「便利な要約Bot」と見えたら基準①敗北。デモシナリオ (`PITCH.md §4`) で90秒以内に "自律的に動いた結果" を見せられるかを2026-08-13 リハーサルで検証。
@@ -114,7 +114,7 @@
 | 拡張性 | 🟢 | LLMプロバイダ抽象 (`packages/llm/`) / Repository抽象 (`packages/repo/` の RepoContainer = tickets/sprints/projects/epics/stories/members/ceremonies/agentRuns/ceremonyHealth) / Tool factory (`buildTools(repo)`) ですべて差し替え式 |
 | 実運用への配慮 | 🟡 | Secret Manager / WIF / Cloud Logging / 課金アラート / OWASP リリースゲート (WC-110) を設計 |
 | コード品質 | 🟢 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 11 ワークスペース通過 (2026-06-09 確認) / **vitest 34 件 pass** (llm 15 + repo 19) + GitHub Actions CI で `pnpm test` 自動実行 / **zod runtime validation** (firestore.ts read 経路で safeParse + drift detection) / **prompts XML 構造化** (Anthropic Prompting 101 準拠、TS↔Python 同期) |
-| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini (テキスト + Multimodal) / ADK / Firestore / **Cloud Storage (Sprint Review 録画)** / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
+| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini + ADK (Orchestrator + 5 Agent) / Firestore / Cloud Storage (エージェントログ) / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
 | 多階層モノレポ構成 | 🟢 | TS workspace 9 packages + Python uv workspace 1 (orchestrator-py)。shared / seed / repo / tools / llm / agent の依存方向が一方向 (循環なし) |
 
 ---
@@ -186,7 +186,7 @@
 | Phase 1 全体: 手動 Belvedere SaaS 完成 | 2026-06-28 (改訂) | 🟡 Day0 完了で公開 URL 入手、残作業は CRUD 接続 + MCP デプロイ |
 | ピッチデモ動画 (旧 Phase 1-E) | 2026-07-08 (Phase 3 末) | 🟡 待機 (Proto Pedia 提出と一緒に撮影) |
 | Phase 2: Agent トリガ可視化 (Pub/Sub + Cloud Scheduler + Mock Agent + AI Panel) | 2026-06-30 | 🟡 配線設計済、Phase 1 完了が前提 |
-| Phase 3: Agent 本実装 (Gemini + ADK + Multimodal + RAG + GitHub 連携) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち。**応募提出 7/10 はこの中盤** |
+| Phase 3: Agent 本実装 (Gemini + ADK + Orchestrator Multi-Agent + RAG) | 2026-07-27 | 🟡 Mock 実装は機能、実 LLM 待ち。**応募提出 7/10 はこの中盤** |
 | Phase 4: 仕上げ + ピッチ (a11y / OWASP / 動画 / リハ) | 2026-08-19 | 🔴 ピッチ素材未着手 |
 
 ---
