@@ -26,10 +26,10 @@ export WEB_BASE_URL='https://belvedere-web-dev-cpszmcqmuq-an.a.run.app'
 export API_BASE_URL='https://belvedere-api-dev-cpszmcqmuq-an.a.run.app'
 
 # 3. テスト実行
-pnpm --filter @belvedere/e2e test
+pnpm --filter @belvedere/e2e e2e
 
 # 4. UI モード (デバッグ用)
-pnpm --filter @belvedere/e2e test:ui
+pnpm --filter @belvedere/e2e e2e:ui
 ```
 
 ## CI 実行 (GitHub Actions)
@@ -71,6 +71,7 @@ apps/e2e/
 | `failed to exchange custom token: 400 INVALID_CUSTOM_TOKEN` | SA 鍵と UID のプロジェクトが不一致 |
 | Playwright が画面要素を見つけられない | `pnpm --filter @belvedere/e2e test:ui` で UI モード起動して locator を確認 |
 | `failed to create ticket: 403 invitation_required` | robot UID が emailAllowlist で bootstrap されない。Stage 1 では owner の UID を robot として使う想定なので、その UID で必ず /login → ログイン経験させてから e2e 実行 |
+| CI ワークフロー (ci.yml) で playwright が起動して `Executable doesn't exist` | pnpm の script 名が "test" だと `pnpm -r test` に巻き込まれる。本パッケージは "e2e" に分離済 (2026-06-10)。新規 script 追加時も "test" は使わず "e2e" 系の名前を使う |
 
 ## 関連ドキュメント
 
