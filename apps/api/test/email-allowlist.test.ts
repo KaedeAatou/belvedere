@@ -24,6 +24,22 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
     // ハッカソンは個人参加要件があるので、会社ドメインは絶対 owner にしない
     expect(emailAllowlist['***company-email-redacted***']).toBeUndefined();
   });
+
+  it('robot-e2e@belvedere.test は ws-e2e-test owner として登録される (Stage 2)', () => {
+    const m = buildMemberFromAllowlist('firebase-uid-robot', 'robot-e2e@belvedere.test');
+    expect(m).not.toBeNull();
+    expect(m?.workspaceId).toBe('ws-e2e-test'); // 本番 ws-belvedere を汚さない
+    expect(m?.role).toBe('owner');
+    expect(m?.displayName).toBe('E2E Robot');
+  });
+
+  it('robot とユーザーは別 workspace に bootstrap される (本番データ汚染防止)', () => {
+    const me = buildMemberFromAllowlist('uid-1', 'mygolanglearn@gmail.com');
+    const robot = buildMemberFromAllowlist('uid-2', 'robot-e2e@belvedere.test');
+    expect(me?.workspaceId).toBe('ws-belvedere');
+    expect(robot?.workspaceId).toBe('ws-e2e-test');
+    expect(me?.workspaceId).not.toBe(robot?.workspaceId);
+  });
 });
 
 describe('workspace bootstrap シミュレーション (memory backend)', () => {
