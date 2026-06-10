@@ -15,7 +15,7 @@ import type {
   Ticket,
   Epic,
 } from '@belvedere/shared';
-import { generateId } from '@belvedere/shared';
+import { generateId, applyStatusTransition } from '@belvedere/shared';
 import { MCP_TOOLS } from './tools';
 
 // シングルトン (リクエスト毎に再初期化しない)
@@ -181,11 +181,9 @@ export async function callTool(
         }
         const existing = await repo.tickets.get(id);
         if (!existing) return errorResult(`ticket not found: ${id}`);
-        const updated: Ticket = {
-          ...existing,
-          status: to,
-          updatedAt: new Date().toISOString(),
-        };
+        if (existing.workspaceId !== workspaceId) return errorResult(`ticket not found: ${id}`);
+        // applyStatusTransition が startedAt (初回 in-progress) / completedAt (初回 done) を自動記録
+        const updated = applyStatusTransition(existing, to, new Date().toISOString());
         await repo.tickets.upsert(updated);
         return textResult(JSON.stringify({ from: existing.status, to, ticket: updated }, null, 2));
       }
