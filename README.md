@@ -63,7 +63,8 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 
 - 人がチケットを起票する。AI Agent は **DoD / SP / User Story 紐付け / valueImpact / Epic.rationale** の不足を検出し提案 (人が承認 / L2 自律性)
 - スクラムの **5 儀式 (Planning / Daily / Refinement / Review / Retrospective)** ごとに **専用画面** を持ち、儀式特有の形骸化シグナルを AI が診断 (Jira の 1 Sprint Board に対する差別化軸)
-- ⭐ Reviewer Agent が **Sprint Review 録画 (MP4) を Gemini Multimodal で直接読んで指摘抽出 → Ticket 起票候補生成**
+- ⭐ **Orchestrator** が儀式の時刻に合わせて 5 つの専門 Agent を編成 (ADK 宣言的マルチエージェント)。各 Agent は **チケット種別ルールエンジン (17 観点)** を共有
+- ⭐ **見積もりポーカー** を Belvedere 内で完結 (隠蔽投票 → 一斉開示 → 採用、AI が会を運営。スプレッドシート / 外部サイト不要)
 - ⭐ Refinement Agent の **第 6 観点「戦略整合性」** で Epic.rationale 欠落を検出
 - ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接呼べる (= AI Agent エコシステム統合)
 
@@ -118,7 +119,7 @@ ai-agent-hackathon/
 │   ├── repo/                # Repository 抽象 (memory ✅ / firestore は Phase 1-B)
 │   ├── llm/                 # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3)
 │   ├── agent/               # Agent runtime (thought→tool→output ループ)
-│   └── tools/               # Tool 実装 (refinement.check / quality.check / video.extractIssues 等)
+│   └── tools/               # Tool 実装 (refinement.check / quality.check / ticket.rules.check 等) + ticket-rules.ts (17 ルール)
 ├── infra/
 │   └── cloudbuild.yaml      # Cloud Build パイプライン (build / push / deploy 3 step)
 ├── .github/workflows/
