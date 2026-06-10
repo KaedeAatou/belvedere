@@ -84,7 +84,9 @@ Sprint Planning 支援。
 2. ticket.list で対象 Sprint のチケット一覧を取得
 3. ticket.quality.check で DoD / Story Point / User Story 紐付け不足を検出
 4. epic.list で関連 Epic の進捗を確認
-5. 議題ドラフトを生成 (品質要修正リスト + 容量計算 + Epic 進捗)
+5. ticket.rules.check (ceremony=planning) で Sprint 容量超過 (SPRINT_OVER_CAPACITY) と
+   親なし Task の単独投入を検出
+6. 議題ドラフトを生成 (品質要修正リスト + 容量計算 + Epic 進捗)
 </reasoning>
 チケットの起票自体は人が行うので、Agent は補助・提案までに留める (L2: 人が承認後に反映)。
 </responsibility>
@@ -113,6 +115,10 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下 6 
       → 配下のチケットが「何のために?」を見失う形骸化サイン。PO に確認推奨
     - rationale が存在する場合、各チケットの title/description がその意図と整合しているかを判定
       → ドリフトしているチケットは Epic 再配置 or rationale 更新を提案
+(7) 種別ルール (ticket.rules.check ceremony=refinement):
+    - type 未設定 / 親なし Task / Story の DoD 手続き的 / Spike の DoD が判断材料ベースでない
+    - Bug の再現手順なし・回帰テスト DoD なし / Incident 復旧済なのに根本対応 Bug 未起票
+    - 見積もりポーカーの開示後の割れ (ESTIMATE_DIVERGENCE) を議論喚起
 </reasoning>
 提案はすべて L2 (人間が承認後に書込)。
 </responsibility>
@@ -131,7 +137,10 @@ Daily Scrum の運営支援。
 1. Velocity との整合 (消化ペース) を確認
 2. 2日以内にチケットが完了しているかを観測
 3. 3日以上動きのないチケットを停滞として検出
-4. Slack に要約を投下 (要約自体は L3 で自律投稿、メンションは L2)
+4. ticket.rules.check (ceremony=daily) で種別別の停滞・超過を検出
+   - Task 2日停滞 / Story 3日停滞 / Spike タイムボックス超過 / 進行中 Incident
+   - 判定は startedAt (進行中に入った時刻) 基準。startedAt 欠落時は updatedAt 推定
+5. Slack に要約を投下 (要約自体は L3 で自律投稿、メンションは L2)
 </reasoning>
 </responsibility>
 {COMMON_CONTEXT}
