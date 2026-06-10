@@ -12,6 +12,7 @@ import type {
   UserStory,
   Project,
   Ritual,
+  EstimationSession,
 } from '@belvedere/shared';
 import { stripUndefined } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
@@ -25,6 +26,7 @@ import type {
   CeremonyRepository,
   AgentRunRepository,
   CeremonyHealthRepository,
+  EstimationRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -151,6 +153,18 @@ class MemCeremonyHealthRepo implements CeremonyHealthRepository {
   async add(s: CeremonyHealthScore): Promise<void> { this.store.push(s); }
 }
 
+class MemEstimationRepo implements EstimationRepository {
+  private store = new Map<string, EstimationSession>();
+  async list(opts: { workspaceId: string; ticketId?: string; status?: EstimationSession['status'] }): Promise<EstimationSession[]> {
+    let xs = [...this.store.values()].filter((s) => s.workspaceId === opts.workspaceId);
+    if (opts.ticketId) xs = xs.filter((s) => s.ticketId === opts.ticketId);
+    if (opts.status) xs = xs.filter((s) => s.status === opts.status);
+    return xs;
+  }
+  async get(id: string): Promise<EstimationSession | null> { return this.store.get(id) ?? null; }
+  async upsert(s: EstimationSession): Promise<void> { this.store.set(s.id, stripUndefined({ ...s })); }
+}
+
 export function createMemoryRepoContainer(): RepoContainer {
   return {
     tickets: new MemTicketRepo(seedTickets),
@@ -162,5 +176,6 @@ export function createMemoryRepoContainer(): RepoContainer {
     ceremonies: new MemCeremonyRepo(),
     agentRuns: new MemAgentRunRepo(),
     ceremonyHealth: new MemCeremonyHealthRepo(),
+    estimations: new MemEstimationRepo(),
   };
 }
