@@ -48,30 +48,35 @@ export const test = base.extend<AuthedFixtures>({
     const customToken = await mintCustomToken(robotUid);
 
     // ブラウザに Web SDK を読み込ませてから signInWithCustomToken を実行
-    // (Web ページ上にすでに firebase JS SDK が bundle されていることが前提)
+    // (apps/web/composables/useFirebase.ts が window.__belvedereFirebase を露出済)
+    //
+    // 注意: page.evaluate 内の `await import('firebase/auth')` は bare specifier 解決不可
+    // (ブラウザのモジュール解決を使うため、Nuxt/Vite の bundle 経路に乗らない)。
+    // 代わりに window scope に露出した signInWithCustomToken を使う。
     await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
-    // ブラウザコンテキストで Firebase auth を初期化 + custom token でログイン
-    const signInError = await page.evaluate(
-      async ({ customToken, projectId }) => {
-        try {
-          // /login ページが既に firebase をロード済 (composables/useFirebase.ts)
-          const { getAuth, signInWithCustomToken } = await import('firebase/auth');
-          const auth = getAuth();
-          if (!auth.app.options.projectId) {
-            return `Firebase not initialized correctly (projectId expected ${projectId})`;
-          }
-          await signInWithCustomToken(auth, customToken);
-          return null;
-        } catch (e) {
-          return (e as Error).message;
-        }
-      },
-      { customToken, projectId },
+    // useFirebase composable が走るまで少し待つ (Nuxt hydration)
+    await page.waitForFunction(
+      () => typeof (window as unknown as { __belvedereFirebase?: { signInWithCustomToken?: (t: string) => Promise<unknown> } }).__belvedereFirebase?.signInWithCustomToken === 'function',
+      undefined,
+      { timeout: 15_000 },
     );
 
+    const signInError = await page.evaluate(async (customToken) => {
+      try {
+        const fb = (window as unknown as { __belvedereFirebase?: { signInWithCustomToken: (t: string) => Promise<unknown> } }).__belvedereFirebase;
+        if (!fb || typeof fb.signInWithCustomToken !== 'function') {
+          return 'window.__belvedereFirebase.signInWithCustomToken not available';
+        }
+        await fb.signInWithCustomToken(customToken);
+        return null;
+      } catch (e) {
+        return (e as Error).message;
+      }
+    }, customToken);
+
     if (signInError) {
-      throw new Error(`Firebase signInWithCustomToken failed: ${signInError}`);
+      throw new Error(`Firebase signInWithCustomToken failed: ${signInError} (projectId=${projectId})`);
     }
 
     // ログイン完了 → / に遷移して onAuthStateChanged の処理を確実に通す
