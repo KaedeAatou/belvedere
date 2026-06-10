@@ -101,16 +101,21 @@ async function main(): Promise<void> {
 
   const client = createTicketClient({ apiBaseUrl, idToken });
 
-  for (const f of failures) {
+  // 同 testName の重複起票防止のため、同じ test が複数 retry で出てきた時は dedupe
+  const uniqueFailures = Array.from(new Map(failures.map((f) => [f.name, f])).values());
+  console.log(`[post-failure-tickets] ${failures.length} failure rows → ${uniqueFailures.length} unique tests`);
+
+  for (const f of uniqueFailures) {
     try {
       const result = await client.createFailureTicket({
         testName: f.name,
         runUrl,
         errorMessage: f.error,
       });
-      console.log(`[post-failure-tickets] created ticket ${result.id} for "${f.name}"`);
+      const verb = result.isNew ? 'created' : 'appended';
+      console.log(`[post-failure-tickets] ${verb} ticket ${result.id} for "${f.name}"`);
     } catch (e) {
-      console.error(`[post-failure-tickets] failed to create ticket for "${f.name}": ${(e as Error).message}`);
+      console.error(`[post-failure-tickets] failed for "${f.name}": ${(e as Error).message}`);
     }
   }
 }
