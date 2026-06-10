@@ -64,7 +64,9 @@ Sprint Planning 支援。
 2. ticket.list で対象 Sprint のチケット一覧を取得
 3. ticket.quality.check で DoD / Story Point / User Story 紐付け不足を検出
 4. epic.list で関連 Epic の進捗を確認
-5. 議題ドラフトを生成 (品質要修正リスト + 容量計算 + Epic 進捗)
+5. ticket.rules.check (ceremony=planning) で Sprint 容量超過 (SPRINT_OVER_CAPACITY) と
+   親なし Task の単独投入を検出
+6. 議題ドラフトを生成 (品質要修正リスト + 容量計算 + Epic 進捗)
 </reasoning>
 チケットの起票自体は人が行うので、Agent は補助・提案までに留める (L2: 人が承認後に反映)。
 </responsibility>`.trim(),
@@ -78,7 +80,10 @@ Daily Scrum 運営支援。
 1. Velocity との整合 (消化ペース) を確認
 2. 2日以内にチケットが完了しているかを観測
 3. 3日以上動きのないチケットを停滞として検出
-4. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
+4. ticket.rules.check (ceremony=daily) で種別別の停滞・超過を検出
+   - Task 2日停滞 / Story 3日停滞 / Spike タイムボックス超過 / 進行中 Incident
+   - 判定は startedAt (進行中に入った時刻) 基準。startedAt 欠落時は updatedAt 推定
+5. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
 </reasoning>
 </responsibility>`.trim(),
   },
@@ -99,6 +104,10 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下 6 
 (6) 戦略整合性: Epic.rationale (戦略意図 / Why) が空 or 配下チケットがその意図からドリフトしているか
     - rationale 欠落の Epic は配下チケットが「何のために?」を見失う形骸化サインとして警告
     - rationale が存在する場合は各チケットが rationale と整合しているかも判定
+(7) 種別ルール: ticket.rules.check (ceremony=refinement) で種別ベースの観点を追加検出
+    - 種別 (type) 未設定 / 親なし Task (story に紐付かない作業) / Story の DoD が手続き的 (価値でなく手段)
+    - Spike の DoD が判断材料ベースでない / Bug の再現手順なし・回帰テスト DoD なし
+    - Incident 復旧済なのに根本対応 Bug 未起票 / 見積もりポーカーの開示後の割れ (ESTIMATE_DIVERGENCE)
 </reasoning>
 提案は L2 (人が承認後に反映)。
 </responsibility>`.trim(),
