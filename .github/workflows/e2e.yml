@@ -1,0 +1,94 @@
+name: E2E (Playwright + Belvedere auto-ticket)
+
+# トリガ:
+# - deploy-api / deploy-web 完了後に自動起動 (workflow_run トリガ)
+# - 手動 (workflow_dispatch)
+#
+# 動作:
+# 1. Cloud Run dev 環境を baseURL に Playwright 実行
+# 2. 失敗時は失敗したテスト 1 件ごとに Belvedere に POST /api/tickets で自動起票
+#    title: "🤖 [E2E Failure] <testName>"
+# 3. GitHub Actions artifact に Playwright HTML report / trace / screenshot をアップロード
+#
+# Stage 1: 1 シナリオ (login → /settings/profile)。Stage 2 で Backlog 等追加。
+# Stage 3: 重複起票防止 (同 testName で open チケットあれば PATCH に切替)。
+
+on:
+  workflow_run:
+    workflows: ['Deploy Web to Cloud Run', 'Deploy API to Cloud Run']
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WEB_BASE_URL: https://belvedere-web-dev-cpszmcqmuq-an.a.run.app
+  API_BASE_URL: https://belvedere-api-dev-cpszmcqmuq-an.a.run.app
+
+jobs:
+  e2e:
+    name: Playwright e2e + auto-ticket on fail
+    runs-on: ubuntu-latest
+    # workflow_run トリガ時は deploy が成功している時だけ実行
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @belvedere/e2e exec playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        id: tests
+        env:
+          WEB_BASE_URL: ${{ env.WEB_BASE_URL }}
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+          FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SA_KEY }}
+          E2E_ROBOT_UID: ${{ secrets.E2E_ROBOT_UID }}
+          E2E_ROBOT_EMAIL: ${{ secrets.E2E_ROBOT_EMAIL }}
+        run: pnpm --filter @belvedere/e2e test
+        continue-on-error: true
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-${{ github.run_id }}
+          path: apps/e2e/playwright-report
+          retention-days: 14
+
+      - name: Upload Playwright test results (trace / screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results-${{ github.run_id }}
+          path: apps/e2e/test-results
+          retention-days: 14
+
+      - name: Auto-create Belvedere ticket on failure
+        if: steps.tests.outcome == 'failure'
+        env:
+          API_BASE_URL: ${{ env.API_BASE_URL }}
+          FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SA_KEY }}
+          E2E_ROBOT_UID: ${{ secrets.E2E_ROBOT_UID }}
+          GH_RUN_URL: ${{ format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
+        run: pnpm --filter @belvedere/e2e exec tsx utils/post-failure-tickets.ts
+
+      - name: Fail job if tests failed (after ticket creation)
+        if: steps.tests.outcome == 'failure'
+        run: exit 1
