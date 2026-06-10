@@ -151,11 +151,11 @@ commit 分割: (1) prompts+agents.py / (2) tools+mock / (3) shared types+schemas
 
 各画面 commit ごとに §6 ゲート + `pnpm --filter @belvedere/e2e e2e` をローカル実行 (FIREBASE_SA_KEY 必要、無ければ push 後 CI で確認)。
 
-### R4: チケット種別の導入 (1 日)
+### R4: チケット種別の導入 → **`docs/design-ticket-types.md` に拡張置換 (2026-06-10)**
 
-> 2026-06-10 にユーザーと合意した分類: **Story / Task / Spike / Bug / Incident** (NFR / Enabler / Impediment は不採用)。
-> 詳細仕様 (各種別に何を書くか / どの儀式でどの AI が何を監査するか) は会話ログ参照。
-> docs 永続化として `docs/agile-knowledge-base/ticket-types.md` を本フェーズ冒頭で書くこと。
+> 本フェーズは見積もりポーカー込みの詳細設計書 `docs/design-ticket-types.md` (T1〜T8) に置き換えた。
+> 実行モデルはそちらに従うこと。以下の旧手順表は参考情報として残す (設計書と矛盾したら設計書が正)。
+> 合意済み分類: **Story / Task / Spike / Bug / Incident** (NFR / Enabler / Impediment は不採用)。
 
 | 手順 | 内容 |
 |---|---|
