@@ -33,6 +33,7 @@ import {
 } from './handlers/ticket-handlers';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
+import { getFindings } from './handlers/finding-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -151,6 +152,11 @@ app.get('/api/epics/:id', async (c) => {
 app.get('/api/members', async (c) => {
   const workspaceId = c.get('workspaceId');
   return c.json(await repo.members.list({ workspaceId }));
+});
+
+// ルールエンジン findings (UI バッジ / AI Integrity Panel 用、T4)
+app.get('/api/findings', async (c) => {
+  return respond(c, await getFindings(repo, buildCtx(c), c.req.query('ceremony')));
 });
 
 // ------- /api/* CRUD endpoints (Phase 1-C / 2026-06-11) -------
