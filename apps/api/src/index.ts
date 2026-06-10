@@ -31,6 +31,7 @@ import {
   type HandlerResult,
 } from './handlers/ticket-handlers';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
+import { getMe, patchMember } from './handlers/member-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -172,6 +173,13 @@ app.post('/api/epics', async (c) => {
 app.patch('/api/epics/:id', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
   return respond(c, await patchEpic(repo, buildCtx(c), c.req.param('id'), body));
+});
+
+// Phase 1-C: 自分自身の Member 取得 + displayName 編集
+app.get('/api/me', async (c) => respond(c, await getMe(repo, buildCtx(c))));
+app.patch('/api/members/:userId', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchMember(repo, buildCtx(c), c.req.param('userId'), body));
 });
 
 // ------- /api/agents/:name (エージェント実行) -------
