@@ -55,8 +55,8 @@ graph TB
         ORC["orchestrator<br/>(gemini-2.5-flash)"]
         AG_P["agent-planner<br/>FLOOR 01"]
         AG_D["agent-daily<br/>FLOOR 02"]
-        AG_F["agent-refinement<br/>FLOOR 03 (6観点診断)"]
-        AG_R["agent-reviewer<br/>FLOOR 04 ⭐Multimodal"]
+        AG_F["agent-refinement<br/>FLOOR 03 (6観点 + 種別ルール)"]
+        AG_R["agent-reviewer<br/>FLOOR 04"]
         AG_X["agent-retrospective<br/>FLOOR 05"]
         TOOL["tool-server<br/>Slack/GitHub/Calendar"]
         MCP["mcp-server (FLOOR M)<br/>stdio + HTTP / 11 Tools"]
@@ -114,8 +114,6 @@ graph TB
     TOOL --> U2 & U3
     AG_P & AG_D & AG_F & AG_R & AG_X --> FS
     AG_P & AG_D & AG_F & AG_R & AG_X --> VS
-    AG_R -.動画 Multimodal.-> GEM
-    AG_R -.録画取得.-> GCS
     SCHED -.儀式30分前.-> ORC
     PUBSUB --> ORC
     ORC -.fan-out.-> AG_P & AG_D & AG_F & AG_R & AG_X
@@ -151,7 +149,7 @@ graph TB
 | 🟡 implemented | MCP | stdio mode で 11 Tools 実装 / smoke test 14/14 / HTTP deploy は Phase 1-D |
 | 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
 | 🟡 implemented | FS | Firestore (default) instance 作成済 / データ投入は Phase 1-B |
-| 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / Sprint Review 録画 bucket は Phase 2 |
+| 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
 | ⚪ planned | TOOL | Slack / GitHub Tool server (Phase 3) |
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
 | ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
@@ -256,7 +254,7 @@ ai-agent-hackathon/
 │   ├── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / 5 members)
 │   ├── repo/             # Repository 抽象 (memory ✅ / firestore は Phase 1-B で実装)
 │   ├── llm/              # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3 で実装)
-│   ├── tools/            # buildTools(repo) factory (10 Tools + video.extractIssues)
+│   ├── tools/            # buildTools(repo) factory (10 Tools) + ticket-rules.ts (17 ルール)
 │   └── agent/            # Agent runtime (Tool 呼び出しループ + 6 ロール prompts)
 ├── infra/
 │   └── cloudbuild.yaml   # Cloud Build パイプライン (--allow-unauthenticated は Phase 1-A だけ)
