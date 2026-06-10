@@ -61,7 +61,7 @@ jobs:
           FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SA_KEY }}
           E2E_ROBOT_UID: ${{ secrets.E2E_ROBOT_UID }}
           E2E_ROBOT_EMAIL: ${{ secrets.E2E_ROBOT_EMAIL }}
-        run: pnpm --filter @belvedere/e2e test
+        run: pnpm --filter @belvedere/e2e e2e
         continue-on-error: true
 
       - name: Upload Playwright report
