@@ -4,9 +4,30 @@
 import { test, expect } from '../fixtures/auth.fixture';
 import { SettingsProfilePage } from '../pages/SettingsProfilePage';
 
+test('/api/me が token 込みで 200 を返す (Backlog 動作と整合性確認)', async ({ authedPage, apiBaseUrl }) => {
+  // Backlog test では /api/tickets が動いてるのに profile が失敗する場合に切り分け用
+  await authedPage.goto('/', { waitUntil: 'networkidle' });
+  const result = await authedPage.evaluate(async (base: string) => {
+    const fb = (window as unknown as { __belvedereFirebase?: { auth?: { currentUser?: { getIdToken: () => Promise<string> } } } }).__belvedereFirebase;
+    const token = await fb?.auth?.currentUser?.getIdToken();
+    if (!token) return { status: -1, body: 'no token' };
+    const r = await fetch(`${base}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    return { status: r.status, body: await r.text() };
+  }, apiBaseUrl);
+  console.log('[debug] /api/me:', result.status, result.body.slice(0, 200));
+  expect(result.status, `body=${result.body}`).toBe(200);
+});
+
 test('settings/profile で email/role/workspace 表示 + Whoami debug で owner role 確認', async ({ authedPage }) => {
   const profile = new SettingsProfilePage(authedPage);
   await profile.open();
+
+  // 取得失敗時はエラー文言が出るのでそれを先に確認 (debug 容易性)
+  const errorVisible = await authedPage.getByText(/プロフィール取得失敗/).isVisible().catch(() => false);
+  if (errorVisible) {
+    const errorText = await authedPage.getByText(/プロフィール取得失敗/).textContent();
+    throw new Error(`profile fetch failed in UI: ${errorText}`);
+  }
 
   await expect(profile.roleBadge).toContainText('owner', { ignoreCase: true });
   await expect(authedPage.getByText('ws-belvedere')).toBeVisible();
