@@ -47,3 +47,5 @@ docs/autonomous-run.md に従って夜間連続実行を開始して。
 | 2026-06-10 夜 | R2 | ✅ 完了 / CI 緑 | (R2-1)+(R2-2) e1dcb54 系 | D3: stripUndefined を shared/utils.ts に統一 (stripUndefined/stripUndefinedPartial の 2 関数 + shared に vitest test 新設)。D4: ID 採番を generateId(prefix) に一元化 (3 箇所→1)。test 96/96 (shared 7 追加) |
 | 2026-06-11 未明 | T1 | ✅ 完了 | (T1) | references/agile-knowledge-base/ticket-types.md 新設 (5 種別 + AI 監査マトリクス + ポーカー運営方針)。配置は計画の docs/ ではなく既存兄弟と同じ references/ |
 | 2026-06-11 未明 | T2 | ✅ 完了 / CI 緑 | 4abb03e 系 (3 commit) | Ticket 6 フィールド + EstimationSession entity + applyStatusTransition (status 自動スタンプ 3 経路) + seed type 分類 (WC-108 未設定/WC-103 親なし task/WC-105 startedAt = デモ不備)。test 102/102。MISMATCH_SPIKE_TITLE の seed デモは title 変更不可のため見送り (rule は T3 で実装) |
+| 2026-06-11 未明 | T3 | ✅ 完了 / CI 緑 | 497d5df | ticket-rules.ts 17 ルール宣言的レジストリ + runTicketRules + unit test 33。tools に test script 追加。test 135/135 |
+| 2026-06-11 未明 | T4 | ✅ 完了 / CI 緑 | 3ea6f04 系 (2 commit) | ticket.rules.check ツール + backlogRefinement へ additive 合成 + GET /api/findings + prompts/agents.py 種別観点追記。mock-llm-reviewer / prompt-quality-reviewer 両 OK。test 140/140 |
