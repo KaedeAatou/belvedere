@@ -185,7 +185,7 @@ describe('memory backend - tickets where filters', () => {
       // 以下は intentionally undefined
       valueImpact: undefined,
       ritual: undefined,
-      sourceQuote: undefined,
+      assigneeId: undefined,
       createdAt: '2026-06-09T00:00:00Z',
       updatedAt: '2026-06-09T00:00:00Z',
       createdBy: 'human',
@@ -196,7 +196,7 @@ describe('memory backend - tickets where filters', () => {
     // undefined フィールドはキーごと消える (Firestore と同じ shape)
     expect('valueImpact' in got).toBe(false);
     expect('ritual' in got).toBe(false);
-    expect('sourceQuote' in got).toBe(false);
+    expect('assigneeId' in got).toBe(false);
     // 必須フィールドは残る
     expect('title' in got).toBe(true);
     expect(got.title).toBe('parity check');
