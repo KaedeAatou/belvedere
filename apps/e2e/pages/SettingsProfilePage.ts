@@ -29,7 +29,9 @@ export class SettingsProfilePage extends BasePage {
 
   async open(): Promise<void> {
     await this.goto('/settings/profile');
-    await expect(this.page.getByText('プロフィール')).toBeVisible({ timeout: 15_000 });
+    // strict mode 対策: 「プロフィール」テキストは h2 と「プロフィール取得失敗: ...」error メッセージ
+    // の両方にマッチする可能性がある (取得失敗時)。heading role 限定で h2 だけを掴む。
+    await expect(this.page.getByRole('heading', { name: 'プロフィール' })).toBeVisible({ timeout: 15_000 });
   }
 
   async getRole(): Promise<string> {
