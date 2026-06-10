@@ -41,3 +41,5 @@ docs/autonomous-run.md に従って夜間連続実行を開始して。
 
 | 日時 | フェーズ | 結果 | commit | メモ |
 |---|---|---|---|---|
+| 2026-06-10 夜 | R1-1 (code) | ✅ 完了 / CI 緑 | a804037 / 9360db5 / bd9a675 | Reviewer Multimodal 死骸をコードから完全除去 (prompts/agents.py/tools/mock/shared/repo-test/py-types)。mock-llm-reviewer が natural output 側の取り残しを検出・修正。typecheck 11/11 test 91/91 |
+| 2026-06-10 夜 | R1-1 (docs) | ⏸ エスカレーション | — | §7 該当: PITCH.md の Multimodal キラーシーン / 「Gemini である必然性」差別化が訴求判断。5 docs に技術仕様と訴求が密結合。代替訴求 (Orchestrator 中心) はユーザー/Fable 判断のため未着手。コード側で実害 (動作中 AI の虚偽説明) は消滅済 |
