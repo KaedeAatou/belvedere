@@ -135,19 +135,63 @@ commit 分割: (1) prompts+agents.py / (2) tools+mock / (3) shared types+schemas
 
 検証: 両方とも §6 標準ゲート + `pnpm --filter @belvedere/api test` で CRUD 21 case 緑。
 
-### R3: Demo/Live データ統一 (1.5 日 / = Phase 1-C 本体)
+### R3: Demo/Live データ統一 (1.5-2 日 / = Phase 1-C 本体)
 
-> これは「リファクタリング」ではなく Phase 1-C の残り本体。ROADMAP の 1-C 枠 (〜6/19) で実行。
+> これは「リファクタリング」ではなく Phase 1-C の残り本体。ROADMAP の 1-C 枠で実行。
+> **前提: T2 (Ticket.type / startedAt 等) 完了後に着手** (フィールド対応表が type / startedAt を使うため)。
+
+**R3-0: 確定済みの設計判断 (実行モデルはこの通りに作る。変えたければ §7 エスカレーション)**
+
+1. デモ画面の `BLV-2xx` チケット (Designer 製の架空データ) は**廃棄**し、全画面が `/api/tickets`
+   (= Firestore の WC seed + ユーザー作成分) を描画する。見た目の賑やかさは一時的に下がってよい
+2. `DemoTicket` → shared `Ticket` のフィールド対応表:
+
+| DemoTicket | shared Ticket | 備考 |
+|---|---|---|
+| id | id | |
+| type | type | T2 で導入済 |
+| title | title | |
+| actor / goal | (廃止) | description の As a / I want / So that 散文に集約。画面の actor/goal 表示列は削除 |
+| sp | estimatePt | |
+| status 'TODO' | 'todo' | |
+| status 'DOING' | 'in-progress' | |
+| status 'REVIEW' | 'review' | |
+| status 'DONE' | 'done' | |
+| status 'BLOCKED' | **(廃止)** | shared Status に blocked は無い。`labels` に `'blocked'` を含むことで表現。ボード列としての BLOCKED 列は削除 |
+| assignee 'u1'.. | assigneeId | members API の userId ('kaede' 等) に置換 |
+| sprint 'S24' | sprintId | active sprint (sprints API で `status==='active'`、= seed の sprint-13) との一致で判定 |
+| started / lastUpdate | startedAt / updatedAt | T2 で自動記録化済 |
+| acceptance | acceptanceCriteria | |
+| flags | **暫定ローカル計算** | 下記 3 参照 |
+
+3. `flags` は暫定ヘルパ `computeLocalFlags(t: Ticket): string[]` (新規 `apps/web/composables/useFlags.ts`)
+   で算出し、既存 `FLAG_DEFS` の key にマップする (FLAG_DEFS と FlagPill は見た目ごと温存):
+   `no-points` (type==='story' && estimatePt==null) / `no-acceptance` (AC 空) / `oversized` (estimatePt>8) /
+   `stale` (updatedAt から 7 日超) / `long-doing` (in-progress && startedAt から 2 日超) /
+   `missing-owner` (!assigneeId && sprintId あり)。
+   → **T5 で `GET /api/findings` (ルールエンジン) に差し替える**。それまでの仮実装
+4. `SPRINT` 定数 → sprints API から導出。ヘッダ等の「S24」表記は active sprint の `number` から
+   `S${number}` を組み立て (seed では S13 になる)。velocity の架空配列 [22,26..] は廃止し、
+   sprints の `velocity` 実値のみ描画 (1 点でも可。グラフが寂しくなるのは許容)
+5. `TEAM` (u1-u6) → `/api/members` を fetch する `useMembers.ts` (新規 composable、useTickets と同パターン)。
+   `Avatar` の initials は `displayName.charAt(0)`
+6. `SCREENS` / `CEREMONIES` / `ScreenId` / `FLAG_DEFS` は demo data ではなく UI 定数 →
+   新規 `apps/web/composables/useUiMeta.ts` に移し、`useDemoData.ts` は最後に削除
+
+**R3-1: 実行手順 (画面単位で 1 commit、各 commit 後に検証ゲート + push + CI 確認)**
 
 | 手順 | 内容 |
 |---|---|
-| 1 | **seed を実データとして Firestore に置く方針を確認** (既に seed-firestore script あり)。UI は demo data ではなく `/api/tickets` を正とする |
-| 2 | `apps/web/composables/useTickets.ts` を拡張: patch / delete / changeStatus を追加 (API は実装済) |
-| 3 | `DemoTicket` 型 → shared `Ticket` 型への置換を **画面単位で 1 commit ずつ**: BacklogScreen → DailyScreen → PlanningScreen → ReviewScreen → RetroScreen の順 |
-| 4 | 各画面の置換時、`Status` 大文字 (`'TODO'`) → shared 小文字 (`'todo'`) のマッピングを除去し、`StatusDot` / `TicketRow` / `DetailSheet` 等 primitives も shared 型に寄せる |
-| 5 | `useChecks.ts` (AI Integrity の静的 check) は Phase 2 でリアル配線するため、**型だけ** shared に寄せて中身は維持 |
-| 6 | 全画面置換後、`useDemoData.ts` から DemoTicket 配列を削除 (TEAM / SCREENS / CEREMONIES 等の UI 定数は `useUiMeta.ts` 等に移して維持) |
-| 7 | e2e の Backlog Page Object を「Live セクション」前提から「全体が Live」前提に更新。`data-testid` は維持 |
+| 1 | `useTickets.ts` 拡張: `patchTicket` / `deleteTicket` / `changeStatus` を追加 (API 実装済の PATCH/DELETE/status を呼ぶ。useMe と同パターン)。`useMembers.ts` / `useFlags.ts` / `useUiMeta.ts` 新設 |
+| 2 | **BacklogScreen**: demo 2 セクション (Sprint 24 / Backlog) を live データに置換。分割条件は `sprintId === activeSprint.id` / `!sprintId`。「Live (実 API)」区画はメイン一覧に昇格。**`data-testid` (new-ticket-btn / create-dialog / new-ticket-title / new-ticket-priority / submit-create / live-section / live-ticket) は全部維持** — e2e backlog.spec 3 本がこの testid を使う |
+| 3 | **DailyScreen**: ボード列を todo / in-progress / review / done の 4 列に (BLOCKED 列削除)。`@move` → `useTickets.changeStatus` (PATCH) + 楽観更新。これで「チケットを動かす」が実 API 永続化される |
+| 4 | **PlanningScreen** / **ReviewScreen**: 同様に shared Ticket 化。actor/goal 表示は削除 or description 先頭行で代替 |
+| 5 | **RetroScreen**: tickets を受けないので型追従のみ |
+| 6 | primitives (`TicketRow` / `DetailSheet` / `StatusDot` / `StoryPoints` / `TypeMark` / `FlagPill` / `Avatar`) と `AIPanel` / `useChecks.ts` を shared Ticket 型に追従。**レイアウト / CSS は変更しない** (型と data 取得経路の置換に限定) |
+| 7 | `useDemoData.ts` 削除 + `grep -rn "DemoTicket\|useDemoData" apps/web` で残骸ゼロ確認 |
+| 8 | e2e: BacklogPage の意味づけ更新 (「Live セクション = メイン一覧」)。profile.spec は無影響のはず。push 後 CI の e2e 6 本緑を確認 |
+
+検証: 各 commit で §6 ゲート。最終 commit 後に本番 URL で Backlog / Daily の表示と status 移動を CI e2e で確認。
 
 各画面 commit ごとに §6 ゲート + `pnpm --filter @belvedere/e2e e2e` をローカル実行 (FIREBASE_SA_KEY 必要、無ければ push 後 CI で確認)。
 
