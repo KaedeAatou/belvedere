@@ -91,9 +91,13 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 4 日前倒し完了で Phase 1-C 着手が 6/11 に早まる。
 
 ### Phase 1-C Web UI CRUD / 6/11 〜 6/19 (Phase 1-B 前倒し完了で 9 日確保)
-- [ ] チケット詳細画面で **編集 / status 変更 / Epic 紐付け / SP 設定** が Firestore に永続化
-- [ ] バックログから新規チケット起票
-- [ ] Sprint 切替 / Epic 一覧 / メンバ表示が実データで動く
+- [x] バックログから新規チケット起票 (Live セクション + 作成ダイアログ / 2026-06-10)
+- [x] e2e 基盤 Stage 1-3 (Playwright + 失敗時 Belvedere 自動起票 + 重複防止 / 2026-06-10 前倒し)
+- [ ] **R1: Reviewer Multimodal 死骸の除去 + 死設定掃除** (docs/refactoring-plan.md / 案 A 承認 2026-06-10)
+- [ ] **R2: stripUndefined / ID 採番の重複排除** (同上)
+- [ ] チケット詳細画面で **編集 / status 変更 / Epic 紐付け / SP 設定** が Firestore に永続化 (= R3 Demo/Live 統一)
+- [ ] Sprint 切替 / Epic 一覧 / メンバ表示が実データで動く (= R3)
+- [ ] **R4: チケット種別導入 (Story/Task/Spike/Bug/Incident) + Refinement 新 3 観点** (1-C 末尾)
 - [ ] AI Integrity Panel は **空の枠だけ** (Phase 2 で配線)
 
 ### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
