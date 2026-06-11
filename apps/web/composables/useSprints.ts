@@ -36,5 +36,24 @@ export const useSprints = () => {
       .map((s) => ({ number: s.number, velocity: s.velocity as number })),
   );
 
-  return { sprints, activeSprint, velocityHistory, isLoading, error, fetchSprints };
+  /** 計画中スプリント (status==='planned'、number 昇順)。Planning で次スプリントを練る対象。 */
+  const plannedSprints = computed(() => sprints.value.filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number));
+  /** 直近の次スプリント (最小 number の planned)。無ければ null。 */
+  const nextPlanned = computed<Sprint | null>(() => plannedSprints.value[0] ?? null);
+
+  type SprintEdit = { goal?: string; startsAt?: string; endsAt?: string };
+
+  /** goal / 期間の編集 (status は変えない)。成功後に再 fetch して画面へ反映。 */
+  async function patchSprint(id: string, body: SprintEdit): Promise<void> {
+    await api.patch<Sprint>(`/api/sprints/${id}`, body as Record<string, unknown>);
+    await fetchSprints();
+  }
+
+  /** planned スプリントを開始 (active 化)。現 active は completed + velocity 確定。成功後に再 fetch。 */
+  async function startSprint(id: string, body: SprintEdit): Promise<void> {
+    await api.post<{ started: Sprint; completed: Sprint | null }>(`/api/sprints/${id}/start`, body as Record<string, unknown>);
+    await fetchSprints();
+  }
+
+  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, isLoading, error, fetchSprints, patchSprint, startSprint };
 };
