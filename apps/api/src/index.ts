@@ -32,6 +32,7 @@ import {
   type HandlerResult,
 } from './handlers/ticket-handlers';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
+import { patchSprint, startSprint } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
 import { getFindings } from './handlers/finding-handlers';
 import {
@@ -204,6 +205,16 @@ app.patch('/api/tickets/:id/status', async (c) => {
 });
 app.delete('/api/tickets/:id', async (c) => {
   return respond(c, await deleteTicket(repo, buildCtx(c), c.req.param('id')));
+});
+
+// Sprint の goal/期間編集 + 開始 (Planning でゴール先行プランニング、owner/sm/po のみ / 2026-06-11)
+app.patch('/api/sprints/:id', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchSprint(repo, buildCtx(c), c.req.param('id'), body));
+});
+app.post('/api/sprints/:id/start', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await startSprint(repo, buildCtx(c), c.req.param('id'), body));
 });
 
 app.post('/api/epics', async (c) => {
