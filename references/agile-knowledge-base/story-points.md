@@ -111,19 +111,22 @@ Velocity = (SP[s-1] + SP[s-2] + SP[s-3]) / 3
 
 Belvedere `Sprint.velocity` フィールドはこれを保持。
 
-### 7-2. Sprint Planning でのキャパシティ計算
+### 7-2. Sprint Planning での velocity 比較
 
 ```
-今スプリントで取れる SP = Velocity × 利用可能率
-利用可能率 = 1 - (休暇 + 会議 + 割り込み) / 営業日数
+計画 SP の積み上げ (ΣSP) を直近の velocity 実績と直接比較する。
+ΣSP > velocity なら過剰計画 (over-commit) のサイン。
 ```
 
-Belvedere Planner Agent はこの計算を支援:
+> 時間稼働ベースの capacity (Velocity × 利用可能率) は採用しない。相対見積もり (Story Point) が
+> チームの変動を吸収するため、ΣSP を velocity と直接比べる方がシンプルで誤差が少ない。
+
+Belvedere Planner Agent はこの比較を支援:
 
 ```
-◆ Sprint 13 容量計画 (Capacity 32pt / Selected 24pt)
-  Velocity 27 → Capacity 32 (休暇調整後)
-  Selected 24 SP は安全圏 (75% 充填)
+◆ Sprint 13 計画 SP vs velocity
+  Velocity 27 (sprint-12 実績) / 計画 68pt → +41pt 過剰計画
+  低 valueImpact の Story を次スプリントへ、または Sprint Goal を絞る
 ```
 
 ---
