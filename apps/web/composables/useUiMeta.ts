@@ -1,8 +1,8 @@
 // UI 構造メタ (画面 / 儀式の定義 + flag 定義)。demo data とは独立した UI 定数。
 // R3 で useDemoData から分離 (data fixture と UI メタの責務分割。useDemoData は R3 で削除)。
 //
-// 注意: ScreenId は 5 画面 (Backlog + 4 儀式)。T9 で 'refinement' を floor 03 に追加し
-// Review→04 / Retro→05 に振り直す予定。
+// 注意: ScreenId は 6 画面 (Backlog + 5 儀式)。T9 で 'refinement' を floor 03 に追加し
+// Review→04 / Retro→05 に振り直した (2026-06-11 完了)。
 
 export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro';
 
