@@ -6,6 +6,7 @@
 > 2026-05-05 改訂: **Refinement Agent の診断観点を 5 → 6 に拡張**。第 6 観点「戦略整合性 (Strategic Intent Drift)」を追加 — Epic に `rationale` / `successMetric` / `strategicTheme` を新設し、rationale 欠落の Epic を「配下チケットが Why を見失う形骸化サイン」として警告する。「戦略があるから開発するはずだが、その戦略が開発者に伝わっていない」課題への直接対応。
 > 2026-06-11 改訂: **Reviewer Multimodal (録画 → 指摘抽出 / ReviewRecording / video.extractIssues) を縮退削除** (2026-06-10)。代わりに **チケット種別 (Story/Task/Spike/Bug/Incident) + ルールエンジン (17 観点) + 見積もりポーカー** を導入。Refinement に第 7 観点「種別ルール」を追加。差別化の中心は **Orchestrator マルチエージェント (ADK で 5 Agent を編成)**。
 > 2026-05-05 (夜) 改訂: **MCP (Model Context Protocol) サーバ追加** — `apps/mcp-server` で Belvedere の Tool / Agent を MCP 形式で外部公開。Phase 0 で stdio mode + 11 Tools (読み取り 6 + invoke_agent + CRUD 4 全実装)、Smoke test 14/14 pass。Phase 1-D で HTTP transport + Cloud Run + Firestore + OAuth 2.1。書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (MCP server 側に dryRun ロジックを持たない)。
+> 2026-06-12 改訂: RetroTry (carry-forward 積み上げ) + retro.tries.list Tool 追加。Workspace 管理 (作成/招待/切替) を Phase 1-E 前倒しで実装。
 
 ---
 
@@ -62,7 +63,7 @@
 |---|---|
 | 役割 | プランニング会議の議題ドラフト + バックログのチケット品質診断 |
 | 起動 | プランニング 30分前 (Cloud Scheduler) / 手動 |
-| 入力 | 現スプリント `Sprint`, バックログ `Ticket[]`, 前スプリント Try, Epic 進捗 |
+| 入力 | 現スプリント `Sprint`, バックログ `Ticket[]`, RetroTry 積み上げ (retro.tries.list), Epic 進捗 |
 | 出力 | 議題候補 / 品質要修正リスト (DoD/SP/US紐付け不足) / 候補値 |
 | LLM | gemini-2.5-pro (推論重め) |
 | 主な Tool | `firestore.query`, `ticket.list`, `ticket.quality.check`, `epic.list`, `slack.message.post` |
@@ -93,7 +94,7 @@
 | 自律性 | L2 (提案 → 人が承認後に反映) |
 
 **6観点診断の中身** (`packages/tools/src/index.ts` の `backlogRefinementCheckTool` で実装。種別ルール (第7観点) は `packages/tools/src/ticket-rules.ts` の 17 ルールと合成):
-1. **Story 粒度過大**: `estimatePt > 8` → 分割候補を提案 (例: BLV-106 SP=13 → ①Eval set拡充 / ②few-shot rubric / ③コスト計測)
+1. **Story 粒度過大**: `estimatePt > 8` → 分割候補を提案 (例: WC-106 SP=13 → ①Eval set拡充 / ②few-shot rubric / ③コスト計測)
 2. **依存関係未整理**: `parentTicketId` (US- 紐付け) も `blockedBy` も空 → 整理を促す
 3. **valueImpact 未設定**: プロダクトゴール貢献度が空 → PO に確認推奨
 4. **priority × valueImpact ミスマッチ**:
@@ -130,10 +131,12 @@
 | 役割 | ふりかえり進行支援。Try抽出 + 翌スプリントWIP転記候補 |
 | 起動 | ふりかえり開始時 / 終了時 |
 | 入力 | 議事テキスト (Slack スレッド or 手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
-| 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新 |
+| 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新。carry-forward 積み上げ (RetroTry / Firestore 永続) への蓄積は人間の d&d 操作 (L2 原則) |
 | LLM | gemini-2.5-pro |
-| 主な Tool | `slack.thread.fetch`, `vector.search`, `firestore.write` |
+| 主な Tool | `slack.thread.fetch`, `retro.tries.list`, `vector.search`, `firestore.write` |
 | 自律性 | L2 (Try 転記は人間確認後) |
+
+> (prompt への参照誘導は Phase 3-A の Gemini 接続時に実装)
 
 ---
 
@@ -157,6 +160,7 @@
 | `firestore.write` | Firestore 書込 | SA |
 | `cloudrun.previewUrl` | preview revision URL 発行 | SA |
 | `ticket.rules.check` | チケット種別ルール (17 観点) を儀式単位で実行 | SA |
+| `retro.tries.list` | レトロ carry-forward 積み上げ一覧 (儀式 Agent のコンテキスト) | SA |
 | `vector.search` | Vector Search クエリ | SA |
 | `human.ask` | (HITL) 不確実な時に人間に投げる | Slack |
 

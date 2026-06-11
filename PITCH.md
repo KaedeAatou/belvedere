@@ -70,7 +70,7 @@
 2. **(8秒)** 保存した瞬間、右パネルに **AI 提案** がポップアップ:
    - 🟡 DoD 候補3件 / 関連 Story 紐付け候補 / SP=5 (過去類似から)
    - 「Apply」ボタン3クリック → **Quality 100% 緑バッジ**
-3. **(12秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・計画28pt(velocity 20pt 超過)」
+3. **(12秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」
 4. **(14秒)** Refinement 画面 → AI が次スプリント候補を **6観点で診断**: 「WC-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「WC-106 は SP=13 で過大、3つに分割候補」「⭐ EP-3 (デリバリー信頼化) に rationale 未設定 → 配下 3 チケットが Why を見失う形骸化サイン」 — クリックで Epic.rationale 編集画面へジャンプ
 5. **(20秒) ★Orchestrator マルチエージェント キラーシーン★** AI Integrity Panel が一気に埋まる →
    **Orchestrator** が月曜朝の時刻を見て **Planner + Daily を並列起動**、各 Agent が **種別ルールエンジン (17 観点)** で査読した結果が 1 画面に集約:
@@ -78,7 +78,7 @@
    - 🔴 WC-108「Cloud Build → Deploy 分離」は **種別未設定** → 形骸化サイン
    - 🟡 WC-105 は **進行中のまま 4 日停滞** (着手時刻 startedAt 基準で検出)
    - そして **見積もりポーカー**: SP 未設定の Story で「見積もりセッション開始」→ メンバが**互いに見えない状態で投票** → 一斉開示 → 8 と 2 に割れる → **AI が「認識ズレの可能性、スコープを話し合って再投票を」と運営** (スプレッドシートも外部サイトも不要)
-6. **(12秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)
+6. **(12秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)。(現実装: Try を積み上げへ d&d → Firestore 永続 → 次の儀式で AI が参照。自動転記は Phase 3-A)
 7. **(8秒)** Live Activity に「Daily Agent: 停滞警告 → 林 へ」と AI が自分で動いた履歴
 
 > 「全部、**司令塔 (Orchestrator) が儀式の時刻に合わせて複数 AI を動かした結果**です。見積もりの会も AI が回します。ボタンを押したのは Apply だけ。」
@@ -105,7 +105,7 @@
 - **Cloud Run**: Frontend (Nuxt 3 SSR) + Orchestrator + 5 Ceremony Agents + Tool Server を独立サービスに
 - **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で軽量ルーティング (儀式の時刻でどの Agent を起動するか判定)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
 - **チケット種別ルールエンジン**: Story / Task / Spike / Bug / Incident の 17 観点 (親なし Task / 価値の見えない DoD / 停滞 / 見積もり割れ…) を宣言的ルール表に集約、5 Agent が共有
-- **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション
+- **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション + Retro Try carry-forward + マルチテナント (Workspace 作成・招待・切替)
 - **Vertex AI Vector Search + RAG Engine**: Refinement / Retrospective が過去 Try / Scrum Guide を参照
 - **Cloud Build / WIF**: 個人 GitHub (KaedeAatou/belvedere) からの鍵レスデプロイ
 - **MCP Server (stdio + HTTP)**: Claude Code / Cursor / 他 AI Agent クライアントから Belvedere を呼べる API。「Belvedere の開発自体を Claude Code 経由で Belvedere に管理させている」究極のドッグフード

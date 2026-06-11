@@ -39,6 +39,8 @@
 
 ## 2. TypeScript 型定義
 
+> 2026-06-10 改訂: 全エンティティに workspaceId 必須化 (IDOR fix)。以下の型抜粋では省略している場合がある。
+
 ```ts
 // packages/shared/src/types.ts (抜粋)
 
@@ -109,7 +111,11 @@ export interface Sprint {
   velocity?: number;
   status: 'planned' | 'active' | 'completed' | 'cancelled';
 }
+```
 
+**Sprint ライフサイクル (2026-06-11/12)**: POST /api/sprints で `planned` 作成 (number は ws 内 max+1 / capacity は velocity 駆動方針により UI 非表示・0 初期化)。POST /api/sprints/:id/start で `planned`→`active`、同時に旧 `active` を `completed` 化し velocity を done チケット SP 合計で確定。PATCH /api/sprints/:id は goal/期間のみ (`completed`/`cancelled` は不変)。
+
+```ts
 // === Ticket ===
 export interface Ticket {
   id: string;              // "WC-105" / "${idPrefix}-${number}"
@@ -228,6 +234,8 @@ export interface CeremonyHealthScore {
 | 儀式健全性時系列 | `/ceremonyHealth` where `ritual==X` orderBy `computedAt desc` | `(ritual, computedAt)` |
 | チケットの見積もりセッション | `/estimationSessions` where `ticketId == X and status in ['voting','revealed']` | `(ticketId, status)` |
 | 種別別チケット (ルールエンジン入力) | `/tickets` where `workspaceId == X` (全件取得しクライアント側で type 判定) | `workspaceId` |
+| RetroTry 積み上げ一覧 | `/retroTries` where `workspaceId == X` orderBy `createdAt desc` | `(workspaceId, createdAt)` |
+| 招待 bind 用メンバー検索 | `members.listByEmail` (全 ws 横断で email 一致のセンチネル doc を検索) | `email` |
 
 ---
 
@@ -260,8 +268,8 @@ export interface CeremonyHealthScore {
 `packages/seed/src/`:
 - `projects.ts` — 1件 (PRJ-belvedere-core, idPrefix=BV) — **2026-05-03 追加**
 - `epics.ts` — 4件 (EP-1..EP-4) / 全件 `projectId: PRJ-belvedere-core` + `valueImpact`
-- `tickets.ts` — 12件 (WC-101..WC-112) / 全件 `projectId` + `valueImpact` + 一部 `blockedBy`
+- `tickets.ts` — 12件 (WC-101..WC-112) / 全件 `projectId` + `valueImpact` + 一部 `blockedBy` / type は全チケット設定済 (WC-108 のみ意図的未設定 = TYPE_MISSING デモ) / WC-105 は startedAt 付き (停滞デモ)
 - `sprints.ts` — 3件 (Sprint 12-14)
 - `members.ts` — 5名 (会社メアドは `@example.com` ダミー化済 / 2026-05-04)
 
-User Story (US-101..US-402) は実装移行中: 旧 `apps/web/lib/data.ts` (Next.js 時代) は **削除済**。現在は `apps/web/composables/useDemoData.ts` (Nuxt 3, BLV-201..227 デモ用) と Mock LLM 出力で参照されている。将来 `seed/stories.ts` に移管予定。
+User Story (US-101..US-402) は実装移行中: 旧 `apps/web/lib/data.ts` (Next.js 時代) は **削除済**。`useDemoData.ts` は R3 (2026-06-11) で削除し全画面 shared Ticket + 実 API に統一。US-* は Mock LLM 出力のみで参照。将来 `seed/stories.ts` に移管予定。

@@ -145,10 +145,10 @@ graph TB
 | 🟢 deployed | API (`belvedere-api-dev`) | `/health` 200 確認済 (commit 4224ba6) |
 | 🟢 deployed | GH / WIF / CB / AR | WIF 鍵レス CI/CD パイプライン全段動作確認済 |
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
-| 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。Mock データ表示、Firestore 接続は Phase 1-B |
+| 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | MCP | stdio mode で 11 Tools 実装 / smoke test 14/14 / HTTP deploy は Phase 1-D |
 | 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
-| 🟡 implemented | FS | Firestore (default) instance 作成済 / データ投入は Phase 1-B |
+| 🟢 deployed | FS | Firestore (default) instance 作成済 / 実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
 | ⚪ planned | TOOL | Slack / GitHub Tool server (Phase 3) |
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
@@ -254,15 +254,15 @@ ai-agent-hackathon/
 │   ├── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / 5 members)
 │   ├── repo/             # Repository 抽象 (memory ✅ / firestore は Phase 1-B で実装)
 │   ├── llm/              # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3 で実装)
-│   ├── tools/            # buildTools(repo) factory (10 Tools) + ticket-rules.ts (17 ルール)
+│   ├── tools/            # buildTools(repo, workspaceId) factory (11 Tools: retro.tries.list 追加) + ticket-rules.ts (17 ルール)
 │   └── agent/            # Agent runtime (Tool 呼び出しループ + 6 ロール prompts)
 ├── infra/
 │   └── cloudbuild.yaml   # Cloud Build パイプライン (--allow-unauthenticated は Phase 1-A だけ)
 ├── .github/workflows/
-│   ├── ci.yml            # TS typecheck + Python lint+type
+│   ├── ci.yml            # TS typecheck + Python lint+type + vitest (push / PR で自動実行)
 │   ├── deploy-api.yml    # WIF 経由 Cloud Run デプロイ (apps/api / packages 配下変更時)
 │   ├── deploy-web.yml    # WIF 経由 Cloud Run デプロイ (apps/web 変更時 / 2026-06-09 追加)
-│   └── ci.yml            # typecheck + vitest (push / PR で自動実行)
+│   └── e2e.yml           # Playwright e2e (失敗時 Belvedere 自動起票)
 ├── docs/
 │   ├── setup-gcp.md      # GCP 11 ステップ (Step 1-10 完了 / 5/6)
 │   ├── setup-mcp.md      # Claude Code から MCP 接続手順
@@ -312,7 +312,7 @@ ai-agent-hackathon/
 - Cloud Armor で WAF (Phase 4 / 任意)
 - 監査: Cloud Audit Logs を BigQuery にエクスポート (Phase 4 / 任意)
 
-**現状 (2026-05-05)**: 認証コードは未実装 (`apps/web` / `apps/api` / `apps/mcp-server` すべて認証ミドルウェアなし)。`infra/cloudbuild.yaml` も `--allow-unauthenticated` で公開状態 = Phase 1-A の初回デプロイ専用設定。Phase 1-B 完了時点で `--no-allow-unauthenticated` + Firebase Auth 検証ミドルウェアに切替。
+**現状 (2026-06-10〜)**: Firebase Auth Bearer 検証 (`apps/api/src/middleware/auth.ts`) + workspaceMiddleware (所属検証 / X-Workspace-Id 切替 / 招待自動 bind) 実装済。Cloud Run IAM は allUsers のまま、認証はアプリ層 JWT が担う (`infra/cloudbuild.yaml` の設計コメント参照。Cloud Run + Firebase Auth の標準パターン)。
 
 ---
 
