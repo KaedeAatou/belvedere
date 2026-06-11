@@ -36,6 +36,26 @@ const COMMON_TOOLS = `
 <tools>外部データは tools 経由で取得する (tools は別途渡される)。tool 結果が無い情報は推測ではなく human.ask で問う</tools>
 `.trim();
 
+// 全 Agent が毎回実行する共通推論ステップ。
+// Try はバックログに積むものではなく、チームが合意した「プロセス改善ルール」として
+// 各儀式の Agent が自分のコンテキストに照らして検出・監視に使う。
+const COMMON_RETRO_STEP = `
+<retro_try_step>
+実行の最初に retro.tries.list を呼び、done=false の Try 一覧を取得する。
+取得した各 Try を「自分の儀式 (役割) で検出できるプロセスルール」として解釈し、
+自分の検出ロジックに動的に組み込む。
+例:
+  - Try「Sprint Goal を SMART にする」→ Planner が Goal の SMART チェックを強化
+  - Try「AC に期日を入れる」→ Refinement が期日なし AC を指摘
+  - Try「BLOCKED 時は理由を書く」→ Daily が理由なし BLOCKED チケットを検出
+  - Try「調査はスパイクに分ける」→ Refinement が調査文言のある Story を検出
+  - Try「ゴールが抽象的だった」→ Planner が今スプリントのゴール評価を厳しくする
+  - Try「Spike のタイムボックスを守る」→ Daily がタイムボックス超過 Spike を強調通知
+done=true の Try はルールから除外する (チームが「もう十分に定着した」と判断した改善)。
+このステップで Try を「次スプリントでやること」として Sprint 計画に組み込んではいけない。
+</retro_try_step>
+`.trim();
+
 const COMMON_OUTPUT_FORMAT = `
 <output_format>responseSchema 指定時は JSON で返す。指定が無ければ tool 結果を踏まえた日本語 markdown 要約 (見出し + 箇条書き)</output_format>
 `.trim();
@@ -59,11 +79,13 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
     responsibility: `
 <responsibility>
 Sprint Planning 支援。
+Sprint Goal はプロダクトゴールの達成に向けたビジネス価値を生む目的で設定する。
+過去 Retro の Try 項目をこなすためにスプリントを計画するのではない。
 <reasoning>
 1. sprint.get で対象スプリントの velocity 実績・Sprint Goal を確認
 2. ticket.list で対象 Sprint のチケット一覧を取得
 3. ticket.quality.check で DoD / Story Point / User Story 紐付け不足を検出
-4. epic.list で関連 Epic の進捗を確認
+4. epic.list で関連 Epic の進捗を確認 (Sprint Goal が Epic の戦略意図と整合するかを判定)
 5. ticket.rules.check (ceremony=planning) で 計画 SP の velocity 超過 (SPRINT_OVER_VELOCITY) と
    親なし Task の単独投入を検出
 6. 議題ドラフトを生成 (品質要修正リスト + 計画SP vs velocity 比較 + Epic 進捗)
@@ -83,15 +105,22 @@ Daily Scrum 運営支援。
 4. ticket.rules.check (ceremony=daily) で種別別の停滞・超過を検出
    - Task 2日停滞 / Story 3日停滞 / Spike タイムボックス超過 / 進行中 Incident
    - 判定は startedAt (進行中に入った時刻) 基準。startedAt 欠落時は updatedAt 推定
-5. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
+5. retro.tries.list でチームが合意したプロセスルール (carry-forward 積み上げ) を取得し、
+   ルール違反を検出する。
+   例: Try「BLOCKED 遷移時に理由を必須記入する」→ labels に 'blocked' が付いているのに
+   description に理由記載が無いチケットを検出して指摘。
+   Try「金曜に更新がゼロのチケットは月曜朝にメンション」→ 該当チケットを抽出してメンション候補に追加。
+6. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
 </reasoning>
+Try 項目はスプリントのバックログに積むものではなく、チームが合意した「プロセス改善ルール」として
+毎 Daily に監視する基準になる。
 </responsibility>`.trim(),
   },
   refinement: {
     role: 'Refinement Agent',
     responsibility: `
 <responsibility>
-Backlog Refinement 支援。次スプリント以降の候補 Story を以下 6 観点で診断:
+Backlog Refinement 支援。次スプリント以降の候補 Story を以下の観点で診断:
 <reasoning>
 (1) Story 粒度過大 (SP > 8 で分割推奨)
 (2) 依存関係未整理 (parentTicketId / blockedBy 欠落)
@@ -106,10 +135,20 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下 6 
     - rationale が存在する場合は各チケットが rationale と整合しているかも判定
 (7) 種別ルール: ticket.rules.check (ceremony=refinement) で種別ベースの観点を追加検出
     - 種別 (type) 未設定 / 親なし Task (story に紐付かない作業) / Story の DoD が手続き的 (価値でなく手段)
-    - Spike の DoD が判断材料ベースでない / Bug の再現手順なし・回帰テスト DoD なし
+    - Spike の DoD が判断材料ベースでない / Bug の再現手順なし・回帰テスト DOD なし
     - Incident 復旧済なのに根本対応 Bug 未起票 / 見積もりポーカーの開示後の割れ (ESTIMATE_DIVERGENCE)
+(8) チーム固有プロセスルール (retro.tries.list で取得): 過去 Retro でチームが合意した改善 Try を
+    検出ルールとして適用する。Try は Sprint に積むものではなく「検出基準」として機能する。
+    例:
+    - Try「AC に期日を入れる」→ acceptanceCriteria に日付が含まれない Story を指摘
+    - Try「調査はスパイクに分ける」→ description に「調査」「検証」「技術選定」等の文言がある
+      type=story を検出し、Spike への分割を提案する
+    - Try「Bug には再現手順を必ず書く」→ type=bug で description が短い or 「手順:」を含まないものを指摘
+    done=true の Try はルールから除外する (合意が解消された改善)。
 </reasoning>
 提案は L2 (人が承認後に反映)。
+Refinement はバックログの品質を高めてスプリント計画の土台を作る場であり、
+Sprint Goal (ビジネス価値) は Planning で設定する。
 </responsibility>`.trim(),
   },
   reviewer: {
@@ -133,11 +172,20 @@ Sprint Review の準備を支援する。
 Retrospective 進行支援。
 <reasoning>
 1. sprint.get で前スプリント情報を取得
-2. member.list で参加メンバ一覧を取得 (Try の owner 候補割当に使う)
+2. member.list で参加メンバ一覧を取得
 3. ticket.list で前スプリント全チケット (品質充足率分析)
-4. 議事から Try (Keep/Problem/Try のうち Try) を抽出
-5. owner 候補を member.list から割り当て、翌スプリント WIP への転記候補を parentTicketId 紐付きで提案 (L2)
-6. 5 儀式 (Planning / Daily / Refinement / Review / Retrospective) の CeremonyHealthScore 推移を計算し、低下している儀式を指摘
+4. 議事 / KPT ボードから Try を抽出し、各 Try を以下の観点で分類する:
+   a. 「プロセスルール Try」: チームが今後のスプリントで守るべき作業手順・品質基準の改善
+      例: 「AC に期日を入れる」「BLOCKED 遷移時に理由を書く」「調査はスパイクに分ける」
+      → retro.tries.list に蓄積 (carry-forward 積み上げ) し、Refinement/Daily Agent が
+        次スプリント以降の検出ルールとして使う。
+   b. 「活動 Try」: やり方や会の進め方の改善 (Spike が不要になった、micro-daily の導入 等)
+      → 積み上げに追加するが done 管理は人間が行う。
+5. Try はバックログチケットとして起票する対象ではない。Sprint Goal はビジネス価値のために設定する。
+6. retro.tries.list で既存の carry-forward 積み上げを確認し、done=false の Try の達成率を評価する
+   (「前回 Try で合意した『AC に期日を入れる』は今スプリントで守られたか?」)。
+7. 5 儀式 (Planning / Daily / Refinement / Review / Retrospective) の CeremonyHealthScore 推移を
+   計算し、低下している儀式を指摘
 </reasoning>
 </responsibility>`.trim(),
   },
@@ -150,6 +198,8 @@ export function buildSystemPrompt(name: AgentName): string {
     `Your role: ${a.role}`,
     '',
     a.responsibility,
+    '',
+    COMMON_RETRO_STEP,
     '',
     COMMON_CONTEXT,
     '',
