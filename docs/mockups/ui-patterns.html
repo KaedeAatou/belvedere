@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Belvedere — UI パターン比較 (2026-06-11 Fable 策定)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Mohave:wght@400;500;600&family=Noto+Sans+JP:wght@400;500;700&family=Albert+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-0:#FCF5EF; --bg-1:#FFFBF6; --bg-2:#F4ECE2; --bg-3:#EBE2D5; --bg-4:#E3E0DD;
+  --line-1:#ECE4D8; --line-2:#DDD4C3; --line-3:#C2B6A0;
+  --ink-0:#080808; --ink-1:#2E2A24; --ink-2:#6B5F4C; --ink-3:#9A8E78; --ink-4:#C2B8A2;
+  --accent:#D95300; --accent-dim:#A23E00; --accent-bg:rgba(217,83,0,0.08);
+  --ok:#6B8E5A; --warn:#C89A3A; --err:#B85A4A; --info:#6E8AA0;
+  --sans:"Noto Sans JP",sans-serif; --display:"Mohave","Noto Sans JP",sans-serif; --mono:"Albert Sans","Noto Sans JP",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg-0);color:var(--ink-0);font-family:var(--sans);font-size:14px;line-height:1.8;letter-spacing:.03em;-webkit-font-smoothing:antialiased}
+.page{max-width:1100px;margin:0 auto;padding:32px 24px 80px}
+h1{font-family:var(--display);font-size:42px;font-weight:500;letter-spacing:.04em;margin:0}
+.sub{color:var(--ink-2);font-size:13px;margin:4px 0 28px}
+/* tabs */
+.tabs{display:flex;gap:0;border-bottom:1px solid var(--line-2);margin-bottom:28px}
+.tabs label{padding:10px 22px;cursor:pointer;font-family:var(--display);font-size:18px;letter-spacing:.06em;color:var(--ink-3);border-bottom:2px solid transparent}
+input[name=tab]{display:none}
+#ta:checked~.tabs label[for=ta], #tb:checked~.tabs label[for=tb], #tc:checked~.tabs label[for=tc]{color:var(--ink-0);border-bottom-color:var(--accent)}
+.pane{display:none}
+#ta:checked~#pa, #tb:checked~#pb, #tc:checked~#pc{display:block}
+/* pattern header */
+.concept{background:var(--bg-1);border:1px solid var(--line-1);padding:18px 22px;margin-bottom:26px}
+.concept h2{font-size:16px;margin:0 0 6px}
+.concept p{margin:0;color:var(--ink-1);font-size:13px}
+.concept .meta{margin-top:10px;font-size:12px;color:var(--ink-2)}
+.concept .meta b{color:var(--ink-0)}
+/* mock frame = simplified app chrome */
+.frame{border:1px solid var(--line-2);background:var(--bg-0);margin-bottom:34px;box-shadow:0 2px 14px rgba(8,8,8,.05)}
+.frame-label{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3);padding:8px 12px;border-bottom:1px solid var(--line-1);background:var(--bg-2)}
+.chrome{display:flex;min-height:300px}
+.rail{width:110px;border-right:1px solid var(--line-1);background:var(--bg-1);padding:14px 0;flex-shrink:0}
+.rail .f{padding:7px 14px;font-family:var(--display);font-size:12px;letter-spacing:.08em;color:var(--ink-3)}
+.rail .f.on{color:var(--accent);border-left:2px solid var(--accent);background:var(--accent-bg)}
+.main{flex:1;padding:18px 22px;min-width:0}
+.aip{width:250px;border-left:1px solid var(--line-1);background:var(--bg-1);padding:14px 16px;flex-shrink:0;font-size:12px}
+.aip h4{font-family:var(--display);font-size:13px;letter-spacing:.1em;margin:0 0 10px;color:var(--ink-1)}
+/* ticket rows */
+.trow{display:flex;align-items:center;gap:10px;padding:9px 10px;border-bottom:1px solid var(--line-1);font-size:13px}
+.trow .id{font-family:var(--mono);color:var(--ink-2);width:62px;flex-shrink:0}
+.trow .tt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.trow .sp{font-family:var(--mono);color:var(--ink-2);width:36px;text-align:right}
+.trow.hl{background:var(--accent-bg);outline:1px solid var(--accent)}
+.tm{font-family:var(--mono);font-size:10px;letter-spacing:.08em;padding:1px 7px;border:1px solid var(--line-2);border-radius:2px;color:var(--ink-1);flex-shrink:0}
+.tm.story{border-color:var(--info);color:var(--info)}
+.tm.task{border-color:var(--ink-3);color:var(--ink-2)}
+.tm.spike{border-color:var(--warn);color:var(--warn)}
+.tm.bug{border-color:var(--err);color:var(--err)}
+.tm.incident{background:var(--err);border-color:var(--err);color:#fff}
+.tm.none{border-style:dashed;color:var(--ink-3)}
+/* finding presentations */
+.fdot{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:11px;flex-shrink:0}
+.fdot i{width:8px;height:8px;border-radius:50%;display:inline-block}
+.fdot.warn i{background:var(--warn)} .fdot.warn{color:var(--warn)}
+.fdot.err i{background:var(--err)} .fdot.err{color:var(--err)}
+.fpill{font-size:10px;padding:1px 8px;border-radius:9px;flex-shrink:0}
+.fpill.warn{background:rgba(200,154,58,.14);color:#8a6720;border:1px solid var(--warn)}
+.fpill.err{background:rgba(184,90,74,.12);color:var(--err);border:1px solid var(--err)}
+/* estimation */
+.fib{display:flex;gap:8px;margin:10px 0}
+.fib button{font-family:var(--display);font-size:16px;width:42px;height:54px;border:1px solid var(--line-2);background:var(--bg-1);border-radius:3px;cursor:pointer;color:var(--ink-1)}
+.fib button.me{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);font-weight:600}
+.btn{font-size:12px;padding:6px 16px;border:1px solid var(--ink-0);background:var(--ink-0);color:var(--bg-0);border-radius:2px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink-1);border-color:var(--line-3)}
+.sheet{border-left:2px solid var(--ink-0);background:var(--bg-1);padding:16px 20px;width:330px;flex-shrink:0}
+.sheet h3{margin:0 0 2px;font-size:15px}
+.sheet .sec{border-top:1px solid var(--line-1);margin-top:14px;padding-top:12px}
+.sec h5{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.voted{font-size:12px;color:var(--ink-2)}
+.note{font-size:11px;color:var(--ink-3);margin-top:6px}
+/* pattern B inbox */
+.inbox-item{padding:8px 10px;border:1px solid var(--line-1);background:var(--bg-0);margin-bottom:8px;cursor:pointer;font-size:12px}
+.inbox-item.sel{border-color:var(--accent);background:var(--accent-bg)}
+.inbox-item .rid{font-family:var(--mono);font-size:10px;color:var(--ink-3);letter-spacing:.08em}
+.sev{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px}
+.sev.warn{background:var(--warn)} .sev.err{background:var(--err)} .sev.info{background:var(--info)}
+/* pattern C overlay */
+.overlay{background:var(--ink-0);color:var(--bg-0);padding:34px 30px;text-align:center}
+.overlay .ttl{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--ink-4);text-transform:uppercase}
+.overlay h3{font-family:var(--display);font-size:26px;font-weight:500;margin:6px 0 22px;color:var(--bg-0)}
+.bigfib{display:flex;gap:12px;justify-content:center;margin-bottom:26px}
+.bigfib .c{font-family:var(--display);font-size:26px;width:64px;height:92px;border:1px solid #3a3631;border-radius:5px;background:#16130f;display:flex;align-items:center;justify-content:center;color:var(--bg-0);cursor:pointer}
+.bigfib .c.me{border-color:var(--accent);color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.players{display:flex;gap:18px;justify-content:center;margin-bottom:24px}
+.pl{text-align:center;font-size:11px;color:var(--ink-4)}
+.pl .card{width:38px;height:54px;border-radius:4px;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-family:var(--display);font-size:18px}
+.pl .card.back{background:var(--accent);color:transparent}
+.pl .card.empty{border:1px dashed #4a453e;background:transparent}
+.obtn{font-family:var(--display);font-size:15px;letter-spacing:.12em;padding:10px 38px;background:var(--accent);color:#fff;border:none;border-radius:2px;cursor:pointer}
+/* ceremony strips */
+.aistrip{display:flex;gap:10px;align-items:center;background:var(--accent-bg);border:1px solid var(--accent);padding:7px 12px;font-size:12px;margin-bottom:14px}
+.aistrip .who{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.stepper{display:flex;gap:0;margin:14px 0 20px}
+.step{flex:1;padding:10px 14px;border:1px solid var(--line-2);border-left:none;font-size:12px}
+.step:first-child{border-left:1px solid var(--line-2)}
+.step.on{background:var(--ink-0);color:var(--bg-0)}
+.step .n{font-family:var(--display);font-size:18px;display:block}
+.giant{font-family:var(--display);font-size:64px;font-weight:500;letter-spacing:.02em;line-height:1;color:var(--ink-0);margin:4px 0 2px}
+.giant small{font-size:18px;color:var(--ink-3);letter-spacing:.14em}
+.kpi{display:flex;gap:14px;margin:12px 0}
+.kpi .k{border:1px solid var(--line-1);background:var(--bg-1);padding:10px 16px;flex:1}
+.kpi .k .v{font-family:var(--display);font-size:24px}
+.kpi .k .l{font-size:11px;color:var(--ink-2)}
+.cap{font-size:12px;color:var(--ink-2);padding:10px 12px;border-top:1px solid var(--line-1);background:var(--bg-1)}
+table.cmp{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+table.cmp th,table.cmp td{border:1px solid var(--line-2);padding:8px 10px;text-align:left;vertical-align:top}
+table.cmp th{background:var(--bg-2);font-weight:500}
+h2.sec-h{font-family:var(--display);font-size:24px;font-weight:500;letter-spacing:.05em;margin:40px 0 8px}
+</style>
+</head>
+<body>
+<div class="page">
+<h1>BELVEDERE — UI PATTERNS</h1>
+<p class="sub">2026-06-11 Fable 策定 / 対象: Backlog・finding バッジ・見積もりポーカー・5 儀式画面 / タブで 3 方向を切替</p>
+
+<input type="radio" name="tab" id="ta" checked>
+<input type="radio" name="tab" id="tb">
+<input type="radio" name="tab" id="tc">
+<div class="tabs">
+  <label for="ta">A — 静かな監査</label>
+  <label for="tb">B — INTEGRITY パネル主役</label>
+  <label for="tc">C — 儀式没入モード</label>
+</div>
+
+<!-- ================= PATTERN A ================= -->
+<div class="pane" id="pa">
+<div class="concept">
+  <h2>A. 静かな監査 — Jira 踏襲 + 最小の AI 表示</h2>
+  <p>一覧は従来のテーブル。AI の指摘は行末の色ドット + 件数だけで、詳細はホバー。ポーカーは DetailSheet 内の 1 セクション。儀式画面は現行レイアウトに 1 行の AI ストリップを足すのみ。</p>
+  <div class="meta"><b>工数: 最小 (現計画どおり)</b> / デモ映え: 控えめ / 無人実行リスク: 最小</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">Backlog — finding はドット + 件数 (ホバーで内訳)</div>
+  <div class="chrome">
+    <div class="rail"><div class="f on">01 BACKLOG</div><div class="f">02 PLANNING</div><div class="f">03 DAILY</div><div class="f">04 REVIEW</div><div class="f">05 RETRO</div></div>
+    <div class="main">
+      <div class="trow"><span class="id">WC-105</span><span class="tm story">STORY</span><span class="tt">通知設定のユーザ単位カスタマイズ</span><span class="fdot err"><i></i>2</span><span class="sp">8</span></div>
+      <div class="trow"><span class="id">WC-107</span><span class="tm story">STORY</span><span class="tt">ふりかえりボードの永続化</span><span class="sp">5</span></div>
+      <div class="trow"><span class="id">WC-108</span><span class="tm none">?</span><span class="tt">リリースノート自動生成</span><span class="fdot warn" title="種別が未設定です&#10;SP が未見積もりです"><i></i>2</span><span class="sp">—</span></div>
+      <div class="trow"><span class="id">WC-110</span><span class="tm spike">SPIKE</span><span class="tt">通知基盤の技術調査 (Pub/Sub vs Tasks)</span><span class="sp">4h</span></div>
+      <div class="trow"><span class="id">WC-112</span><span class="tm bug">BUG</span><span class="tt">Velocity グラフが 0 件時に NaN 表示</span><span class="fdot warn"><i></i>1</span><span class="sp">2</span></div>
+    </div>
+  </div>
+  <div class="cap">ドットの色 = 最悪 severity (赤=error / 黄=warn)。ホバーで指摘文ツールチップ。一覧は静かなまま。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">見積もりポーカー — DetailSheet 内の 1 セクション (voting 状態)</div>
+  <div class="chrome">
+    <div class="main" style="background:var(--bg-2);opacity:.55"><div class="trow"><span class="id">WC-108</span><span class="tt">リリースノート自動生成</span></div><div class="trow"><span class="id">WC-110</span><span class="tt">通知基盤の技術調査</span></div></div>
+    <div class="sheet">
+      <h3>WC-108 リリースノート自動生成</h3>
+      <div class="note">story / SP 未見積もり</div>
+      <div class="sec"><h5>AI の指摘</h5>
+        <div class="voted">⚠ 種別が未設定です ⚠ SP が未見積もりです</div></div>
+      <div class="sec"><h5>見積もり — 投票中</h5>
+        <div class="fib"><button>1</button><button>2</button><button>3</button><button class="me">5</button><button>8</button><button>13</button><button>?</button></div>
+        <div class="voted">3 人投票済: あなた・佐藤・山本 (値は開示まで非公開)</div>
+        <div style="margin-top:10px"><button class="btn">開示する</button> <span class="note">owner/sm/po のみ</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="cap">現計画 (design-ui-unification.md §T7) そのまま。チケットを開く → 投票 → 開示 → 採用が 1 シートで完結。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">儀式画面 (Daily の例) — 現行レイアウト + AI ストリップ 1 行</div>
+  <div class="chrome">
+    <div class="rail"><div class="f">01 BACKLOG</div><div class="f">02 PLANNING</div><div class="f on">03 DAILY</div><div class="f">04 REVIEW</div><div class="f">05 RETRO</div></div>
+    <div class="main">
+      <div class="aistrip"><span class="who">Daily Agent</span><span>WC-105 が 3 日間 in-progress で停滞しています。担当の再確認を推奨します。</span></div>
+      <div class="kpi"><div class="k"><span class="v">21</span><div class="l">残 SP</div></div><div class="k"><span class="v">68%</span><div class="l">2日完了率</div></div><div class="k"><span class="v">1</span><div class="l">停滞チケット</div></div></div>
+      <div class="trow"><span class="id">WC-105</span><span class="tt">通知設定のカスタマイズ</span><span class="fdot err"><i></i>停滞 3日</span></div>
+      <div class="trow"><span class="id">WC-107</span><span class="tt">ふりかえりボードの永続化</span><span class="fdot warn"><i></i></span></div>
+    </div>
+  </div>
+  <div class="cap">5 儀式とも同型: 既存画面の最上部に各 Agent の 1 行サマリを置くだけ。Planning=容量超過 / Review=デモ順 / Retro=Try 未転記。</div>
+</div>
+</div>
+
+<!-- ================= PATTERN B ================= -->
+<div class="pane" id="pb">
+<div class="concept">
+  <h2>B. Integrity パネル主役 — 右パネルが AI 司令塔</h2>
+  <p>右の Integrity AI パネルを常設の「指摘インボックス」にする。指摘クリックで該当行へジャンプ + ハイライト。ポーカーもパネルに dock し、シートを開かずに投票できる。儀式画面ではパネルの中身が Agent ごとに変わる = <b>Orchestrator が儀式を運営している</b>というピッチの物語がそのまま画面になる。</p>
+  <div class="meta"><b>工数: 中 (+0.5〜1 日)</b> / デモ映え: 高 / 無人実行リスク: 小〜中 (パネルの状態管理が増える)</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">Backlog — 行は最小ドット、右パネルに指摘インボックス。クリックで該当行ハイライト</div>
+  <div class="chrome">
+    <div class="rail"><div class="f on">01 BACKLOG</div><div class="f">02 PLANNING</div><div class="f">03 DAILY</div><div class="f">04 REVIEW</div><div class="f">05 RETRO</div></div>
+    <div class="main">
+      <div class="trow"><span class="id">WC-105</span><span class="tm story">STORY</span><span class="tt">通知設定のユーザ単位カスタマイズ</span><span class="fdot err"><i></i></span><span class="sp">8</span></div>
+      <div class="trow"><span class="id">WC-107</span><span class="tm story">STORY</span><span class="tt">ふりかえりボードの永続化</span><span class="sp">5</span></div>
+      <div class="trow hl"><span class="id">WC-108</span><span class="tm none">?</span><span class="tt">リリースノート自動生成</span><span class="fdot warn"><i></i></span><span class="sp">—</span></div>
+      <div class="trow"><span class="id">WC-110</span><span class="tm spike">SPIKE</span><span class="tt">通知基盤の技術調査</span><span class="sp">4h</span></div>
+    </div>
+    <div class="aip">
+      <h4>INTEGRITY — REFINEMENT</h4>
+      <div class="inbox-item sel"><span class="rid">WC-108 · TYPE_MISSING</span><br><span class="sev warn"></span>種別が未設定です → <u>種別を選ぶ</u></div>
+      <div class="inbox-item"><span class="rid">WC-108 · STORY_SP_MISSING</span><br><span class="sev warn"></span>SP 未見積もり → <u>ポーカー開始</u></div>
+      <div class="inbox-item"><span class="rid">WC-105 · STORY_STALL</span><br><span class="sev err"></span>3 日停滞しています</div>
+      <div class="note">7 件中 3 件表示 · severity 順</div>
+    </div>
+  </div>
+  <div class="cap">指摘に「修正アクション」リンクが付く (種別を選ぶ / ポーカー開始)。AI が指摘 → 人が 1 クリックで直す、の動線。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">見積もりポーカー — 右パネルに dock (シートを開かず投票)</div>
+  <div class="chrome">
+    <div class="main" style="opacity:.7">
+      <div class="trow hl"><span class="id">WC-108</span><span class="tm none">?</span><span class="tt">リリースノート自動生成</span></div>
+      <div class="trow"><span class="id">WC-110</span><span class="tm spike">SPIKE</span><span class="tt">通知基盤の技術調査</span></div>
+    </div>
+    <div class="aip">
+      <h4>ESTIMATION — WC-108</h4>
+      <div class="fib" style="flex-wrap:wrap"><button>1</button><button>2</button><button>3</button><button class="me">5</button><button>8</button><button>13</button><button>?</button></div>
+      <div class="voted">3/5 人投票済<br>あなた ✓ · 佐藤 ✓ · 山本 ✓ · 田中 — · 鈴木 —</div>
+      <div style="margin-top:10px"><button class="btn">開示する</button></div>
+      <div class="note">Refinement Agent: 過去の類似 story (WC-103) は 5SP でした — 参考情報のみ、投票はしません</div>
+    </div>
+  </div>
+  <div class="cap">「AI は投票しない、運営する」の方針が画面に出る: 参考情報の提示と割れ検出だけ AI が担う。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">儀式画面 (Daily の例) — パネルの中身が Agent のアジェンダに変わる</div>
+  <div class="chrome">
+    <div class="rail"><div class="f">01 BACKLOG</div><div class="f">02 PLANNING</div><div class="f on">03 DAILY</div><div class="f">04 REVIEW</div><div class="f">05 RETRO</div></div>
+    <div class="main">
+      <div class="kpi"><div class="k"><span class="v">21</span><div class="l">残 SP</div></div><div class="k"><span class="v">68%</span><div class="l">2日完了率</div></div><div class="k"><span class="v">1</span><div class="l">停滞</div></div></div>
+      <div class="trow hl"><span class="id">WC-105</span><span class="tt">通知設定のカスタマイズ</span><span class="fdot err"><i></i>3日</span></div>
+      <div class="trow"><span class="id">WC-107</span><span class="tt">ふりかえりボード永続化</span></div>
+    </div>
+    <div class="aip">
+      <h4>DAILY AGENT — 今日の進行</h4>
+      <div class="inbox-item"><span class="sev ok" style="background:var(--ok)"></span>Velocity 整合 — 問題なし</div>
+      <div class="inbox-item sel"><span class="sev err"></span>WC-105 が 3 日停滞 → 今立っている人に聞く</div>
+      <div class="inbox-item"><span class="sev info"></span>2日完了率 68% — 昨日比 +5pt</div>
+      <div class="note">Orchestrator: Daily Agent を起動しました (L3 自律)</div>
+    </div>
+  </div>
+  <div class="cap">5 儀式ともパネルが「その Agent の進行表」になる。Planning=容量診断 / Review=デモ順提案 / Retro=Try 抽出。画面本体は触らずパネルだけ差し替えるので実装が儀式間で再利用できる。</div>
+</div>
+</div>
+
+<!-- ================= PATTERN C ================= -->
+<div class="pane" id="pc">
+<div class="concept">
+  <h2>C. 儀式没入モード — フロアごとのフルスクリーン体験</h2>
+  <p>儀式画面を「モード」として演出する。巨大 Mohave のフロア表示 + アジェンダステッパーで会の進行を構造化。ポーカーはフルスクリーンオーバーレイでカードを配り、開示で一斉フリップ — 「ポーカーサイトを別途開く面倒を消す」の原体験に最も忠実。findings は一覧でラベル付きピル表示。</p>
+  <div class="meta"><b>工数: 大 (+2〜3 日)</b> / デモ映え: 最高 (演出的) / 無人実行リスク: 大 (視覚調整が多くスクリーンショット検証の NG ループが増えやすい)</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">Backlog — finding はラベル付きピル (ホバー不要で読める)</div>
+  <div class="chrome">
+    <div class="rail"><div class="f on">01 BACKLOG</div><div class="f">02 PLANNING</div><div class="f">03 DAILY</div><div class="f">04 REVIEW</div><div class="f">05 RETRO</div></div>
+    <div class="main">
+      <div class="trow"><span class="id">WC-105</span><span class="tm story">STORY</span><span class="tt">通知設定のカスタマイズ</span><span class="fpill err">3日停滞</span><span class="sp">8</span></div>
+      <div class="trow"><span class="id">WC-108</span><span class="tm none">?</span><span class="tt">リリースノート自動生成</span><span class="fpill warn">種別なし</span><span class="fpill warn">SP未定</span><span class="sp">—</span></div>
+      <div class="trow"><span class="id">WC-110</span><span class="tm spike">SPIKE</span><span class="tt">通知基盤の技術調査</span><span class="sp">4h</span></div>
+    </div>
+  </div>
+  <div class="cap">読みやすいが指摘が多い行は横に溢れる → 2 個 + 「+n」に丸める実装が必要。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">見積もりポーカー — フルスクリーンオーバーレイ (開示で一斉フリップ)</div>
+  <div class="overlay">
+    <div class="ttl">Estimation — Sprint 24 Refinement</div>
+    <h3>WC-108 リリースノート自動生成</h3>
+    <div class="players">
+      <div class="pl"><div class="card back">5</div>あなた ✓</div>
+      <div class="pl"><div class="card back">3</div>佐藤 ✓</div>
+      <div class="pl"><div class="card back">5</div>山本 ✓</div>
+      <div class="pl"><div class="card empty"></div>田中</div>
+      <div class="pl"><div class="card empty"></div>鈴木</div>
+    </div>
+    <div class="bigfib"><div class="c">1</div><div class="c">2</div><div class="c">3</div><div class="c me">5</div><div class="c">8</div><div class="c">13</div><div class="c">?</div></div>
+    <button class="obtn">開示する</button>
+  </div>
+  <div class="cap">投票済みはオレンジの裏面カード。開示で全カードが同時にフリップ (CSS transform)。割れたら Agent が「13 と 3 で割れています — 前提の違いを話してから再投票を」と挿入。</div>
+</div>
+
+<div class="frame">
+  <div class="frame-label">儀式画面 (Daily の例) — フロア演出 + アジェンダステッパー</div>
+  <div class="chrome">
+    <div class="rail"><div class="f">01</div><div class="f">02</div><div class="f on">03</div><div class="f">04</div><div class="f">05</div></div>
+    <div class="main">
+      <div class="giant">03 <small>DAILY STANDUP</small></div>
+      <div class="stepper">
+        <div class="step"><span class="n">①</span>Velocity 確認 ✓</div>
+        <div class="step on"><span class="n">②</span>停滞チケット (1)</div>
+        <div class="step"><span class="n">③</span>今日のフォーカス</div>
+      </div>
+      <div class="aistrip"><span class="who">Daily Agent</span><span>WC-105 が 3 日停滞。担当の山本さんに状況を聞きましょう。</span></div>
+      <div class="trow hl"><span class="id">WC-105</span><span class="tt">通知設定のカスタマイズ</span><span class="fpill err">3日停滞</span></div>
+    </div>
+  </div>
+  <div class="cap">会の進行そのものを UI が先導する。Planning=①Goal ②容量 ③DoD、Retro=①Keep ②Problem ③Try のステッパー。最も「儀式専用画面」らしいが、5 画面それぞれに演出実装が要る。</div>
+</div>
+</div>
+
+<!-- ================= COMPARISON ================= -->
+<h2 class="sec-h">COMPARISON</h2>
+<table class="cmp">
+<tr><th></th><th>A 静かな監査</th><th>B Integrity パネル主役</th><th>C 儀式没入モード</th></tr>
+<tr><th>finding 表示</th><td>行末ドット+件数、ホバーで内訳</td><td>行は最小ドット、右パネルに指摘インボックス+修正アクション</td><td>ラベル付きピル (行内で読める)</td></tr>
+<tr><th>ポーカー</th><td>DetailSheet 内セクション</td><td>右パネルに dock</td><td>フルスクリーンオーバーレイ+カードフリップ</td></tr>
+<tr><th>儀式画面</th><td>既存+AI ストリップ 1 行</td><td>パネルが Agent の進行表に変わる (実装再利用可)</td><td>フロア演出+アジェンダステッパー</td></tr>
+<tr><th>ピッチ整合</th><td>△ AI が脇役に見える</td><td>◎ Orchestrator が運営している画が撮れる</td><td>○ 演出は強いが Agent より UI が主役に見える</td></tr>
+<tr><th>追加工数</th><td>±0 (現計画)</td><td>+0.5〜1 日</td><td>+2〜3 日</td></tr>
+<tr><th>無人実行リスク</th><td>最小</td><td>小〜中</td><td>大</td></tr>
+</table>
+<p style="font-size:13px;color:var(--ink-2);margin-top:14px"><b style="color:var(--ink-0)">Fable の推奨: B をベースに、ポーカーの開示演出 (カードフリップ) だけ C から借りる。</b> 理由: ①ピッチの主役 = Orchestrator マルチエージェントと画面の主役が一致する ②パネル 1 個の実装を 5 儀式で使い回せるため工数対効果が最良 ③フリップは CSS のみで足せて原体験 (ポーカーサイトの面倒) に応える。納期最優先なら A。</p>
+</div>
+</body>
+</html>
