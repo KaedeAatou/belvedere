@@ -36,7 +36,6 @@ const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estim
 const remaining = computed(() => Math.max(0, totalSP.value - doneSP.value));
 const inProgressCount = computed(() => colItems('in-progress').length);
 const blockedCount = computed(() => sprintTickets.value.filter((t) => (t.labels ?? []).includes('blocked')).length);
-const capacity = computed(() => activeSprint.value?.capacity ?? 32);
 
 const sprintDays = computed(() => {
   if (!activeSprint.value) return { elapsed: 0, total: 14 };
@@ -66,9 +65,9 @@ function onDrop(e: DragEvent, col: Status) {
   drag.value = null;
 }
 
-// Burndown は装飾 (理想線 + 進捗イメージ)。capacity を上限に使う。
+// Burndown: コミット済 SP (totalSP) を起点に 0 へ落とす理想線。velocity 駆動の SP ベース。
 const W = 320, H = 200, P = 8;
-const max = computed(() => capacity.value);
+const max = computed(() => Math.max(1, totalSP.value));
 const total = computed(() => sprintDays.value.total);
 const ideal = computed(() => Array.from({ length: total.value + 1 }, (_, i) => max.value - (max.value / total.value) * i));
 const xCoord = (i: number) => P + (i / total.value) * (W - P * 2);
@@ -97,9 +96,9 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
   <div class="daily">
     <div class="daily-strip">
       <div class="cell">
-        <div class="l">CAPACITY</div>
-        <div class="v t-num">{{ capacity }}<span class="u">SP</span></div>
-        <div class="sub">sprint capacity</div>
+        <div class="l">COMMITTED</div>
+        <div class="v t-num">{{ totalSP }}<span class="u">SP</span></div>
+        <div class="sub">sprint commitment</div>
       </div>
       <div class="cell">
         <div class="l">IN PROGRESS</div>
@@ -173,7 +172,7 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
         </div>
         <div class="burn-chart">
           <svg :viewBox="`0 0 ${W} ${H}`" style="position: absolute; inset: 0; width: 100%; height: 100%">
-            <line v-for="g in [0, capacity / 4, capacity / 2, (capacity * 3) / 4, capacity]" :key="g" :x1="P" :y1="yCoord(g)" :x2="W - P" :y2="yCoord(g)" stroke="var(--line-1)" />
+            <line v-for="g in [0, max / 4, max / 2, (max * 3) / 4, max]" :key="g" :x1="P" :y1="yCoord(g)" :x2="W - P" :y2="yCoord(g)" stroke="var(--line-1)" />
             <path :d="idealPath" stroke="var(--ink-3)" stroke-width="1" fill="none" stroke-dasharray="3 4" />
           </svg>
         </div>
@@ -191,8 +190,8 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
             <div class="v t-num">{{ remaining }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
           </div>
           <div class="burn-stat">
-            <div class="l">Capacity</div>
-            <div class="v t-num">{{ capacity }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
+            <div class="l">Committed</div>
+            <div class="v t-num">{{ totalSP }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
           </div>
         </div>
 

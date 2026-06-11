@@ -14,15 +14,22 @@ const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
 );
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
-const capacity = computed(() => activeSprint.value?.capacity ?? 32);
-const overBy = computed(() => totalSP.value - capacity.value);
+// 相対見積もり (SP) の積み上げを過去スプリントの velocity 実績と比較する。
+// 時間稼働ベースの capacity は使わない (SP ベースの velocity 駆動プランニング)。
+const avgVelocity = computed(() => {
+  const vs = velocityHistory.value;
+  if (vs.length === 0) return 0;
+  return Math.round(vs.reduce((n, v) => n + v.velocity, 0) / vs.length);
+});
+const hasVelocity = computed(() => avgVelocity.value > 0);
+const overBy = computed(() => totalSP.value - avgVelocity.value);
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
 
 // SMART は構造ガイド (汎用)。実評価は AI 連携で別途。
 const smart = [
   { letter: 'S', name: 'Specific', ok: true, note: 'ゴールが具体的か' },
   { letter: 'M', name: 'Measurable', ok: false, note: '測定可能な指標があるか' },
-  { letter: 'A', name: 'Attainable', ok: true, note: '容量内に収まるか' },
+  { letter: 'A', name: 'Attainable', ok: true, note: 'velocity 内に収まるか' },
   { letter: 'R', name: 'Relevant', ok: true, note: 'ロードマップに整合するか' },
   { letter: 'T', name: 'Time-bound', ok: true, note: '期限が明確か' },
 ];
@@ -49,12 +56,12 @@ const velMax = computed(() => Math.max(35, ...velocityHistory.value.map((v) => v
       <div class="floor"><span class="step" />FLOOR 01 / PLANNING</div>
       <h1>{{ activeSprint ? `Sprint ${activeSprint.number} — Planning` : 'Sprint Planning' }}</h1>
       <div class="subtitle">
-        ゴールの具体性、容量、リスクを点検します。AIが容量とゴール紐付けを確認しています。
+        ゴールの具体性、velocity 比較、リスクを点検します。AIが過剰計画とゴール紐付けを確認しています。
       </div>
     </div>
     <div class="stat-row">
-      <div class="stat"><div class="label">Capacity</div><div class="v t-num">{{ capacity }}</div><div class="delta">SP</div></div>
-      <div class="stat"><div class="label">Planned</div><div class="v t-num accent">{{ totalSP }}</div><div class="delta">{{ overBy > 0 ? `+${overBy} over` : `${-overBy} free` }}</div></div>
+      <div class="stat"><div class="label">Velocity</div><div class="v t-num">{{ hasVelocity ? avgVelocity : '—' }}</div><div class="delta">avg SP/sprint</div></div>
+      <div class="stat"><div class="label">Planned</div><div class="v t-num accent">{{ totalSP }}</div><div class="delta">{{ hasVelocity ? (overBy > 0 ? `+${overBy} over` : `${-overBy} room`) : 'tickets' }}</div></div>
       <div class="stat"><div class="label">Items</div><div class="v t-num">{{ sprintTickets.length }}</div><div class="delta">tickets</div></div>
       <div class="stat"><div class="label">Members</div><div class="v t-num">{{ members.length }}</div><div class="delta">team</div></div>
     </div>
@@ -97,27 +104,26 @@ const velMax = computed(() => Math.max(35, ...velocityHistory.value.map((v) => v
       </div>
     </div>
 
-    <!-- RIGHT — capacity + members -->
+    <!-- RIGHT — velocity 比較 + members -->
     <div class="col">
       <div class="capacity">
         <div class="capacity-head">
-          <div class="t-cap">CAPACITY</div>
+          <div class="t-cap">PLANNED / VELOCITY</div>
           <div style="font-family: var(--mono); font-size: 11px; color: var(--accent)">
-            {{ overBy > 0 ? `+${overBy} SP OVER` : `${-overBy} SP FREE` }}
+            {{ hasVelocity ? (overBy > 0 ? `+${overBy} SP OVER` : `${-overBy} SP ROOM`) : '実績なし' }}
           </div>
         </div>
         <div class="capacity-num">
           <span style="color: var(--accent)">{{ totalSP }}</span>
           <span class="div">/</span>
-          <span class="total">{{ capacity }}</span>
+          <span class="total">{{ hasVelocity ? avgVelocity : '—' }}</span>
         </div>
         <div class="capacity-bar" style="margin-top: 14px">
-          <i v-for="i in 33" :key="i" :class="i - 1 < capacity ? '' : 'over'" />
+          <i v-for="i in 33" :key="i" :class="i - 1 < avgVelocity ? '' : 'over'" />
         </div>
         <div class="capacity-legend">
-          <span class="it"><i style="background: var(--ink-2)" />Planned</span>
-          <span class="it"><i style="background: var(--accent)" />Over capacity</span>
-          <span class="it"><i style="background: var(--bg-3)" />Available</span>
+          <span class="it"><i style="background: var(--ink-2)" />Within velocity</span>
+          <span class="it"><i style="background: var(--accent)" />Over velocity</span>
         </div>
       </div>
 
