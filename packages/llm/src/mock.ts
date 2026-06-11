@@ -179,7 +179,7 @@ function getStructuredOutput(role: AgentRole): unknown {
         agendaItems: [
           { topic: 'Sprint 12 ふりかえり Try (3件) のレビュー', source: 'agent', durationMin: 8 },
           { topic: 'バックログ品質チェック: DoD/SP/US紐付け不足のチケット 3件', source: 'agent', durationMin: 10, ticketIds: ['WC-101', 'WC-104', 'WC-109'] },
-          { topic: 'Sprint 13 容量計画 (Capacity 32pt / Selected 24pt)', source: 'agent', durationMin: 6 },
+          { topic: 'Sprint 13 計画 SP vs velocity (velocity 27pt / 計画 68pt → 過剰計画)', source: 'agent', durationMin: 6 },
           { topic: 'Epic 進捗確認: EP-1 / EP-2 / EP-3 / EP-4', source: 'agent', durationMin: 6 },
         ],
         qualityIssues: [
@@ -252,7 +252,7 @@ function getNaturalOutput(role: AgentRole): string {
         '◆ 議題候補 (4件 / 合計 30min):',
         '  1. Sprint 12 ふりかえり Try (3件) のレビュー (8min)',
         '  2. バックログ品質チェック: DoD/SP/US紐付け不足 3件 (10min) — WC-101 / WC-104 / WC-109',
-        '  3. Sprint 13 容量計画 (Capacity 32pt / Selected 24pt) (6min)',
+        '  3. Sprint 13 計画 SP vs velocity (velocity 27pt / 計画 68pt → 過剰計画) (6min)',
         '  4. Epic 進捗確認: EP-1 / EP-2 / EP-3 / EP-4 (6min)',
         '',
         '◆ 品質要修正のチケット (AI が候補を準備):',
