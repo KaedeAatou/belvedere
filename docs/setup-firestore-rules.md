@@ -46,7 +46,7 @@ firebase login:list
 # 出力に owner@example.com が表示されれば OK
 ```
 
-⚠ 会社アカウント (`@***company-domain-redacted***`) で誤ってログインしたら `firebase logout` で必ず削除。
+⚠ 会社アカウント (会社ドメインのメール) で誤ってログインしたら `firebase logout` で必ず削除。
 
 ---
 
