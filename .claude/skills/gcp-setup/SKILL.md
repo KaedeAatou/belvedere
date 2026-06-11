@@ -1,6 +1,6 @@
 ---
 name: gcp-setup
-description: docs/setup-gcp.md の 11 ステップ (gcloud install / プロジェクト + billing / API 有効化 / Firestore / Artifact Registry / IAM / 課金アラート / WIF) を対話的に進めるための手引き。ユーザーは AWS 実務経験あり / GCP 未経験のため、各ステップで AWS の対応サービスを併記すること。billing 有効化やプロジェクト作成などコスト発生操作はユーザーの明示的な Yes を取ってから流す。`disable-model-invocation: true` のためユーザーが `/gcp-setup` と入力した時のみ起動する。
+description: docs/setup-gcp.md の 11 ステップ (gcloud install / プロジェクト + billing / API 有効化 / Firestore / Artifact Registry / IAM / 課金アラート / WIF) を対話的に進めるための手引き。ユーザーは AWS 実務経験あり / GCP 未経験のため、各ステップで AWS の対応サービスを併記すること。billing 有効化やプロジェクト作成などコスト発生操作はユーザーの明示的な Yes を取ってから流す。`disable-model-invocation: true` のためユーザーが `/gcp-setup` と入力した時のみ起動する。※基盤セットアップは 2026-05-06 完了済 — 残る用途は Phase 3-A の Vertex AI / Gemini API 有効化のみ。Phase 3-A 完了後に削除予定 (2026-06-12 usage-audit 判定)。
 disable-model-invocation: true
 color: yellow
 ---
