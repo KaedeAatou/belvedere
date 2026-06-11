@@ -277,6 +277,29 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     },
   };
 
+  /**
+   * レトロの carry-forward 積み上げ一覧。チームが継続中の改善アクションを返す。
+   * 各儀式 Agent (Planner / Daily / Refinement / Reviewer / Retrospective) が
+   * 「前スプリントから持ち越した約束事」をコンテキストとして参照するための read-only ツール。
+   */
+  const retroTriesListTool: AgentTool<Record<string, never>, unknown> = {
+    spec: {
+      name: 'retro.tries.list',
+      description:
+        'レトロの carry-forward 積み上げ (チームが継続中の改善アクション) 一覧を返す。各儀式 Agent がコンテキストとして参照する。',
+      parameters: { type: 'object', properties: {} },
+    },
+    async invoke() {
+      const xs = await repo.retroTries.list({ workspaceId });
+      return xs.map((t) => ({
+        id: t.id,
+        text: t.text,
+        sprintNumber: t.sprintNumber,
+        done: t.done,
+      }));
+    },
+  };
+
   const memberListTool: AgentTool<Record<string, never>, unknown> = {
     spec: {
       name: 'member.list',
@@ -359,6 +382,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     ticketQualityCheckTool,
     backlogRefinementCheckTool,
     ticketRulesCheckTool,
+    retroTriesListTool,
     memberListTool,
     slackPostTool,
     humanAskTool,
