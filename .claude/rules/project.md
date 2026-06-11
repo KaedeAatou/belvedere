@@ -23,6 +23,7 @@
 - **造語禁止**: 設計・データモデル・Agent 出力・ピッチで勝手な造語を作らない。スクラム/PM の業界語を使う (Sprint Goal / Definition of Done / Velocity / Story Point / WSJF / Business Value)
 - **比喩は明示**: 螺旋階段比喩は冒頭で「比喩」と宣言。コードや型名には持ち込まない
 - **AI Agent 出力では source ID を引用**: `EP-xxx` / `US-xxx` / `WC-xxx`、外部参照は `slack:Cxx:Txx` / `gh:org/repo#nn`。fabricated ID は禁止
+- **スプリント計画は velocity 基準** (2026-06-11 確定): 相対見積もり (Story Point) の積み上げ ΣSP を **velocity 実績** と直接比較する。時間稼働ベースの「**容量 / capacity**」は sprint 計画・UI・ルール・prompt・ピッチで**使わない** (ルールは `SPRINT_OVER_VELOCITY`)。`Sprint.capacity` フィールドや cache の「容量上限」等の別文脈は可
 
 ## Git commit メッセージ (non-negotiable)
 
