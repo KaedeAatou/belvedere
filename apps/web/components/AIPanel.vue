@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import type { DemoTicket } from '~/composables/useDemoData';
+import type { Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 import { buildChecks, screenIntro } from '~/composables/useChecks';
 
 const props = defineProps<{
   screen: ScreenId;
-  tickets: DemoTicket[];
+  tickets: Ticket[];
 }>();
 const emit = defineEmits<{ jump: [id: string] }>();
 
@@ -38,16 +38,9 @@ const intro = computed(() => screenIntro(props.screen));
       </div>
     </div>
 
-    <div class="ai-msg">
-      <span class="who">You</span>
-      <span class="body user">DOING長期化のチケットだけ抜き出して</span>
-    </div>
-    <div class="ai-msg">
+    <div v-if="checks.length === 0" class="ai-msg">
       <span class="who">Belvedere</span>
-      <span class="body">
-        BLV-202 / BLV-207 の2件です。それぞれ4日・10日DOINGに留まっています。
-        分割するか、ブロッカーを記録することを提案します。
-      </span>
+      <span class="body">この画面で検出された指摘はありません。</span>
     </div>
   </div>
 

@@ -1,33 +1,37 @@
 <script setup lang="ts">
-import type { DemoTicket } from '~/composables/useDemoData';
-import { SPRINT } from '~/composables/useDemoData';
+import type { Ticket } from '@belvedere/shared';
 
-const props = defineProps<{ tickets: DemoTicket[] }>();
+const props = defineProps<{ tickets: Ticket[] }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const sprintTickets = computed(() => props.tickets.filter((t) => t.sprint === 'S24'));
-const done = computed(() => sprintTickets.value.filter((t) => t.status === 'DONE'));
-const carry = computed(() => sprintTickets.value.filter((t) => t.status !== 'DONE'));
-const doneSP = computed(() => done.value.reduce((n, t) => n + (t.sp ?? 0), 0));
-const carrySP = computed(() => carry.value.reduce((n, t) => n + (t.sp ?? 0), 0));
+const { activeSprint } = useSprints();
+
+const sprintTickets = computed(() =>
+  activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
+);
+const done = computed(() => sprintTickets.value.filter((t) => t.status === 'done'));
+const carry = computed(() => sprintTickets.value.filter((t) => t.status !== 'done'));
+const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+const carrySP = computed(() => carry.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+const goalPct = computed(() => (totalSP.value > 0 ? Math.round((doneSP.value / totalSP.value) * 100) : 0));
+const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
 const demos = computed(() =>
-  sprintTickets.value.filter((t) => t.status === 'DONE' || t.status === 'REVIEW').slice(0, 4),
+  sprintTickets.value.filter((t) => t.status === 'done' || t.status === 'review').slice(0, 4),
 );
 
 function thumbVariant(id: string) { return id.charCodeAt(id.length - 1) % 4; }
 
-const highlights = [
-  { id: 'BLV-208', text: '⌘K リリース後、社内利用 +60%' },
-  { id: 'BLV-209', text: 'フォントサイズ 200KB 達成（−42%）' },
-  { id: 'BLV-203', text: 'SMARTゴール入力UI を REVIEW へ' },
-];
+// highlights / risks は live チケットから生成 (架空 ID を出さない)
+const highlights = computed(() => done.value.slice(0, 3).map((t) => ({ id: t.id, text: t.title })));
+const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, text: t.title })));
 </script>
 
 <template>
   <div class="screen-head">
     <div>
       <div class="floor"><span class="step" />FLOOR 03 / REVIEW</div>
-      <h1>Sprint 24 — Review</h1>
+      <h1>{{ activeSprint ? `Sprint ${activeSprint.number} — Review` : 'Sprint Review' }}</h1>
       <div class="subtitle">
         ステークホルダー向けのデモと成果物の確認。AIが完了基準を満たすかチェック済み。
       </div>
@@ -35,7 +39,7 @@ const highlights = [
     <div class="stat-row">
       <div class="stat"><div class="label">Done</div><div class="v t-num">{{ doneSP }}<span style="font-size: 14px; color: var(--ink-3)">SP</span></div><div class="delta">{{ done.length }} items</div></div>
       <div class="stat"><div class="label">Carry</div><div class="v t-num accent">{{ carrySP }}</div><div class="delta">{{ carry.length }} items</div></div>
-      <div class="stat"><div class="label">Goal</div><div class="v t-num">75<span style="font-size: 14px; color: var(--ink-3)">%</span></div><div class="delta">partial</div></div>
+      <div class="stat"><div class="label">Goal</div><div class="v t-num">{{ goalPct }}<span style="font-size: 14px; color: var(--ink-3)">%</span></div><div class="delta">done</div></div>
     </div>
   </div>
 
@@ -43,33 +47,16 @@ const highlights = [
     <div class="review-main">
       <div class="t-cap" style="margin-bottom: 6px">SPRINT GOAL</div>
       <div style="font-size: 18px; letter-spacing: -0.01em; line-height: 1.5; border-left: 2px solid var(--accent); padding-left: 14px; margin-bottom: 6px">
-        {{ SPRINT.goal }}
-      </div>
-      <div style="display: flex; gap: 18px; font-family: var(--mono); font-size: 11px; color: var(--ink-2)">
-        <span><span style="color: var(--ok)">●</span> AI形骸化チェック 4/4 リリース</span>
-        <span><span style="color: var(--accent)">◐</span> 螺旋ナビ初版 — 実装中</span>
+        {{ goal }}
       </div>
 
-      <div class="outcome-row">
-        <div class="outcome-cell">
-          <div class="l">Velocity (this sprint)</div>
-          <div class="v t-num">{{ doneSP }}<span style="font-size: 13px; color: var(--ink-3); margin-left: 4px">SP</span></div>
-          <div style="font-family: var(--mono); font-size: 10px; color: var(--ink-3); margin-top: 4px">vs avg 26.7 → −9</div>
-        </div>
-        <div class="outcome-cell">
-          <div class="l">Acceptance Pass Rate</div>
-          <div class="v t-num">100<span style="font-size: 13px; color: var(--ink-3)">%</span></div>
-          <div style="font-family: var(--mono); font-size: 10px; color: var(--ok); margin-top: 4px">all DONE pass AC</div>
-        </div>
-      </div>
-
-      <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 12px">
+      <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 18px">
         <h2 style="margin: 0; font-size: 14px; font-weight: 500">Demos</h2>
         <span class="t-cap">{{ demos.length }} READY</span>
         <span style="margin-left: auto" />
         <button class="h-btn"><Icon name="sparkle" /> AI: Generate demo script</button>
       </div>
-      <div class="demo-grid">
+      <div v-if="demos.length > 0" class="demo-grid">
         <div v-for="t in demos" :key="t.id" class="demo-card" @click="emit('select', t.id)">
           <div class="demo-thumb">
             <svg viewBox="0 0 280 140" preserveAspectRatio="xMidYMid slice">
@@ -112,13 +99,15 @@ const highlights = [
             <div class="ttl">{{ t.title }}</div>
             <div class="row">
               <StatusDot :status="t.status" />
-              <Avatar :user="t.assignee" />
+              <Avatar :user="t.assigneeId" />
               <span style="flex: 1" />
-              <span><Icon name="comment" /> 4</span>
             </div>
           </div>
         </div>
       </div>
+      <p v-else style="font-family: var(--sans); font-size: 13px; color: var(--ink-2); padding: 12px 0">
+        デモ対象 (done / review) のチケットがまだありません。
+      </p>
 
       <div style="margin-top: 24px">
         <h2 style="margin: 0 0 8px; font-size: 14px; font-weight: 500">Carry-over candidates</h2>
@@ -128,36 +117,31 @@ const highlights = [
               <StatusDot :status="t.status" />
             </template>
           </TicketRow>
+          <p v-if="carry.length === 0" style="padding: 12px 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
+            未完了チケットはありません。
+          </p>
         </div>
       </div>
     </div>
 
     <aside class="review-aside">
-      <div class="t-cap" style="margin-bottom: 8px">STAKEHOLDER NOTES</div>
-      <div style="font-size: 12.5px; color: var(--ink-1); line-height: 1.6; margin-bottom: 18px">
-        CTOから<span style="color: var(--accent)">螺旋ナビ初版のスクロール挙動</span>について
-        フィードバックあり。次スプリントで対応予定。
-      </div>
-
       <div class="t-cap" style="margin-bottom: 8px">HIGHLIGHTS</div>
-      <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px">
+      <div v-if="highlights.length > 0" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px">
         <div v-for="h in highlights" :key="h.id" style="border-left: 2px solid var(--ok); padding-left: 10px">
           <div style="font-family: var(--mono); font-size: 9.5px; color: var(--ink-3); letter-spacing: 0.04em">{{ h.id }}</div>
           <div style="font-size: 12px; margin-top: 2px">{{ h.text }}</div>
         </div>
       </div>
+      <div v-else style="font-size: 12px; color: var(--ink-2); margin-bottom: 18px">完了チケットがまだありません。</div>
 
       <div class="t-cap" style="margin-bottom: 8px">RISKS / CARRY</div>
-      <div style="display: flex; flex-direction: column; gap: 10px">
-        <div style="border-left: 2px solid var(--accent); padding-left: 10px">
-          <div style="font-family: var(--mono); font-size: 9.5px; color: var(--ink-3)">BLV-207</div>
-          <div style="font-size: 12px; margin-top: 2px">WebGL Spike 10日経過、技術選定を Spike として再切り出し</div>
-        </div>
-        <div style="border-left: 2px solid var(--err); padding-left: 10px">
-          <div style="font-family: var(--mono); font-size: 9.5px; color: var(--ink-3)">BLV-210</div>
-          <div style="font-size: 12px; margin-top: 2px">Blocked silent — 次スプリント冒頭に解消会議を実施</div>
+      <div v-if="risks.length > 0" style="display: flex; flex-direction: column; gap: 10px">
+        <div v-for="r in risks" :key="r.id" style="border-left: 2px solid var(--accent); padding-left: 10px">
+          <div style="font-family: var(--mono); font-size: 9.5px; color: var(--ink-3)">{{ r.id }}</div>
+          <div style="font-size: 12px; margin-top: 2px">{{ r.text }}</div>
         </div>
       </div>
+      <div v-else style="font-size: 12px; color: var(--ink-2)">キャリーオーバー候補はありません。</div>
 
       <div style="margin-top: 24px; padding: 12px; border: 1px solid var(--line-2)">
         <div class="t-cap" style="margin-bottom: 6px">NEXT STEP</div>

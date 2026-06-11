@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import type { Status } from '~/composables/useDemoData';
+import type { Status } from '@belvedere/shared';
 
 const props = defineProps<{ status: Status }>();
 
 const STATUS_MAP: Record<Status, { color: string; label: string }> = {
-  TODO:    { color: 'var(--ink-3)', label: 'TODO' },
-  DOING:   { color: 'var(--accent)', label: 'DOING' },
-  REVIEW:  { color: 'var(--info)', label: 'REVIEW' },
-  DONE:    { color: 'var(--ok)', label: 'DONE' },
-  BLOCKED: { color: 'var(--err)', label: 'BLOCKED' },
+  backlog:       { color: 'var(--ink-4)', label: 'BACKLOG' },
+  todo:          { color: 'var(--ink-3)', label: 'TODO' },
+  'in-progress': { color: 'var(--accent)', label: 'DOING' },
+  review:        { color: 'var(--info)', label: 'REVIEW' },
+  done:          { color: 'var(--ok)', label: 'DONE' },
 };
 const m = computed(() => STATUS_MAP[props.status]);
 </script>

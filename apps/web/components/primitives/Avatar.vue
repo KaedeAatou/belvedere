@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { TEAM } from '~/composables/useDemoData';
 const props = defineProps<{ user?: string | null }>();
-const initials = computed(() => {
-  if (!props.user) return null;
-  return TEAM.find((t) => t.id === props.user)?.initials ?? '?';
-});
+const { memberInitial } = useMembers();
+const initials = computed(() => (props.user ? memberInitial(props.user) : null));
 </script>
 
 <template>

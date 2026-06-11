@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import type { DemoTicket } from '~/composables/useDemoData';
-import { TEAM } from '~/composables/useDemoData';
+import type { Ticket } from '@belvedere/shared';
 import { FLAG_DEFS } from '~/composables/useUiMeta';
 
-const props = defineProps<{ ticket: DemoTicket }>();
+const props = defineProps<{ ticket: Ticket }>();
 const emit = defineEmits<{ close: [] }>();
 
-const flags = computed(() => props.ticket.flags ?? []);
-const ownerName = computed(() => TEAM.find((t) => t.id === props.ticket.assignee)?.name ?? 'Unassigned');
+const { memberName } = useMembers();
+const flags = computed(() => computeLocalFlags(props.ticket));
+const ownerName = computed(() => memberName(props.ticket.assigneeId));
 </script>
 
 <template>
@@ -17,7 +17,7 @@ const ownerName = computed(() => TEAM.find((t) => t.id === props.ticket.assignee
       <TypeMark :type="ticket.type" />
       <span class="t-mono" style="font-size: 11px; color: var(--ink-2)">{{ ticket.id }}</span>
       <StatusDot :status="ticket.status" />
-      <StoryPoints :value="ticket.sp" :critical="ticket.sp == null" />
+      <StoryPoints :value="ticket.estimatePt ?? null" :critical="ticket.estimatePt == null" />
       <span style="flex: 1" />
       <button class="ibtn"><Icon name="link" /></button>
       <button class="ibtn" @click="emit('close')"><Icon name="x" /></button>
@@ -26,39 +26,32 @@ const ownerName = computed(() => TEAM.find((t) => t.id === props.ticket.assignee
     <div class="sheet-body">
       <h2>{{ ticket.title }}</h2>
       <div style="display: flex; gap: 10px; align-items: center; margin: 12px 0 22px; font-family: var(--mono); font-size: 11px; color: var(--ink-2)">
-        <Avatar :user="ticket.assignee" />
+        <Avatar :user="ticket.assigneeId" />
         <span>{{ ownerName }}</span>
         <span style="color: var(--ink-4)">·</span>
-        <span>Updated {{ ticket.lastUpdate ?? '—' }}</span>
-        <template v-if="ticket.sprint">
+        <span>Updated {{ ticket.updatedAt?.slice(0, 10) ?? '—' }}</span>
+        <template v-if="ticket.sprintId">
           <span style="color: var(--ink-4)">·</span>
-          <span>{{ ticket.sprint }}</span>
+          <span>{{ ticket.sprintId }}</span>
         </template>
       </div>
 
-      <!-- User story -->
+      <!-- Description -->
       <div class="field">
-        <div class="l">USER STORY</div>
-        <div v-if="ticket.actor" style="font-size: 13.5px; line-height: 1.6">
-          <span style="color: var(--ink-2)">〜として　</span>
-          <span style="color: var(--ink-0)">{{ ticket.actor }}</span><br />
-          <span style="color: var(--ink-2)">〜したい　</span>
-          <span style="color: var(--ink-0)">{{ ticket.title }}</span><br />
-          <span style="color: var(--ink-2)">〜のために　</span>
-          <span style="color: var(--ink-0)">{{ ticket.goal ?? '—' }}</span>
-        </div>
+        <div class="l">DESCRIPTION</div>
+        <div v-if="ticket.description" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.description }}</div>
         <div v-else
              style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
-          <span style="color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em">主語なし　</span>
-          ユーザーストーリーが定義されていません。AIが下書きを提案できます。
+          <span style="color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em">説明なし　</span>
+          詳細・ユーザーストーリーが記述されていません。
         </div>
       </div>
 
       <!-- Acceptance -->
       <div class="field">
         <div class="l">ACCEPTANCE CRITERIA</div>
-        <div v-if="ticket.acceptance && ticket.acceptance.length > 0" class="ac-list">
-          <div v-for="(a, i) in ticket.acceptance" :key="i" class="ac">
+        <div v-if="ticket.acceptanceCriteria && ticket.acceptanceCriteria.length > 0" class="ac-list">
+          <div v-for="(a, i) in ticket.acceptanceCriteria" :key="i" class="ac">
             <span class="check" />
             <span>{{ a }}</span>
           </div>

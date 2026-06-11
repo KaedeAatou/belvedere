@@ -1,12 +1,22 @@
 <script setup lang="ts">
-import type { Status } from '~/composables/useDemoData';
+import type { Status } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 
-const { tickets, moveTicket } = useDemoData();
+// 実 API データ源 (R3: demo data 廃止)。useState 共有なので各画面は composable から直接読む。
+const { tickets, fetchTickets, changeStatus } = useTickets();
+const { fetchMembers } = useMembers();
+const { fetchSprints } = useSprints();
+
 const screen = ref<ScreenId>('backlog');
 const aiOpen = ref(true);
 const railTab = ref<'backlog' | 'events'>('backlog');
 const selected = ref<string | null>(null);
+
+onMounted(() => {
+  fetchTickets();
+  fetchMembers();
+  fetchSprints();
+});
 
 watch(screen, (s) => {
   if (s === 'backlog') railTab.value = 'backlog';
@@ -14,7 +24,7 @@ watch(screen, (s) => {
 
 function onSelect(id: string) { selected.value = id; }
 function onClose() { selected.value = null; }
-function onMove(id: string, status: Status) { moveTicket(id, status); }
+function onMove(id: string, status: Status) { changeStatus(id, status); }
 function onJump(id: string) { selected.value = id; }
 
 const ticket = computed(() =>

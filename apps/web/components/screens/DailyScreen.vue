@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { DemoTicket, Status } from '~/composables/useDemoData';
+import type { Ticket, Status } from '@belvedere/shared';
 
 const props = defineProps<{
-  tickets: DemoTicket[];
+  tickets: Ticket[];
   selectedId: string | null;
 }>();
 const emit = defineEmits<{
@@ -10,36 +10,49 @@ const emit = defineEmits<{
   move: [id: string, status: Status];
 }>();
 
-const sprintTickets = computed(() => props.tickets.filter((t) => t.sprint === 'S24'));
-const cols: Status[] = ['TODO', 'DOING', 'REVIEW', 'DONE'];
-const totalDays = 14;
-const remaining = 11;
-const today = computed(() => sprintTickets.value.filter((t) => t.lastUpdate === '2026-04-30').length);
+const { activeSprint } = useSprints();
 
-const drag = ref<string | null>(null);
-const over = ref<string | null>(null);
+const sprintTickets = computed(() =>
+  activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
+);
 
-function ageInDays(started: string | null | undefined) {
-  if (!started) return 0;
-  const now = new Date('2026-04-30');
-  const s = new Date(started);
-  return Math.max(1, Math.round((now.getTime() - s.getTime()) / 86400000));
-}
-
-const ideal = Array.from({ length: totalDays + 1 }, (_, i) => 32 - (32 / totalDays) * i);
-const actual = [32, 32, 30, 28, 26, 24, 22, 20, 21];
-
-// Burndown SVG paths
-const W = 320, H = 200, P = 8, max = 32;
-const xCoord = (i: number) => P + (i / totalDays) * (W - P * 2);
-const yCoord = (v: number) => P + (1 - v / max) * (H - P * 2);
-const idealPath = ideal.map((v, i) => `${i === 0 ? 'M' : 'L'}${xCoord(i)},${yCoord(v)}`).join(' ');
-const actualPath = actual.map((v, i) => `${i === 0 ? 'M' : 'L'}${xCoord(i)},${yCoord(v)}`).join(' ');
-const actualArea = actualPath + ` L${xCoord(actual.length - 1)},${yCoord(0)} L${xCoord(0)},${yCoord(0)} Z`;
+// BLOCKED 列は廃止 (shared Status に無い)。4 列に。
+const cols: Status[] = ['todo', 'in-progress', 'review', 'done'];
+const COL_LABEL: Record<Status, string> = {
+  backlog: 'BACKLOG',
+  todo: 'TODO',
+  'in-progress': 'DOING',
+  review: 'REVIEW',
+  done: 'DONE',
+};
 
 function colItems(col: Status) {
   return sprintTickets.value.filter((t) => t.status === col);
 }
+
+const doneSP = computed(() => colItems('done').reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+const remaining = computed(() => Math.max(0, totalSP.value - doneSP.value));
+const inProgressCount = computed(() => colItems('in-progress').length);
+const blockedCount = computed(() => sprintTickets.value.filter((t) => (t.labels ?? []).includes('blocked')).length);
+const capacity = computed(() => activeSprint.value?.capacity ?? 32);
+
+const sprintDays = computed(() => {
+  if (!activeSprint.value) return { elapsed: 0, total: 14 };
+  const start = Date.parse(activeSprint.value.startsAt);
+  const end = Date.parse(activeSprint.value.endsAt);
+  const total = Math.max(1, Math.round((end - start) / 86_400_000));
+  const elapsed = Math.min(total, Math.max(0, Math.round((Date.now() - start) / 86_400_000)));
+  return { elapsed, total };
+});
+
+function ageInDays(started?: string): number {
+  if (!started) return 0;
+  return Math.max(1, Math.round((Date.now() - Date.parse(started)) / 86_400_000));
+}
+
+const drag = ref<string | null>(null);
+const over = ref<string | null>(null);
 
 function onDragStart(id: string) { drag.value = id; }
 function onDragEnd() { drag.value = null; over.value = null; }
@@ -51,47 +64,56 @@ function onDrop(e: DragEvent, col: Status) {
   over.value = null;
   drag.value = null;
 }
+
+// Burndown は装飾 (理想線 + 進捗イメージ)。capacity を上限に使う。
+const W = 320, H = 200, P = 8;
+const max = computed(() => capacity.value);
+const total = computed(() => sprintDays.value.total);
+const ideal = computed(() => Array.from({ length: total.value + 1 }, (_, i) => max.value - (max.value / total.value) * i));
+const xCoord = (i: number) => P + (i / total.value) * (W - P * 2);
+const yCoord = (v: number) => P + (1 - v / max.value) * (H - P * 2);
+const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L'}${xCoord(i)},${yCoord(v)}`).join(' '));
 </script>
 
 <template>
   <div class="screen-head">
     <div>
       <div class="floor"><span class="step" />FLOOR 02 / DAILY</div>
-      <h1>Daily Scrum — Day 08</h1>
+      <h1>Daily Scrum — Day {{ String(sprintDays.elapsed).padStart(2, '0') }}</h1>
       <div class="subtitle">
         昨日の前進、今日のコミット、ブロッカーを 15 分で。AIは
         <span style="color: var(--accent)">滞留</span>と<span style="color: var(--accent)">ベロシティ乖離</span>を監視中。
       </div>
     </div>
     <div class="stat-row">
-      <div class="stat"><div class="label">Day</div><div class="v t-num">08<span style="color: var(--ink-3); font-size: 14px">/{{ totalDays }}</span></div></div>
+      <div class="stat"><div class="label">Day</div><div class="v t-num">{{ String(sprintDays.elapsed).padStart(2, '0') }}<span style="color: var(--ink-3); font-size: 14px">/{{ sprintDays.total }}</span></div></div>
       <div class="stat"><div class="label">Remain</div><div class="v t-num">{{ remaining }}</div><div class="delta">SP</div></div>
-      <div class="stat"><div class="label">Pace</div><div class="v t-num accent">−2</div><div class="delta">SP vs ideal</div></div>
-      <div class="stat"><div class="label">Updates</div><div class="v t-num">{{ today }}</div><div class="delta">today</div></div>
+      <div class="stat"><div class="label">Done</div><div class="v t-num accent">{{ doneSP }}</div><div class="delta">SP</div></div>
+      <div class="stat"><div class="label">In progress</div><div class="v t-num">{{ inProgressCount }}</div><div class="delta">tickets</div></div>
     </div>
   </div>
 
   <div class="daily">
     <div class="daily-strip">
       <div class="cell">
-        <div class="l">YESTERDAY</div>
-        <div class="v t-num">5<span class="u">SP</span></div>
-        <div class="sub">3 tickets advanced</div>
+        <div class="l">CAPACITY</div>
+        <div class="v t-num">{{ capacity }}<span class="u">SP</span></div>
+        <div class="sub">sprint capacity</div>
       </div>
       <div class="cell">
         <div class="l">IN PROGRESS</div>
-        <div class="v t-num">{{ sprintTickets.filter((t) => t.status === 'DOING').length }}</div>
-        <div class="sub" style="color: var(--accent)">2 long-doing</div>
+        <div class="v t-num">{{ inProgressCount }}</div>
+        <div class="sub">tickets active</div>
       </div>
       <div class="cell">
         <div class="l">BLOCKED</div>
-        <div class="v t-num">{{ sprintTickets.filter((t) => t.status === 'BLOCKED').length }}</div>
-        <div class="sub" style="color: var(--accent)">1 silent</div>
+        <div class="v t-num">{{ blockedCount }}</div>
+        <div class="sub">labelled blocked</div>
       </div>
       <div class="cell">
-        <div class="l">CYCLE TIME (avg)</div>
-        <div class="v t-num">2.6<span class="u">d</span></div>
-        <div class="sub">target ≤ 2.0d</div>
+        <div class="l">REMAINING</div>
+        <div class="v t-num">{{ remaining }}<span class="u">SP</span></div>
+        <div class="sub">to done</div>
       </div>
     </div>
 
@@ -99,7 +121,7 @@ function onDrop(e: DragEvent, col: Status) {
       <div class="daily-board">
         <div v-for="col in cols" :key="col" class="col-board">
           <div class="ch">
-            <span class="name">{{ col }}</span>
+            <span class="name">{{ COL_LABEL[col] }}</span>
             <span class="count">{{ colItems(col).length }}</span>
           </div>
           <div class="col-body"
@@ -110,7 +132,7 @@ function onDrop(e: DragEvent, col: Status) {
             <template v-for="t in colItems(col)" :key="t.id">
               <div :class="[
                      'tcard',
-                     (t.flags ?? []).length > 0 && 'flagged',
+                     computeLocalFlags(t).length > 0 && 'flagged',
                      drag === t.id && 'dragging',
                    ]"
                    draggable="true"
@@ -123,14 +145,14 @@ function onDrop(e: DragEvent, col: Status) {
                 </div>
                 <div class="title">{{ t.title }}</div>
                 <div class="row">
-                  <StoryPoints :value="t.sp" :critical="t.sp == null" />
-                  <FlagPill v-for="f in (t.flags ?? []).slice(0, 2)" :key="f" :flag="f" mini />
+                  <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
+                  <FlagPill v-for="f in computeLocalFlags(t).slice(0, 2)" :key="f" :flag="f" mini />
                   <span class="spacer" />
-                  <span v-if="col === 'DOING'"
-                        :class="['age', ageInDays(t.started) > 2 && 'warn']">
-                    <Icon name="clock" /> {{ ageInDays(t.started) }}d
+                  <span v-if="col === 'in-progress' && t.startedAt"
+                        :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
+                    <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
                   </span>
-                  <Avatar :user="t.assignee" />
+                  <Avatar :user="t.assigneeId" />
                 </div>
               </div>
             </template>
@@ -146,19 +168,12 @@ function onDrop(e: DragEvent, col: Status) {
         <h3>Burndown</h3>
         <div class="legend">
           <span><i style="background: var(--ink-3); border-top: 1px dashed var(--ink-3)" />Ideal</span>
-          <span><i style="background: var(--accent)" />Actual</span>
+          <span><i style="background: var(--accent)" />Done</span>
         </div>
         <div class="burn-chart">
           <svg :viewBox="`0 0 ${W} ${H}`" style="position: absolute; inset: 0; width: 100%; height: 100%">
-            <line v-for="g in [0, 8, 16, 24, 32]" :key="g" :x1="P" :y1="yCoord(g)" :x2="W - P" :y2="yCoord(g)" stroke="var(--line-1)" />
-            <text v-for="g in [0, 16, 32]" :key="`t${g}`" :x="W - P + 2" :y="yCoord(g) + 3" font-size="9" fill="var(--ink-3)" font-family="var(--mono)">{{ g }}</text>
+            <line v-for="g in [0, capacity / 4, capacity / 2, (capacity * 3) / 4, capacity]" :key="g" :x1="P" :y1="yCoord(g)" :x2="W - P" :y2="yCoord(g)" stroke="var(--line-1)" />
             <path :d="idealPath" stroke="var(--ink-3)" stroke-width="1" fill="none" stroke-dasharray="3 4" />
-            <path :d="actualArea" fill="rgba(245,194,66,0.08)" />
-            <path :d="actualPath" stroke="var(--accent)" stroke-width="1.5" fill="none" />
-            <circle :cx="xCoord(actual.length - 1)" :cy="yCoord(actual[actual.length - 1] ?? 0)" r="3" fill="var(--accent)" />
-            <circle :cx="xCoord(actual.length - 1)" :cy="yCoord(actual[actual.length - 1] ?? 0)" r="6" fill="none" stroke="var(--accent)" opacity="0.4" />
-            <line :x1="xCoord(actual.length - 1)" :y1="P" :x2="xCoord(actual.length - 1)" :y2="H - P" stroke="var(--accent)" stroke-width="1" stroke-dasharray="2 3" opacity="0.4" />
-            <text :x="xCoord(actual.length - 1) + 4" :y="P + 10" font-size="9" fill="var(--accent)" font-family="var(--mono)">DAY 8</text>
           </svg>
         </div>
         <div class="axis-x">
@@ -168,23 +183,23 @@ function onDrop(e: DragEvent, col: Status) {
         <div class="burn-stat-row">
           <div class="burn-stat">
             <div class="l">Done</div>
-            <div class="v t-num">{{ 32 - remaining }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
+            <div class="v t-num">{{ doneSP }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
           </div>
           <div class="burn-stat">
-            <div class="l">Today's pace</div>
-            <div class="v t-num">2.6<span style="font-size: 13px; color: var(--ink-3)">SP/d</span></div>
+            <div class="l">Remaining</div>
+            <div class="v t-num">{{ remaining }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
           </div>
           <div class="burn-stat">
-            <div class="l">Forecast</div>
-            <div class="v t-num" style="color: var(--accent)">+1d</div>
+            <div class="l">Capacity</div>
+            <div class="v t-num">{{ capacity }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
           </div>
         </div>
 
         <div style="margin-top: 24px; padding: 14px; border: 1px solid var(--accent-dim); background: var(--accent-bg)">
           <div class="t-cap" style="color: var(--accent); margin-bottom: 6px">AI INSIGHT</div>
           <div style="font-size: 12px; line-height: 1.55">
-            理想ラインから −2SP の遅れ。BLV-207（10日DOING）を分割し、
-            BLV-202 を Day 9 までに REVIEW に進められれば回復可能です。
+            in-progress に長く留まるチケットは分割を、ブロック中のものは理由の記録を推奨します。
+            残り {{ remaining }}SP を計画的に消化しましょう。
           </div>
         </div>
       </div>
