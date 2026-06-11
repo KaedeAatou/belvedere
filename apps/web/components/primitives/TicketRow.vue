@@ -8,8 +8,12 @@ const props = defineProps<{
 }>();
 defineEmits<{ click: [] }>();
 
-// 暫定: ローカル計算 flag (T5-3 で findings ピルに置換)
-const flags = computed(() => computeLocalFlags(props.t));
+// ルールエンジン findings (T5-3 / C 案)。severity 悪い順。行内は最大 2 個 + 超過は +n に丸める。
+const { findingsFor } = useFindings();
+const findings = computed(() => findingsFor(props.t.id));
+const shown = computed(() => findings.value.slice(0, 2));
+const overflow = computed(() => Math.max(0, findings.value.length - 2));
+const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.message).join('\n'));
 </script>
 
 <template>
@@ -20,9 +24,9 @@ const flags = computed(() => computeLocalFlags(props.t));
     <span class="trow-id t-mono">{{ t.id }}</span>
     <span class="trow-title">
       {{ t.title }}
-      <span v-if="flags.length > 0" class="trow-flags">
-        <FlagPill v-for="f in flags.slice(0, 3)" :key="f" :flag="f" mini />
-        <span v-if="flags.length > 3" class="t-cap-tight">+{{ flags.length - 3 }}</span>
+      <span v-if="findings.length > 0" class="trow-flags">
+        <FindingPill v-for="f in shown" :key="f.ruleId" :finding="f" />
+        <span v-if="overflow > 0" class="finding-badge sev-more" :title="overflowTitle">+{{ overflow }}</span>
       </span>
     </span>
     <slot name="extra" />

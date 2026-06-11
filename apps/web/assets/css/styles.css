@@ -516,6 +516,10 @@ a { color: inherit; text-decoration: none; }
 .ttype.bug   { color: var(--err); border-color: rgba(200,115,106,0.4); }
 .ttype.task  { color: var(--ink-1); }
 .ttype.spike { color: var(--accent); border-color: var(--accent-dim); }
+/* incident: bug(--err 枠線) と区別するため塗りつぶし赤 */
+.ttype.incident { color: #FFFBF6; background: var(--err); border-color: var(--err); }
+/* 種別なし (TYPE_MISSING): グレーの破線「?」 */
+.ttype.none  { color: var(--ink-3); border-style: dashed; }
 
 /* ----- avatar ----- */
 .av {

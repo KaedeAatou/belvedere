@@ -6,6 +6,7 @@ import type { ScreenId } from '~/composables/useUiMeta';
 const { tickets, fetchTickets, changeStatus } = useTickets();
 const { fetchMembers } = useMembers();
 const { fetchSprints } = useSprints();
+const { fetchFindings } = useFindings();
 
 const screen = ref<ScreenId>('backlog');
 const aiOpen = ref(true);
@@ -16,6 +17,7 @@ onMounted(() => {
   fetchTickets();
   fetchMembers();
   fetchSprints();
+  fetchFindings('refinement'); // 全画面共通: チケット品質の指摘 (T5-3 ピル / T9 ワークキュー)
 });
 
 watch(screen, (s) => {

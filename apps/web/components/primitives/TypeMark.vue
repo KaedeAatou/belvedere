@@ -3,12 +3,13 @@ import type { TicketType } from '@belvedere/shared';
 
 const props = defineProps<{ type?: TicketType }>();
 
-// type 未設定 (種別なし) は '·' のグレー表示。T5-1 で incident 色 + 視覚強化予定。
+// type 未設定 (TYPE_MISSING) は破線グレーの「?」(.ttype.none)。spike の「?」は accent 色で区別。
+// incident は塗りつぶし赤 (枠線だけの bug と区別)。
 const ch = computed(() =>
-  props.type ? ({ story: 'S', task: 'T', spike: '?', bug: 'B', incident: '!' }[props.type] ?? '·') : '·',
+  props.type ? ({ story: 'S', task: 'T', spike: '?', bug: 'B', incident: '!' }[props.type] ?? '?') : '?',
 );
 </script>
 
 <template>
-  <span :class="['ttype', type ?? 'none']">{{ ch }}</span>
+  <span :class="['ttype', type ?? 'none']" :title="type ?? '種別なし'">{{ ch }}</span>
 </template>
