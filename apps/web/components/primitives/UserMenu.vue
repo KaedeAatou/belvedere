@@ -104,7 +104,8 @@ function goSettings(): void {
         >
           <span class="ws-check">{{ w.id === currentId ? '✓' : '' }}</span>
           <span class="ws-name">{{ w.name }}</span>
-          <span class="badge badge-role" style="margin-left: auto">{{ w.role }}</span>
+          <!-- .badge-role は既存 e2e が一意 locator 前提のため WS 一覧では別クラス名 -->
+          <span class="badge badge-ws-role" style="margin-left: auto">{{ w.role }}</span>
         </button>
         <button class="menu-item ws-new" data-testid="ws-create-open" @click="goSettings">
           <Icon name="plus" />
@@ -209,7 +210,7 @@ function goSettings(): void {
   text-transform: uppercase;
 }
 
-.badge-role {
+.badge-role, .badge-ws-role {
   background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
