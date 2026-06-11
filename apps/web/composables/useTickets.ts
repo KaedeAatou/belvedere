@@ -1,5 +1,5 @@
 // 実 API データ用の Ticket composable (Phase 1-C / 2026-06-11)。
-// useDemoData (demo 用) と並行運用、Phase 1-C 後半で demo data を完全廃止予定。
+// R3 で demo data (useDemoData) を完全廃止し、全画面がこの単一 source を描画する。
 //
 // 使い方:
 //   const { tickets, isLoading, error, fetchTickets, createTicket } = useTickets();

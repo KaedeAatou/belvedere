@@ -1,28 +1,48 @@
 <script setup lang="ts">
-import type { DemoTicket } from '~/composables/useDemoData';
+import type { Ticket, Priority } from '@belvedere/shared';
 
 const props = defineProps<{
-  tickets: DemoTicket[];
+  tickets: Ticket[];
   selectedId: string | null;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const sprintTickets = computed(() => props.tickets.filter((t) => t.sprint === 'S24'));
-const backlogTickets = computed(() => props.tickets.filter((t) => !t.sprint));
-const issueCount = computed(() => props.tickets.reduce((n, t) => n + (t.flags?.length ?? 0), 0));
-const noSP = computed(() => props.tickets.filter((t) => t.flags.includes('no-points')).length);
-const noAcc = computed(() => props.tickets.filter((t) => t.flags.includes('no-acceptance')).length);
-const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.sp ?? 0), 0));
+const { activeSprint } = useSprints();
+const { createTicket, isLoading: createLoading, error: liveError } = useTickets();
 
-// 実 API データセクション (Phase 1-C / 2026-06-11)
-// Demo data と並行表示、Phase 1-C 後半で完全置換予定
-const { tickets: liveTickets, isLoading: liveLoading, error: liveError, fetchTickets, createTicket } = useTickets();
-onMounted(() => { fetchTickets(); });
+// active sprint のチケット / それ以外 (= プロダクトバックログ) に二分
+const sprintTickets = computed(() =>
+  activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
+);
+const backlogTickets = computed(() => {
+  const activeId = activeSprint.value?.id;
+  return props.tickets.filter((t) => t.sprintId !== activeId);
+});
+
+// 暫定 flag 集計 (T5-3 で findings に置換)
+function flagCount(t: Ticket): number { return computeLocalFlags(t).length; }
+const issueCount = computed(() => props.tickets.reduce((n, t) => n + flagCount(t), 0));
+const noSP = computed(() => props.tickets.filter((t) => computeLocalFlags(t).includes('no-points')).length);
+const noAcc = computed(() => props.tickets.filter((t) => computeLocalFlags(t).includes('no-acceptance')).length);
+const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
+
+const sprintStats = computed(() => ({
+  count: sprintTickets.value.length,
+  sp: sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0),
+  flagged: sprintTickets.value.filter((t) => flagCount(t) > 0).length,
+}));
+const backlogStats = computed(() => ({
+  count: backlogTickets.value.length,
+  sp: backlogTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0),
+  flagged: backlogTickets.value.filter((t) => flagCount(t) > 0).length,
+}));
+
+const sprintLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
 
 // 新規作成ダイアログ
 const showCreateDialog = ref(false);
 const newTitle = ref('');
-const newPriority = ref<'low' | 'medium' | 'high' | 'urgent'>('medium');
+const newPriority = ref<Priority>('medium');
 const newEstimatePt = ref<number | null>(null);
 const createError = ref<string | null>(null);
 
@@ -40,7 +60,7 @@ async function submitCreate(): Promise<void> {
     createError.value = 'タイトルは必須です';
     return;
   }
-  const input: { title: string; priority: 'low' | 'medium' | 'high' | 'urgent'; estimatePt?: number } = {
+  const input: { title: string; priority: Priority; estimatePt?: number } = {
     title: newTitle.value.trim(),
     priority: newPriority.value,
   };
@@ -52,17 +72,6 @@ async function submitCreate(): Promise<void> {
     createError.value = liveError.value ?? 'API 呼出失敗';
   }
 }
-
-const sprintStats = computed(() => ({
-  count: sprintTickets.value.length,
-  sp: sprintTickets.value.reduce((n, t) => n + (t.sp ?? 0), 0),
-  flagged: sprintTickets.value.filter((t) => t.flags.length).length,
-}));
-const backlogStats = computed(() => ({
-  count: backlogTickets.value.length,
-  sp: backlogTickets.value.reduce((n, t) => n + (t.sp ?? 0), 0),
-  flagged: backlogTickets.value.filter((t) => t.flags.length).length,
-}));
 </script>
 
 <template>
@@ -90,28 +99,33 @@ const backlogStats = computed(() => ({
     <button class="h-btn" data-testid="new-ticket-btn" @click="openCreate"><Icon name="plus" /> New issue <span class="kbd">C</span></button>
   </div>
 
-  <div class="screen-body">
+  <div class="screen-body" data-testid="live-section">
+    <p v-if="createLoading && tickets.length === 0" class="live-msg">読み込み中…</p>
+    <p v-else-if="liveError && tickets.length === 0" class="live-msg live-error">取得失敗: {{ liveError }}</p>
+
+    <!-- active sprint -->
     <div class="backlog-section">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
-        <span class="title">Sprint 24 — Spiral</span>
+        <span class="title">{{ sprintLabel }}</span>
         <span class="chip amber solid">CURRENT</span>
-        <span class="t-cap">Apr 21 → May 04</span>
         <div class="meta">
           <span><b>{{ sprintStats.count }}</b> issues</span>
           <span><b>{{ sprintStats.sp }}</b> SP</span>
           <span><b>{{ sprintStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t"
+      <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle
                  @click="emit('select', t.id)">
         <template #extra>
           <StatusDot :status="t.status" />
         </template>
       </TicketRow>
+      <p v-if="sprintTickets.length === 0" class="live-msg">アクティブスプリントにチケットがありません。</p>
     </div>
 
+    <!-- product backlog -->
     <div class="backlog-section">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
@@ -123,32 +137,14 @@ const backlogStats = computed(() => ({
           <span><b>{{ backlogStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <TicketRow v-for="t in backlogTickets" :key="t.id" :t="t"
+      <TicketRow v-for="t in backlogTickets" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle
-                 @click="emit('select', t.id)" />
-    </div>
-
-    <!-- Phase 1-C 実 API データセクション (Demo data とは別、新規作成はここに反映) -->
-    <div class="backlog-section live-section" data-testid="live-section">
-      <div class="backlog-section-head">
-        <Icon name="caretRight" />
-        <span class="title">Live (実 API)</span>
-        <span class="chip amber solid">PHASE 1-C</span>
-        <div class="meta">
-          <span><b>{{ liveTickets.length }}</b> issues</span>
-        </div>
-      </div>
-      <p v-if="liveLoading && liveTickets.length === 0" class="live-msg">読み込み中…</p>
-      <p v-else-if="liveError" class="live-msg live-error">取得失敗: {{ liveError }}</p>
-      <p v-else-if="liveTickets.length === 0" class="live-msg">まだチケットがありません。「+ New issue」で作成してください。</p>
-      <ul v-else class="live-list" data-testid="live-tickets">
-        <li v-for="t in liveTickets" :key="t.id" class="live-row" data-testid="live-ticket">
-          <span class="live-id">{{ t.id }}</span>
-          <span class="live-title">{{ t.title }}</span>
-          <span class="live-priority" :data-priority="t.priority">{{ t.priority }}</span>
-          <span v-if="t.estimatePt !== undefined" class="live-sp">{{ t.estimatePt }} SP</span>
-        </li>
-      </ul>
+                 @click="emit('select', t.id)">
+        <template #extra>
+          <StatusDot :status="t.status" />
+        </template>
+      </TicketRow>
+      <p v-if="backlogTickets.length === 0" class="live-msg">まだチケットがありません。「+ New issue」で作成してください。</p>
     </div>
   </div>
 
@@ -198,8 +194,8 @@ const backlogStats = computed(() => ({
       </div>
       <div class="dialog-foot">
         <button class="btn-cancel" @click="showCreateDialog = false">キャンセル</button>
-        <button class="btn-primary" data-testid="submit-create" :disabled="liveLoading" @click="submitCreate">
-          {{ liveLoading ? '作成中…' : '作成' }}
+        <button class="btn-primary" data-testid="submit-create" :disabled="createLoading" @click="submitCreate">
+          {{ createLoading ? '作成中…' : '作成' }}
         </button>
       </div>
     </div>
@@ -207,11 +203,6 @@ const backlogStats = computed(() => ({
 </template>
 
 <style scoped>
-.live-section {
-  border-top: 2px solid var(--accent);
-  padding-top: 16px;
-  margin-top: 24px;
-}
 .live-msg {
   padding: 12px 16px;
   font-family: var(--sans);
@@ -220,55 +211,6 @@ const backlogStats = computed(() => ({
 }
 .live-msg.live-error {
   color: var(--err);
-}
-.live-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.live-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: var(--hairline) solid var(--line-1);
-  font-family: var(--sans);
-  font-size: 13px;
-}
-.live-row:hover {
-  background: var(--bg-3);
-}
-.live-id {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-3);
-  min-width: 80px;
-}
-.live-title {
-  flex: 1;
-  color: var(--ink-0);
-}
-.live-priority {
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border-radius: 2px;
-  background: var(--bg-3);
-  color: var(--ink-2);
-}
-.live-priority[data-priority='urgent'] {
-  background: rgba(184, 90, 74, 0.15);
-  color: var(--err);
-}
-.live-priority[data-priority='high'] {
-  background: rgba(217, 83, 0, 0.12);
-  color: var(--accent);
-}
-.live-sp {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-2);
 }
 
 /* ダイアログ */

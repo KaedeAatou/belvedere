@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import type { DemoTicket } from '~/composables/useDemoData';
+import type { Ticket } from '@belvedere/shared';
 
 const props = defineProps<{
-  t: DemoTicket;
+  t: Ticket;
   selected?: boolean;
   dragHandle?: boolean;
 }>();
 defineEmits<{ click: [] }>();
-const flags = computed(() => props.t.flags ?? []);
+
+// 暫定: ローカル計算 flag (T5-3 で findings ピルに置換)
+const flags = computed(() => computeLocalFlags(props.t));
 </script>
 
 <template>
@@ -29,7 +31,7 @@ const flags = computed(() => props.t.flags ?? []);
         {{ l }}
       </span>
     </span>
-    <StoryPoints :value="t.sp" :critical="t.sp == null" />
-    <Avatar :user="t.assignee" />
+    <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
+    <Avatar :user="t.assigneeId" />
   </div>
 </template>
