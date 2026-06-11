@@ -26,6 +26,10 @@ export class RetroPage extends BasePage {
     await this.page.getByRole('button', { name: 'Events', exact: true }).click();
     await this.page.getByTestId('rail-retro').click();
     await expect(this.stack).toBeVisible({ timeout: 15_000 });
+    // 積み上げは onMounted の fetch で非同期に埋まる。コンテナ表示だけでは
+    // 「読込前の 0 件」を初期値と誤認するため、アイテムか空状態のどちらかが
+    // 出るまで待って「読込完了」を保証する。
+    await expect(this.stackItems.first().or(this.page.locator('.stack-empty'))).toBeVisible({ timeout: 15_000 });
   }
 
   /** 積み上げの現在の件数 */
@@ -81,13 +85,18 @@ export class RetroPage extends BasePage {
   }
 
   /**
-   * 積み上げに追加された最後のアイテムの削除ボタンをクリックして削除する。
-   * クリーンアップ用: 追加に成功した場合は必ず呼んで元の件数に戻す。
-   * @param text 削除対象テキスト (一致する最初のアイテムを削除)
+   * 指定テキストに一致する積み上げアイテムを全件削除する。
+   * クリーンアップ + 過去の失敗 run が残した残骸の自己清掃を兼ねる。
+   * 0 件なら何もしない (並行 run が先に消した場合も許容)。
    */
-  async removeFromStack(text: string): Promise<void> {
-    const item = this.stackItems.filter({ hasText: text }).first();
-    await expect(item).toBeVisible({ timeout: 5_000 });
-    await item.locator('.rm').click();
+  async removeAllFromStack(text: string): Promise<void> {
+    for (let i = 0; i < 10; i++) {
+      const items = this.stackItems.filter({ hasText: text });
+      const n = await items.count();
+      if (n === 0) return;
+      await items.first().locator('.rm').click();
+      // DELETE → refetch の反映で件数が減るまで待つ
+      await expect.poll(async () => items.count(), { timeout: 8_000 }).toBeLessThan(n);
+    }
   }
 }
