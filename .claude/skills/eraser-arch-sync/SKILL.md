@@ -1,6 +1,6 @@
 ---
 name: eraser-arch-sync
-description: Belvedere の Eraser アーキ図 (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) を `ARCHITECTURE.md` の Mermaid 図と一方向同期する (ARCHITECTURE.md → Eraser)。Use this skill whenever the user edits `ARCHITECTURE.md` / Mermaid 図 / 儀式数 / Agent 構成 / GCP サービス選択 / データ層、または mentions「アーキ図同期」「Eraser 反映」「ピッチ用の図を更新」/ arch-sync。ピッチ審査員に見せる公開図のため、編集後は同期し忘れない。会社情報 (`***company-redacted***`/`***company-account-redacted***`) と廃止語 (翼/風車/Kazaguruma) は絶対に図に混入させない。
+description: Belvedere の Eraser アーキ図 (https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) を `ARCHITECTURE.md` の Mermaid 図と一方向同期する (ARCHITECTURE.md → Eraser)。Use this skill whenever the user edits `ARCHITECTURE.md` / Mermaid 図 / 儀式数 / Agent 構成 / GCP サービス選択 / データ層、または mentions「アーキ図同期」「Eraser 反映」「ピッチ用の図を更新」/ arch-sync。ピッチ審査員に見せる公開図のため、編集後は同期し忘れない。会社情報 (会社名 / 会社アカウント名 — 具体文字列もここに書かない) と廃止語 (翼/風車/Kazaguruma) は絶対に図に混入させない。
 color: purple
 ---
 
@@ -132,7 +132,7 @@ PubSub --> Orchestrator: review_recording.uploaded
 
 ## 注意事項
 
-- **Eraser 図に会社情報を絶対含めない**: ノードラベルや title 等で `***company-redacted***` / `***company-account-redacted***` 等が混入しないよう、生成 DSL を grep スキャン
+- **Eraser 図に会社情報を絶対含めない**: ノードラベルや title 等で 会社名・会社アカウント名等が混入しないよう、生成 DSL を grep スキャン
 - **idPrefix は表記しても OK**: Belvedere Core (BV-) や他 Project の存在は図に書いてよい
 - **比喩 (螺旋階段 / FLOOR) は明示的に**: ピッチ用なので「FLOOR 01-05」表記は維持。ただし「翼」「風車」「Kazaguruma」など廃止語は絶対に使わない
 - 同期前に必ず `ARCHITECTURE.md` の Mermaid 図が最新であることを確認 (この skill は ARCHITECTURE.md → Eraser の一方向同期。逆同期はしない)

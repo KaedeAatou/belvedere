@@ -28,7 +28,7 @@
    (Mock LLM `detectRole` が依存)。prompts.ts を編集したら **`mock-llm-reviewer` subagent と
    `agent-prompt-sync` skill を必ず実行**。
 5. **廃止語を復活させない**: `WindEvent` / `風車` / `Kazaguruma` / `@kazaguruma/*` / 翼メタファー。
-6. **会社識別子 (`***company-redacted***` / `***company-account-redacted***` / 会社メアド) をコード・コミットに混入させない**。
+6. **会社識別子 (会社名 / 会社ドメイン / 会社メアド) をコード・コミットに混入させない** (具体文字列を公開 repo に書くこと自体が露出になるため、このルール内にも書かない)。
 7. **commit は belvedere-commit skill 形式** (`[種別]要約` + 空行 + 理由)。1 commit = 1 論理変更。
    `git add -A` / `git add .` 禁止 (ファイル名明示)。
 8. **e2e の `data-testid` 属性と Page Object の公開メソッド名を変えない** (CI が 6 シナリオで使用)。

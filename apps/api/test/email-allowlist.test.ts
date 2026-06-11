@@ -21,8 +21,14 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
   });
 
   it('会社メアドは allowlist に絶対入れない (PII / 個人参加要件)', () => {
-    // ハッカソンは個人参加要件があるので、会社ドメインは絶対 owner にしない
-    expect(emailAllowlist['***company-email-redacted***']).toBeUndefined();
+    // ハッカソンは個人参加要件があるので、会社ドメインは絶対 owner にしない。
+    // 実在の会社メアドを公開 repo に書くこと自体が個人↔会社の紐付け露出になるため、
+    // ダミードメインで「個人 Gmail 以外が入っていない」を検証する。
+    expect(emailAllowlist['someone@company.example']).toBeUndefined();
+    const gmailOnly = Object.keys(emailAllowlist).every(
+      (e) => e.endsWith('@gmail.com') || e.endsWith('@belvedere.test'),
+    );
+    expect(gmailOnly).toBe(true);
   });
 
   it('robot-e2e@belvedere.test は ws-e2e-test owner として登録される (Stage 2)', () => {
