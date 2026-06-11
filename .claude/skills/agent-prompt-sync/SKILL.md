@@ -51,7 +51,7 @@ if (/Orchestrator/.test(sys)) return 'orchestrator';
 
 | Role | TS keywords | Python keywords | Drift |
 |---|---|---|---|
-| planner | Planner Agent, Sprint Goal, SP容量, 品質診断 (DoD/SP/US紐付け) | Sprint Goal, 容量, 品質診断 | ✅ |
+| planner | Planner Agent, Sprint Goal, 計画SP vs velocity, 品質診断 (DoD/SP/US紐付け) | Sprint Goal, velocity, 品質診断 | ✅ |
 | refinement | Refinement Agent, 粒度過大, 依存, valueImpact, priority×valueImpact, SP分散 | 粒度, 依存, valueImpact, ミスマッチ | ✅ |
 | daily | Daily Agent, Velocity整合, 2日完了率, 3日停滞 | Velocity, 2日完了, 停滞 | ✅ |
 | reviewer | Reviewer Agent, デモシナリオ, preview URL | デモシナリオ, preview URL | ✅ |

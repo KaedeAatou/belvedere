@@ -62,7 +62,7 @@ Scrum Guide 2020 はユーザーストーリーもタスクも規定していな
 
 | 種別 | Planning (Planner) | Daily (Daily) | Refinement (Refinement) |
 |---|---|---|---|
-| **story** | Sprint Goal 整合 / 容量 vs ΣSP / DoD あり | 3 日停滞 / Velocity 差 | SP>8 粒度過大 / ★DoD 手続き的 / valueImpact 未設定 / priority↔valueImpact ミスマッチ |
+| **story** | Sprint Goal 整合 / ΣSP vs velocity (過剰計画) / DoD あり | 3 日停滞 / Velocity 差 | SP>8 粒度過大 / ★DoD 手続き的 / valueImpact 未設定 / priority↔valueImpact ミスマッチ |
 | **task** | ★親 Story なし投入を弾く | ★1 日想定 vs 2 日経過 | ★親なし Task 検出 |
 | **spike** | タイムボックス設定済 | タイムボックス超過警告 | ★DoD が判断材料ベースか |
 | **bug** | 優先度 vs 影響範囲 | 修正リードタイム | ★再現手順なし / 回帰テスト DoD あり |
