@@ -6,7 +6,7 @@
 //   onMounted(() => fetchTickets());
 //   await createTicket({ title: '新規' });
 
-import type { Ticket, Status, Priority, ValueImpact, Ritual } from '@belvedere/shared';
+import type { Ticket, Status, Priority, ValueImpact, Ritual, TicketType } from '@belvedere/shared';
 
 export interface CreateTicketInput {
   title: string;
@@ -20,6 +20,23 @@ export interface CreateTicketInput {
   estimatePt?: number;
   acceptanceCriteria?: string[];
   labels?: string[];
+  type?: TicketType;
+  timeboxHours?: number;
+}
+
+/** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
+export interface PatchTicketInput {
+  title?: string;
+  description?: string;
+  priority?: Priority;
+  valueImpact?: ValueImpact;
+  sprintId?: string;
+  assigneeId?: string;
+  estimatePt?: number;
+  acceptanceCriteria?: string[];
+  labels?: string[];
+  type?: TicketType;
+  timeboxHours?: number;
 }
 
 export const useTickets = () => {
@@ -63,6 +80,8 @@ export const useTickets = () => {
       if (input.estimatePt !== undefined) body.estimatePt = input.estimatePt;
       if (input.acceptanceCriteria !== undefined) body.acceptanceCriteria = input.acceptanceCriteria;
       if (input.labels !== undefined) body.labels = input.labels;
+      if (input.type !== undefined) body.type = input.type;
+      if (input.timeboxHours !== undefined) body.timeboxHours = input.timeboxHours;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)
@@ -77,5 +96,55 @@ export const useTickets = () => {
     }
   }
 
-  return { tickets, isLoading, error, fetchTickets, createTicket };
+  /** 部分更新。成功時はローカル tickets を楽観更新してサーバ結果で置換する。 */
+  async function patchTicket(id: string, patch: PatchTicketInput): Promise<Ticket | null> {
+    error.value = null;
+    try {
+      const body: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(patch)) {
+        if (v !== undefined) body[k] = v;
+      }
+      const updated = await api.patch<Ticket>(`/api/tickets/${id}`, body);
+      tickets.value = tickets.value.map((t) => (t.id === id ? updated : t));
+      return updated;
+    } catch (e) {
+      const err = e as { data?: { error?: string }; message?: string };
+      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      return null;
+    }
+  }
+
+  /** ステータス遷移 (専用 endpoint。サーバが startedAt/completedAt を自動スタンプ)。 */
+  async function changeStatus(id: string, status: Status): Promise<Ticket | null> {
+    error.value = null;
+    // 楽観更新 (ボード移動を即時反映)
+    const prev = tickets.value;
+    tickets.value = tickets.value.map((t) => (t.id === id ? { ...t, status } : t));
+    try {
+      const updated = await api.patch<Ticket>(`/api/tickets/${id}/status`, { status });
+      tickets.value = tickets.value.map((t) => (t.id === id ? updated : t));
+      return updated;
+    } catch (e) {
+      const err = e as { data?: { error?: string }; message?: string };
+      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      tickets.value = prev; // ロールバック
+      return null;
+    }
+  }
+
+  /** 削除。成功時はローカル tickets から除去する。 */
+  async function deleteTicket(id: string): Promise<boolean> {
+    error.value = null;
+    try {
+      await api.delete<Ticket>(`/api/tickets/${id}`);
+      tickets.value = tickets.value.filter((t) => t.id !== id);
+      return true;
+    } catch (e) {
+      const err = e as { data?: { error?: string }; message?: string };
+      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      return false;
+    }
+  }
+
+  return { tickets, isLoading, error, fetchTickets, createTicket, patchTicket, changeStatus, deleteTicket };
 };
