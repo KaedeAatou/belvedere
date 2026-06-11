@@ -66,6 +66,13 @@ async function activeSession(repo: RepoContainer, ctx: HandlerContext, ticketId:
   const list = await repo.estimations.list({ workspaceId: ctx.workspaceId, ticketId });
   return list.find((s) => ACTIVE_STATUS.includes(s.status)) ?? null;
 }
+/** GET 用: 最新の非 discarded セッション (adopted も含む)。adopt 後も「採用済」を返せるようにする。 */
+async function latestSession(repo: RepoContainer, ctx: HandlerContext, ticketId: string): Promise<EstimationSession | null> {
+  const list = await repo.estimations.list({ workspaceId: ctx.workspaceId, ticketId });
+  const live = list.filter((s) => s.status !== 'discarded');
+  if (live.length === 0) return null;
+  return live.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+}
 
 // ------- handlers -------
 
@@ -106,7 +113,7 @@ export async function getEstimation(
   ticketId: string,
 ): Promise<HandlerResult<EstimationView>> {
   if (!(await ensureTicket(repo, ctx, ticketId))) return { ok: false, status: 404, body: { error: 'not_found' } };
-  const s = await activeSession(repo, ctx, ticketId);
+  const s = await latestSession(repo, ctx, ticketId);
   if (!s) return { ok: false, status: 404, body: { error: 'no_active_session' } };
   return { ok: true, status: 200, body: serializeForViewer(s, ctx.user.userId) };
 }
@@ -159,7 +166,7 @@ export async function adoptEstimation(
   ticketId: string,
   body: unknown,
   now: string,
-): Promise<HandlerResult<{ ticketId: string; adoptedValue: number }>> {
+): Promise<HandlerResult<EstimationView>> {
   const ticket = await ensureTicket(repo, ctx, ticketId);
   if (!ticket) return { ok: false, status: 404, body: { error: 'not_found' } };
   if (!isPrivileged(ctx)) return { ok: false, status: 403, body: { error: 'forbidden' } };
@@ -168,7 +175,9 @@ export async function adoptEstimation(
   const parsed = AdoptBodySchema.safeParse(body);
   if (!parsed.success) return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
 
-  await repo.estimations.upsert({ ...s, status: 'adopted', adoptedValue: parsed.data.value, adoptedAt: now });
+  const adopted: EstimationSession = { ...s, status: 'adopted', adoptedValue: parsed.data.value, adoptedAt: now };
+  await repo.estimations.upsert(adopted);
   await repo.tickets.upsert({ ...ticket, estimatePt: parsed.data.value, updatedAt: now });
-  return { ok: true, status: 200, body: { ticketId, adoptedValue: parsed.data.value } };
+  // web が「採用済」を描画できるよう EstimationView を返す (他 endpoint と一貫)
+  return { ok: true, status: 200, body: serializeForViewer(adopted, ctx.user.userId) };
 }
