@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Hook: PreToolUse on Task|Skill
-# subagent (Task tool) と skill (Skill tool) の起動を .claude/.usage.log に記録する。
-# このログを usage-audit.sh が SessionStart で読み、未使用機能を検出する。
+# Hook: PreToolUse on Agent|Task|Skill
+# subagent (Agent tool / 旧称 Task tool) と skill (Skill tool) の起動を
+# .claude/.usage.log に記録する。usage-audit.sh が SessionStart で読み、未使用機能を検出する。
+#
+# 2026-06-12 修正: subagent 起動ツールが Task → Agent にリネームされており、
+# matcher も case も旧名のままだったため起動が一切記録されず、usage-audit が
+# 「全 subagent 未使用」と偽陽性を出していた。両対応にする。
 
 INPUT=$(cat)
 
@@ -18,7 +22,7 @@ LOG="${CLAUDE_PROJECT_DIR:-$PWD}/.claude/.usage.log"
 TS=$(date -u +%FT%TZ)
 
 case "$TOOL_NAME" in
-  Task)
+  Agent|Task)
     NAME=$(printf '%s' "$INPUT" | python3 -c "
 import sys, json
 try:
