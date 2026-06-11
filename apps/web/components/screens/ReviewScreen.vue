@@ -4,7 +4,7 @@ import type { Ticket } from '@belvedere/shared';
 const props = defineProps<{ tickets: Ticket[] }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { activeSprint } = useSprints();
+const { activeSprint, velocityHistory } = useSprints();
 
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
@@ -12,10 +12,17 @@ const sprintTickets = computed(() =>
 const done = computed(() => sprintTickets.value.filter((t) => t.status === 'done'));
 const carry = computed(() => sprintTickets.value.filter((t) => t.status !== 'done'));
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
-const carrySP = computed(() => carry.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
-const goalPct = computed(() => (totalSP.value > 0 ? Math.round((doneSP.value / totalSP.value) * 100) : 0));
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
+
+// 消化 SP を過去スプリントの velocity 実績と比較した達成割合。
+const avgVelocity = computed(() => {
+  const vs = velocityHistory.value;
+  if (vs.length === 0) return 0;
+  return Math.round(vs.reduce((n, v) => n + v.velocity, 0) / vs.length);
+});
+const hasVelocity = computed(() => avgVelocity.value > 0);
+const velocityPct = computed(() => (hasVelocity.value ? Math.round((doneSP.value / avgVelocity.value) * 100) : 0));
 const demos = computed(() =>
   sprintTickets.value.filter((t) => t.status === 'done' || t.status === 'review').slice(0, 4),
 );
@@ -28,22 +35,28 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
 </script>
 
 <template>
-  <div class="screen-head">
-    <div class="stat-row">
-      <div class="stat"><div class="label">Done</div><div class="v t-num">{{ doneSP }}<span style="font-size: 14px; color: var(--ink-3)">SP</span></div><div class="delta">{{ done.length }} items</div></div>
-      <div class="stat"><div class="label">Carry</div><div class="v t-num accent">{{ carrySP }}</div><div class="delta">{{ carry.length }} items</div></div>
-      <div class="stat"><div class="label">Goal</div><div class="v t-num">{{ goalPct }}<span style="font-size: 14px; color: var(--ink-3)">%</span></div><div class="delta">done</div></div>
-    </div>
-  </div>
-
   <div class="review">
     <div class="review-main">
       <div class="t-cap" style="margin-bottom: 6px">SPRINT GOAL</div>
-      <div style="font-size: 18px; letter-spacing: -0.01em; line-height: 1.5; border-left: 2px solid var(--accent); padding-left: 14px; margin-bottom: 6px">
+      <div style="font-size: 18px; letter-spacing: -0.01em; line-height: 1.5; border-left: 2px solid var(--accent); padding-left: 14px; margin-bottom: 14px">
         {{ goal }}
       </div>
 
-      <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 18px">
+      <!-- 消化 SP / 目標 velocity の達成割合 -->
+      <div class="review-velocity">
+        <div class="rv-bar">
+          <i :style="{ width: `${Math.min(100, velocityPct)}%` }" />
+        </div>
+        <div class="rv-nums">
+          <span class="big">{{ doneSP }}</span>
+          <span class="sep">/</span>
+          <span class="vel">{{ hasVelocity ? avgVelocity : '—' }}</span>
+          <span class="lbl">消化 SP / 目標 velocity</span>
+          <span class="pct">{{ hasVelocity ? `${velocityPct}%` : '実績なし' }}</span>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 22px">
         <h2 style="margin: 0; font-size: 14px; font-weight: 500">Demos</h2>
         <span class="t-cap">{{ demos.length }} READY</span>
         <span style="margin-left: auto" />

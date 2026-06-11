@@ -10,7 +10,7 @@ const emit = defineEmits<{
   move: [id: string, status: Status];
 }>();
 
-const { activeSprint } = useSprints();
+const { activeSprint, velocityHistory } = useSprints();
 const { findingsFor } = useFindings();
 
 const sprintTickets = computed(() =>
@@ -34,8 +34,13 @@ function colItems(col: Status) {
 const doneSP = computed(() => colItems('done').reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const remaining = computed(() => Math.max(0, totalSP.value - doneSP.value));
-const inProgressCount = computed(() => colItems('in-progress').length);
-const blockedCount = computed(() => sprintTickets.value.filter((t) => (t.labels ?? []).includes('blocked')).length);
+
+// 過去スプリントの velocity 実績 (バーンダウンの目標ペース)。
+const avgVelocity = computed(() => {
+  const vs = velocityHistory.value;
+  if (vs.length === 0) return 0;
+  return Math.round(vs.reduce((n, v) => n + v.velocity, 0) / vs.length);
+});
 
 const sprintDays = computed(() => {
   if (!activeSprint.value) return { elapsed: 0, total: 14 };
@@ -65,110 +70,105 @@ function onDrop(e: DragEvent, col: Status) {
   drag.value = null;
 }
 
-// Burndown: コミット済 SP (totalSP) を起点に 0 へ落とす理想線。velocity 駆動の SP ベース。
-const W = 320, H = 200, P = 8;
-const max = computed(() => Math.max(1, totalSP.value));
-const total = computed(() => sprintDays.value.total);
-const ideal = computed(() => Array.from({ length: total.value + 1 }, (_, i) => max.value - (max.value / total.value) * i));
-const xCoord = (i: number) => P + (i / total.value) * (W - P * 2);
-const yCoord = (v: number) => P + (1 - v / max.value) * (H - P * 2);
-const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L'}${xCoord(i)},${yCoord(v)}`).join(' '));
+// ===== Burndown: 各チケットの SP 積み上げ (totalSP) を残量として、目標 velocity のペースと比較 =====
+// 横長レイアウト (ボードの下段)。縦軸 = 残 SP / 横軸 = スプリント経過日。
+const W = 720, H = 150, PX = 20, PY = 16;
+const totalDays = computed(() => sprintDays.value.total);
+const elapsedDays = computed(() => sprintDays.value.elapsed);
+// 計画 SP と目標 velocity の大きい方を上端に (過剰計画なら計画線が velocity 線の上に出る)。
+const yMax = computed(() => Math.max(totalSP.value, avgVelocity.value, 1));
+const targetTop = computed(() => (avgVelocity.value > 0 ? avgVelocity.value : totalSP.value));
+const xCoord = (d: number) => PX + (d / totalDays.value) * (W - PX * 2);
+const yCoord = (v: number) => PY + (1 - v / yMax.value) * (H - PY * 2);
+// 目標 velocity 線: velocity を起点にスプリント終了で 0 へ落とす理想ペース。
+const targetPath = computed(() => `M${xCoord(0)},${yCoord(targetTop.value)} L${xCoord(totalDays.value)},${yCoord(0)}`);
+// 実績線: 計画 SP (D0) → 現在の残 SP (今日)。
+const actualPath = computed(() => `M${xCoord(0)},${yCoord(totalSP.value)} L${xCoord(elapsedDays.value)},${yCoord(remaining.value)}`);
+const gridY = computed(() => [0, yMax.value / 2, yMax.value]);
+const dayTicks = computed(() => {
+  const step = Math.max(2, Math.round(totalDays.value / 7));
+  const out: number[] = [];
+  for (let d = 0; d <= totalDays.value; d += step) out.push(d);
+  if (out[out.length - 1] !== totalDays.value) out.push(totalDays.value);
+  return out;
+});
 </script>
 
 <template>
   <div class="daily">
-    <div class="daily-strip">
-      <div class="cell">
-        <div class="l">DONE</div>
-        <div class="v t-num">{{ doneSP }}<span class="u">SP</span></div>
-        <div class="sub">of {{ totalSP }}SP committed</div>
-      </div>
-      <div class="cell">
-        <div class="l">IN PROGRESS</div>
-        <div class="v t-num">{{ inProgressCount }}</div>
-        <div class="sub">tickets active</div>
-      </div>
-      <div class="cell">
-        <div class="l">BLOCKED</div>
-        <div class="v t-num">{{ blockedCount }}</div>
-        <div class="sub">labelled blocked</div>
-      </div>
-      <div class="cell">
-        <div class="l">REMAINING</div>
-        <div class="v t-num">{{ remaining }}<span class="u">SP</span></div>
-        <div class="sub">to done</div>
+    <div class="daily-board">
+      <div v-for="col in cols" :key="col" class="col-board">
+        <div class="ch">
+          <span class="name">{{ COL_LABEL[col] }}</span>
+          <span class="count">{{ colItems(col).length }}</span>
+        </div>
+        <div class="col-body"
+             :style="over === col ? { background: 'var(--bg-2)' } : {}"
+             @dragover="(e) => onDragOver(e, col)"
+             @dragleave="onDragLeave(col)"
+             @drop="(e) => onDrop(e, col)">
+          <template v-for="t in colItems(col)" :key="t.id">
+            <div :class="[
+                   'tcard',
+                   findingsFor(t.id).length > 0 && 'flagged',
+                   drag === t.id && 'dragging',
+                 ]"
+                 draggable="true"
+                 @dragstart="onDragStart(t.id)"
+                 @dragend="onDragEnd"
+                 @click="emit('select', t.id)">
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <span class="id">{{ t.id }}</span>
+                <TypeMark :type="t.type" />
+              </div>
+              <div class="title">{{ t.title }}</div>
+              <div class="row">
+                <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
+                <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
+                <span class="spacer" />
+                <span v-if="col === 'in-progress' && t.startedAt"
+                      :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
+                  <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
+                </span>
+                <Avatar :user="t.assigneeId" />
+              </div>
+            </div>
+          </template>
+          <div v-if="colItems(col).length === 0"
+               style="padding: 24px 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.16em; text-transform: uppercase">
+            empty
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="daily-body">
-      <div class="daily-board">
-        <div v-for="col in cols" :key="col" class="col-board">
-          <div class="ch">
-            <span class="name">{{ COL_LABEL[col] }}</span>
-            <span class="count">{{ colItems(col).length }}</span>
+    <!-- Burndown: ボード下段に横長で配置 (横並びだとボードが狭くなるため上下分割) -->
+    <div class="daily-burn">
+      <div class="burn-chart-wrap">
+        <div class="burn-head">
+          <h3>Burndown</h3>
+          <div class="legend">
+            <span><i class="actual" />実績 (残 {{ remaining }}SP)</span>
+            <span><i class="target" />目標 velocity {{ avgVelocity > 0 ? avgVelocity : '—' }}</span>
           </div>
-          <div class="col-body"
-               :style="over === col ? { background: 'var(--bg-2)' } : {}"
-               @dragover="(e) => onDragOver(e, col)"
-               @dragleave="onDragLeave(col)"
-               @drop="(e) => onDrop(e, col)">
-            <template v-for="t in colItems(col)" :key="t.id">
-              <div :class="[
-                     'tcard',
-                     findingsFor(t.id).length > 0 && 'flagged',
-                     drag === t.id && 'dragging',
-                   ]"
-                   draggable="true"
-                   @dragstart="onDragStart(t.id)"
-                   @dragend="onDragEnd"
-                   @click="emit('select', t.id)">
-                <div style="display: flex; justify-content: space-between; align-items: center">
-                  <span class="id">{{ t.id }}</span>
-                  <TypeMark :type="t.type" />
-                </div>
-                <div class="title">{{ t.title }}</div>
-                <div class="row">
-                  <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
-                  <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
-                  <span class="spacer" />
-                  <span v-if="col === 'in-progress' && t.startedAt"
-                        :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
-                    <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
-                  </span>
-                  <Avatar :user="t.assigneeId" />
-                </div>
-              </div>
-            </template>
-            <div v-if="colItems(col).length === 0"
-                 style="padding: 24px 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.16em; text-transform: uppercase">
-              empty
-            </div>
-          </div>
+        </div>
+        <svg :viewBox="`0 0 ${W} ${H}`" class="burn-svg" preserveAspectRatio="none">
+          <line v-for="g in gridY" :key="g" :x1="PX" :y1="yCoord(g)" :x2="W - PX" :y2="yCoord(g)" stroke="var(--line-1)" />
+          <path :d="targetPath" stroke="var(--ink-3)" stroke-width="1.5" fill="none" stroke-dasharray="4 5" />
+          <path :d="actualPath" stroke="var(--accent)" stroke-width="2" fill="none" />
+          <circle :cx="xCoord(elapsedDays)" :cy="yCoord(remaining)" r="3.5" fill="var(--accent)" />
+        </svg>
+        <div class="burn-axis">
+          <span v-for="d in dayTicks" :key="d">D{{ String(d).padStart(2, '0') }}</span>
         </div>
       </div>
 
-      <div class="burn">
-        <h3>Burndown</h3>
-        <div class="legend">
-          <span><i style="background: var(--ink-3); border-top: 1px dashed var(--ink-3)" />Ideal</span>
-          <span><i style="background: var(--accent)" />Done</span>
-        </div>
-        <div class="burn-chart">
-          <svg :viewBox="`0 0 ${W} ${H}`" style="position: absolute; inset: 0; width: 100%; height: 100%">
-            <line v-for="g in [0, max / 4, max / 2, (max * 3) / 4, max]" :key="g" :x1="P" :y1="yCoord(g)" :x2="W - P" :y2="yCoord(g)" stroke="var(--line-1)" />
-            <path :d="idealPath" stroke="var(--ink-3)" stroke-width="1" fill="none" stroke-dasharray="3 4" />
-          </svg>
-        </div>
-        <div class="axis-x">
-          <span v-for="i in [0, 2, 4, 6, 8, 10, 12, 14]" :key="i">D{{ String(i).padStart(2, '0') }}</span>
-        </div>
-
-        <div style="margin-top: 20px; padding: 14px; border: 1px solid var(--accent-dim); background: var(--accent-bg)">
-          <div class="t-cap" style="color: var(--accent); margin-bottom: 6px">AI INSIGHT</div>
-          <div style="font-size: 12px; line-height: 1.55">
-            in-progress に長く留まるチケットは分割を、ブロック中のものは理由の記録を推奨します。
-            残り {{ remaining }}SP を計画的に消化しましょう。
-          </div>
+      <div class="burn-insight">
+        <div class="t-cap" style="color: var(--accent); margin-bottom: 6px">AI INSIGHT</div>
+        <div style="font-size: 12px; line-height: 1.55; color: var(--ink-1)">
+          残り <b style="color: var(--ink-0)">{{ remaining }}SP</b>。目標 velocity は
+          <b style="color: var(--ink-0)">{{ avgVelocity > 0 ? `${avgVelocity}SP` : '実績なし' }}</b> です。
+          in-progress に長く留まるチケットは分割を、停滞は理由の記録を推奨します。
         </div>
       </div>
     </div>
