@@ -19,6 +19,7 @@ export function screenIntro(screen: ScreenId): string {
     backlog:  'バックログ全体を走査しました。各チケットの品質指摘は行内のピルに表示しています。プランニング前に整えることを推奨します。',
     planning: 'スプリント計画を点検中。容量とゴール紐付け、見積もりの粒度を確認しましょう。',
     daily:    '進行中チケットの滞留とベロシティ乖離を監視しています。',
+    refinement: 'バックログの指摘をルール別に整理しました。上から潰すと品質スコアが上がります。',
     review:   '完了チケットと受け入れ条件の充足を確認しています。デモ対象を下に整理しました。',
     retro:    'スプリントのメトリクスから議論候補を抽出します。',
   };
@@ -48,6 +49,13 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
       tag: '滞留監視',
       msg: 'in-progress に長く留まるチケットは、サブタスクへの分割かブロッカーの記録を推奨します。',
       actions: [{ label: '滞留を抽出', primary: true }],
+    });
+
+  if (screen === 'refinement')
+    out.push({
+      tag: 'グルーミング',
+      msg: 'SP 未見積もりのストーリーは「ポーカー開始」で合意形成できます。種別なし・DoD 欠落も上から解消しましょう。',
+      actions: [{ label: '一括提案', primary: true }],
     });
 
   if (screen === 'review')
