@@ -404,17 +404,13 @@ a { color: inherit; text-decoration: none; }
 }
 
 /* ----- screen header (sub-toolbar inside main) ----- */
+/* タイトル無しの KPI バー (画面識別は左レール + ヘッダのパンくず) */
 .screen-head {
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 28px;
-  flex-wrap: wrap;
-  padding: 14px 32px 16px;
+  align-items: stretch;
+  padding: 6px 32px 12px;
   border-bottom: var(--hairline) solid var(--line-1);
 }
-.screen-head > div:first-child { min-width: 0; }
 .screen-head .floor {
   font-family: var(--display);
   font-size: 12px;
@@ -449,19 +445,18 @@ a { color: inherit; text-decoration: none; }
   margin-top: 10px;
   max-width: 64ch;
 }
-/* KPI クラスタはタイトル右上に寄せて上部余白を埋める (旧: タイトル下の帯) */
 .screen-head .stat-row {
   display: flex; gap: 18px; align-items: stretch;
   flex-wrap: wrap;
-  margin-left: auto;
 }
 .stat {
   border-left: var(--hairline) solid var(--line-2);
   padding-left: 14px;
-  padding-top: 12px;
+  padding-top: 8px;
   min-width: 80px;
   flex: 0 0 auto;
 }
+.stat:first-child { border-left: none; padding-left: 0; }
 .stat .label { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: 0.16em; color: var(--ink-3); text-transform: uppercase; }
 .stat .v { font-family: var(--display); font-weight: 600; font-size: 28px; line-height: 1; letter-spacing: -0.01em; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .stat .v.accent { color: var(--accent); }

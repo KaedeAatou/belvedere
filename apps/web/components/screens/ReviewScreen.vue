@@ -29,13 +29,6 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
 
 <template>
   <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 03 / REVIEW</div>
-      <h1>{{ activeSprint ? `Sprint ${activeSprint.number} — Review` : 'Sprint Review' }}</h1>
-      <div class="subtitle">
-        ステークホルダー向けのデモと成果物の確認。AIが完了基準を満たすかチェック済み。
-      </div>
-    </div>
     <div class="stat-row">
       <div class="stat"><div class="label">Done</div><div class="v t-num">{{ doneSP }}<span style="font-size: 14px; color: var(--ink-3)">SP</span></div><div class="delta">{{ done.length }} items</div></div>
       <div class="stat"><div class="label">Carry</div><div class="v t-num accent">{{ carrySP }}</div><div class="delta">{{ carry.length }} items</div></div>
