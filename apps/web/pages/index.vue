@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { ScreenId, Status } from '~/composables/useDemoData';
+import type { Status } from '~/composables/useDemoData';
+import type { ScreenId } from '~/composables/useUiMeta';
 
 const { tickets, moveTicket } = useDemoData();
 const screen = ref<ScreenId>('backlog');

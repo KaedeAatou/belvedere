@@ -1,6 +1,7 @@
 // AI Integrity check の生成 (Designer の buildChecks / screenIntro を移植)
 
-import type { DemoTicket, ScreenId } from './useDemoData';
+import type { DemoTicket } from './useDemoData';
+import type { ScreenId } from './useUiMeta';
 
 export interface AICheck {
   tag: string;

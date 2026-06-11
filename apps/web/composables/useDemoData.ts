@@ -27,12 +27,6 @@ export interface TeamMember {
   initials: string;
 }
 
-export interface FlagDef {
-  label: string;
-  sev: 'warn' | 'err';
-  desc: string;
-}
-
 export const TEAM: TeamMember[] = [
   { id: 'u1', name: 'Asai', initials: 'AS' },
   { id: 'u2', name: 'Bandō', initials: 'BD' },
@@ -159,40 +153,6 @@ export const SPRINT = {
   capacity: 32,
   velocity: [22, 26, 24, 29, 31, 28],
 };
-
-export const FLAG_DEFS: Record<string, FlagDef> = {
-  'no-points':        { label: 'SP未設定',         sev: 'warn', desc: '見積りがありません。プランニング前に Fibonacci で見積もってください。' },
-  'no-actor':         { label: '主語なし',         sev: 'warn', desc: 'ユーザーストーリーに主語（〜として）がありません。' },
-  'no-acceptance':    { label: '受け入れ条件なし',  sev: 'err',  desc: '完了の判定基準が定義されていません。' },
-  'vague-acceptance': { label: '曖昧な受け入れ条件', sev: 'warn', desc: '「正しく動く」など測定不能な条件が含まれます。' },
-  'stale':            { label: '停滞',             sev: 'warn', desc: '7日以上更新されていません。' },
-  'oversized':        { label: '過大',             sev: 'err',  desc: 'SP > 8。分割を検討してください。' },
-  'no-goal-link':     { label: 'ゴール未紐付',      sev: 'warn', desc: 'スプリントゴールへの貢献が不明です。' },
-  'scope-creep':      { label: 'スコープ追加',      sev: 'warn', desc: 'スプリント開始後に追加されました。' },
-  'long-doing':       { label: 'DOING長期化',      sev: 'err',  desc: 'DOINGに2日以上滞留しています。' },
-  'blocked-silent':   { label: 'ブロック理由なし',   sev: 'err',  desc: 'BLOCKED ですが理由が記録されていません。' },
-  'missing-owner':    { label: '担当未割当',        sev: 'warn', desc: 'アサイニーが未設定です。' },
-};
-
-export interface ScreenDef { id: ScreenId; label: string; floor: string }
-export type ScreenId = 'backlog' | 'planning' | 'daily' | 'review' | 'retro';
-
-export const SCREENS: ScreenDef[] = [
-  { id: 'backlog',  label: 'Backlog',         floor: '00' },
-  { id: 'planning', label: 'Sprint Planning', floor: '01' },
-  { id: 'daily',    label: 'Daily Scrum',     floor: '02' },
-  { id: 'review',   label: 'Sprint Review',   floor: '03' },
-  { id: 'retro',    label: 'Retrospective',   floor: '04' },
-];
-
-export interface CeremonyDef { id: ScreenId; label: string; floor: string; sub: string }
-
-export const CEREMONIES: CeremonyDef[] = [
-  { id: 'planning', label: 'Sprint Planning', floor: '01', sub: 'Sprint kickoff' },
-  { id: 'daily',    label: 'Daily Scrum',     floor: '02', sub: 'Daily sync' },
-  { id: 'review',   label: 'Sprint Review',   floor: '03', sub: 'Demo' },
-  { id: 'retro',    label: 'Retrospective',   floor: '04', sub: 'Inspect & adapt' },
-];
 
 export function useDemoData() {
   const tickets = ref<DemoTicket[]>(structuredClone(TICKETS));

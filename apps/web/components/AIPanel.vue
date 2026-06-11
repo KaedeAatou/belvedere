@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { ScreenId, DemoTicket } from '~/composables/useDemoData';
+import type { DemoTicket } from '~/composables/useDemoData';
+import type { ScreenId } from '~/composables/useUiMeta';
 import { buildChecks, screenIntro } from '~/composables/useChecks';
 
 const props = defineProps<{
