@@ -278,15 +278,19 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
   };
 
   /**
-   * レトロの carry-forward 積み上げ一覧。チームが継続中の改善アクションを返す。
-   * 各儀式 Agent (Planner / Daily / Refinement / Reviewer / Retrospective) が
-   * 「前スプリントから持ち越した約束事」をコンテキストとして参照するための read-only ツール。
+   * レトロの carry-forward 積み上げ一覧。チームが合意したプロセス改善ルール。
+   * 全 Agent が起動時に呼び、自分の儀式に関係する Try を検出ルールとして動的に適用する。
+   * Try は Sprint バックログに積むものではなく「検出基準」として機能する。
+   * 例: 「AC に期日を入れる」→ Refinement が期日なし AC を指摘
+   *     「BLOCKED 時は理由必須」→ Daily が理由なし BLOCKED を検出
+   *     「Goal を SMART にする」→ Planner が Goal 評価を強化
+   * done=true の Try はルールとして除外する (チームが定着と判断した改善)。
    */
   const retroTriesListTool: AgentTool<Record<string, never>, unknown> = {
     spec: {
       name: 'retro.tries.list',
       description:
-        'レトロの carry-forward 積み上げ (チームが継続中の改善アクション) 一覧を返す。各儀式 Agent がコンテキストとして参照する。',
+        'チームが合意したプロセス改善ルール (carry-forward 積み上げ) の一覧。全 Agent が起動時に呼び、done=false の Try を自分の儀式の検出基準として動的に適用する。Try は Sprint バックログに積む対象ではない。',
       parameters: { type: 'object', properties: {} },
     },
     async invoke() {
