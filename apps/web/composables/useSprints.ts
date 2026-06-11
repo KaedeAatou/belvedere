@@ -1,6 +1,6 @@
 // Sprint 取得 composable (Phase 1-C / R3 / 2026-06-11)。
 // GET /api/sprints で取得して useState 共有。旧 demo の SPRINT 定数を置換する単一 source。
-// active sprint (status==='active') を各画面が参照する (容量/ゴール/ベロシティ算出)。
+// active sprint (status==='active') を各画面が参照する (ゴール / velocity 比較の算出)。
 
 import type { Sprint } from '@belvedere/shared';
 
