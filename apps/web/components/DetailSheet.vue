@@ -83,6 +83,9 @@ const ownerName = computed(() => memberName(props.ticket.assigneeId));
         </div>
       </div>
 
+      <!-- 見積もりポーカー (story のみ / T7) -->
+      <EstimationPanel v-if="ticket.type === 'story'" :key="ticket.id" :ticket="ticket" />
+
       <div class="field">
         <div class="l">LABELS</div>
         <div style="display: flex; gap: 6px; flex-wrap: wrap">
