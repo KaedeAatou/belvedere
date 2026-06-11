@@ -1,5 +1,10 @@
 <script setup lang="ts">
 const { memberName } = useMembers();
+const { activeSprint } = useSprints();
+const { tries: stack, fetchTries, create, toggleDone, remove } = useRetroTries();
+
+// 積み上げは Firestore 永続 (GET /api/retro-tries)。過去スプリント由来の Try は最初から積み上がっている。
+onMounted(() => fetchTries());
 
 // KPT ボード (Retro は tickets を受けない / demo シード)。who は実メンバー userId を参照する。
 const cols = ref({
@@ -39,39 +44,31 @@ function sorted(key: 'keep' | 'problem' | 'try') {
 
 // ===== アクション積み上げ (carry-forward stack) =====
 // 「次に試すこと(Try)」を d&d で積み上げに移すと、スプリントを跨いで蓄積される。
-// この積み上げが各儀式 AI のコンテキストになる (将来は永続ストアに保存)。
+// この積み上げが各儀式 AI のコンテキストになる (Firestore 永続 / useRetroTries 経由)。
 // 過去スプリント由来の Try は最初から積み上がっている。
-interface StackItem { id: string; text: string; sprint: string; done: boolean; }
-const stack = ref<StackItem[]>([
-  { id: 'st-prev1', text: 'PR レビューは依頼から 24h 以内に着手する。', sprint: 'S11', done: true },
-  { id: 'st-prev2', text: 'デイリーで前日の停滞チケットを必ず 1 件共有する。', sprint: 'S12', done: false },
-]);
-
 const dragTryId = ref<string | null>(null);
 const stackOver = ref(false);
 
 function onTryDragStart(id: string) { dragTryId.value = id; }
 function onTryDragEnd() { dragTryId.value = null; }
 
-function onStackDrop(e: DragEvent) {
+async function onStackDrop(e: DragEvent) {
   e.preventDefault();
   stackOver.value = false;
   const t = cols.value.try.find((x) => x.id === dragTryId.value);
-  if (t) {
-    const sid = `st-${t.id}`;
-    if (!stack.value.some((s) => s.id === sid)) {
-      stack.value.push({ id: sid, text: t.text, sprint: 'S13', done: false });
-    }
-  }
   dragTryId.value = null;
+  if (!t) return;
+  // id 形式が変わったため重複判定は「同一 text が既に積み上げに存在するか」で行う。
+  if (stack.value.some((s) => s.text === t.text)) return;
+  // 由来スプリントは active sprint。number はバッジ表示 / Agent コンテキスト用。
+  await create({
+    text: t.text,
+    sprintNumber: activeSprint.value?.number ?? 0,
+    ...(activeSprint.value && { sprintId: activeSprint.value.id }),
+  });
 }
 
-function removeFromStack(id: string) {
-  stack.value = stack.value.filter((s) => s.id !== id);
-}
-function toggleDone(item: StackItem) { item.done = !item.done; }
-
-const inStack = (tryId: string) => stack.value.some((s) => s.id === `st-${tryId}`);
+const inStack = (tryText: string) => stack.value.some((s) => s.text === tryText);
 </script>
 
 <template>
@@ -86,7 +83,7 @@ const inStack = (tryId: string) => stack.value.some((s) => s.id === `st-${tryId}
         </div>
         <div class="retro-col-body">
           <div v-for="n in sorted(c.key)" :key="n.id"
-               :class="['retro-note', c.key === 'try' && 'draggable', c.key === 'try' && inStack(n.id) && 'stacked']"
+               :class="['retro-note', c.key === 'try' && 'draggable', c.key === 'try' && inStack(n.text) && 'stacked']"
                :draggable="c.key === 'try'"
                @dragstart="c.key === 'try' && onTryDragStart(n.id)"
                @dragend="onTryDragEnd">
@@ -108,6 +105,7 @@ const inStack = (tryId: string) => stack.value.some((s) => s.id === `st-${tryId}
 
     <!-- アクション積み上げ: Try を d&d で蓄積 / スプリントを跨いで担当 AI のコンテキストになる -->
     <div :class="['retro-stack', stackOver && 'drop-over']"
+         data-testid="retro-stack"
          @dragover.prevent="stackOver = true"
          @dragleave="stackOver = false"
          @drop="onStackDrop">
@@ -116,13 +114,13 @@ const inStack = (tryId: string) => stack.value.some((s) => s.id === `st-${tryId}
         <p>Try を <b>ドラッグ</b>して積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
       </div>
       <div class="stack-list">
-        <div v-for="a in stack" :key="a.id" :class="['stack-item', a.done && 'done']">
+        <div v-for="a in stack" :key="a.id" data-testid="retro-stack-item" :class="['stack-item', a.done && 'done']">
           <span :class="['check', a.done && 'on']" @click="toggleDone(a)">
             <Icon v-if="a.done" name="check" :size="10" />
           </span>
           <span class="text">{{ a.text }}</span>
-          <span class="sprint-badge">{{ a.sprint }}</span>
-          <button class="rm" title="積み上げから削除" @click="removeFromStack(a.id)">
+          <span class="sprint-badge">S{{ a.sprintNumber }}</span>
+          <button class="rm" title="積み上げから削除" @click="remove(a.id)">
             <Icon name="x" :size="12" />
           </button>
         </div>
