@@ -17,7 +17,7 @@ export interface AICheck {
 export function screenIntro(screen: ScreenId): string {
   const m: Record<ScreenId, string> = {
     backlog:  'バックログ全体を走査しました。各チケットの品質指摘は行内のピルに表示しています。プランニング前に整えることを推奨します。',
-    planning: 'スプリント計画を点検中。容量とゴール紐付け、見積もりの粒度を確認しましょう。',
+    planning: 'スプリント計画を点検中。velocity 比較とゴール紐付け、見積もりの粒度を確認しましょう。',
     daily:    '進行中チケットの滞留とベロシティ乖離を監視しています。',
     refinement: 'バックログの指摘をルール別に整理しました。上から潰すと品質スコアが上がります。',
     review:   '完了チケットと受け入れ条件の充足を確認しています。デモ対象を下に整理しました。',
@@ -40,7 +40,7 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
   if (screen === 'planning')
     out.push({
       tag: '計画点検',
-      msg: 'スプリント容量とゴール紐付けを点検中。計画が容量を超えないか、各チケットがゴールに貢献するかを確認しましょう。',
+      msg: '計画 SP の積み上げを velocity 実績と比較中。過剰計画になっていないか、各チケットがゴールに貢献するかを確認しましょう。',
       actions: [{ label: '提案を見る', primary: true }],
     });
 

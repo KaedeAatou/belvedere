@@ -38,7 +38,7 @@ export const RULE_LABELS: Record<string, string> = {
   INCIDENT_ACTIVE: '対応中',
   INCIDENT_NO_FOLLOWUP_BUG: 'Bug未起票',
   MISMATCH_SPIKE_TITLE: 'Spike示唆',
-  SPRINT_OVER_CAPACITY: '容量超過',
+  SPRINT_OVER_CAPACITY: '過剰計画',
   ESTIMATE_DIVERGENCE: '見積もり乖離',
 };
 
