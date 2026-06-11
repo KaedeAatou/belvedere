@@ -38,11 +38,10 @@ const showEvents = computed(() => props.railTab === 'events');
       </div>
     </div>
 
+    <!-- Sprint Goal は Planning の開始ダイアログへ / Dependencies は廃止。
+         Roadmap だけ残るためセクション見出しなしの単独エントリにする。 -->
     <div class="rail-artifacts">
-      <div class="rail-art-h">Artifacts</div>
       <div class="rail-art-item"><Icon name="roadmap" /><span>Roadmap</span></div>
-      <div class="rail-art-item"><Icon name="branch" /><span>Dependencies</span></div>
-      <div class="rail-art-item"><Icon name="flag" /><span>Sprint Goal</span></div>
     </div>
 
     <div class="rail-foot">

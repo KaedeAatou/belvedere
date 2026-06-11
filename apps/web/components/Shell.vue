@@ -26,7 +26,6 @@ function setRailTab(t: 'backlog' | 'events') { emit('update:railTab', t); }
       <div class="brand">
         <Icon name="brand" :size="22" />
         <div class="brand-name">Belvedere</div>
-        <div class="brand-sub">SPIRAL · S24</div>
       </div>
       <div class="crumbs">
         <div class="seg-ctrl">
