@@ -8,6 +8,7 @@ export class BacklogPage extends BasePage {
   readonly newTicketBtn: Locator;
   readonly createDialog: Locator;
   readonly newTicketTitle: Locator;
+  readonly newTicketType: Locator;
   readonly newTicketPriority: Locator;
   readonly submitCreate: Locator;
   readonly liveSection: Locator;
@@ -19,6 +20,7 @@ export class BacklogPage extends BasePage {
     this.newTicketBtn = page.getByTestId('new-ticket-btn');
     this.createDialog = page.getByTestId('create-dialog');
     this.newTicketTitle = page.getByTestId('new-ticket-title');
+    this.newTicketType = page.getByTestId('new-ticket-type');
     this.newTicketPriority = page.getByTestId('new-ticket-priority');
     this.submitCreate = page.getByTestId('submit-create');
     this.liveSection = page.getByTestId('live-section');
@@ -44,10 +46,17 @@ export class BacklogPage extends BasePage {
    * 新規作成ダイアログを開く → 入力 → 「作成」押下。
    * 成功時はダイアログが閉じ、Live セクションに新規行が追加される。
    */
-  async createTicket(opts: { title: string; priority?: 'low' | 'medium' | 'high' | 'urgent' }): Promise<void> {
+  async createTicket(opts: {
+    title: string;
+    priority?: 'low' | 'medium' | 'high' | 'urgent';
+    type?: 'story' | 'task' | 'spike' | 'bug' | 'incident';
+  }): Promise<void> {
     await this.newTicketBtn.click();
     await expect(this.createDialog).toBeVisible();
     await this.newTicketTitle.fill(opts.title);
+    if (opts.type) {
+      await this.newTicketType.selectOption(opts.type);
+    }
     if (opts.priority) {
       await this.newTicketPriority.selectOption(opts.priority);
     }
@@ -60,5 +69,15 @@ export class BacklogPage extends BasePage {
   async hasTicketWithTitle(title: string): Promise<boolean> {
     const matches = await this.page.getByTestId('live-ticket').filter({ hasText: title }).count();
     return matches > 0;
+  }
+
+  /** 指定タイトルのチケット行をクリックして DetailSheet を開く。 */
+  async openTicketByTitle(title: string): Promise<void> {
+    await this.liveTickets.filter({ hasText: title }).first().click();
+  }
+
+  /** 指定 ID の行 (finding ピル等の assert 用)。 */
+  rowById(id: string): Locator {
+    return this.page.locator('.trow').filter({ hasText: id });
   }
 }
