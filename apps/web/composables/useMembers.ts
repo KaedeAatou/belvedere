@@ -47,5 +47,29 @@ export const useMembers = () => {
     return name.charAt(0).toUpperCase();
   }
 
-  return { members, isLoading, error, fetchMembers, memberById, memberName, memberInitial };
+  /** 招待中 (まだ実 uid に bind されていない) センチネルかどうか。userId が 'invite:' 始まり。 */
+  function isPendingInvite(m: Member): boolean {
+    return m.userId.startsWith('invite:');
+  }
+
+  /** メンバーを招待する (owner/sm のみ。失敗時は throw)。成功後に一覧を再取得。 */
+  async function invite(email: string, role: 'sm' | 'po' | 'dev' | 'guest', displayName?: string): Promise<void> {
+    await api.post<Member>('/api/workspaces/members/invite', {
+      email,
+      role,
+      ...(displayName ? { displayName } : {}),
+    });
+    await fetchMembers();
+  }
+
+  /** 招待を取消す (招待センチネルのみ)。成功後に一覧を再取得。 */
+  async function cancelInvite(userId: string): Promise<void> {
+    await api.delete(`/api/workspaces/members/${encodeURIComponent(userId)}`);
+    await fetchMembers();
+  }
+
+  return {
+    members, isLoading, error, fetchMembers, memberById, memberName, memberInitial,
+    isPendingInvite, invite, cancelInvite,
+  };
 };
