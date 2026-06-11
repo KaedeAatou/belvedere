@@ -8,6 +8,7 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string] }>();
 
 const { activeSprint, velocityHistory, nextPlanned, patchSprint, startSprint } = useSprints();
+const { patchTicket } = useTickets();
 
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
@@ -97,6 +98,53 @@ async function startNextSprint() {
     showSprintDialog.value = false;
   } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
 }
+
+// ===== Pull from backlog ダイアログ =====
+// バックログチケット: sprintId が無い、または active sprint に属さない、かつ status === 'backlog'
+const showPullDialog = ref(false);
+const pullSelected = ref<Set<string>>(new Set());
+const pullBusy = ref(false);
+const pullError = ref<string | null>(null);
+
+const backlogTickets = computed(() => {
+  const activeId = activeSprint.value?.id;
+  return props.tickets.filter((t) => {
+    const notInActiveSprint = !activeId || t.sprintId !== activeId;
+    return notInActiveSprint && t.status === 'backlog';
+  });
+});
+
+function openPullDialog(): void {
+  pullSelected.value = new Set();
+  pullError.value = null;
+  showPullDialog.value = true;
+}
+
+function togglePullRow(id: string): void {
+  const s = new Set(pullSelected.value);
+  if (s.has(id)) { s.delete(id); } else { s.add(id); }
+  pullSelected.value = s;
+}
+
+async function submitPull(): Promise<void> {
+  const sprint = activeSprint.value;
+  if (!sprint) return;
+  const ids = [...pullSelected.value];
+  if (ids.length === 0) return;
+  pullBusy.value = true;
+  pullError.value = null;
+  try {
+    for (const id of ids) {
+      const result = await patchTicket(id, { sprintId: sprint.id, status: 'todo' });
+      if (!result) throw new Error(`チケット ${id} の更新に失敗しました`);
+    }
+    showPullDialog.value = false;
+  } catch (e) {
+    pullError.value = errText(e);
+  } finally {
+    pullBusy.value = false;
+  }
+}
 </script>
 
 <template>
@@ -146,7 +194,11 @@ async function startNextSprint() {
       <h2>Sprint items</h2>
       <span class="t-cap">{{ sprintTickets.length }} planned</span>
       <span style="margin-left: auto" />
-      <button class="h-btn"><Icon name="plus" /> Pull from backlog</button>
+      <button class="h-btn" data-testid="pull-from-backlog"
+              :disabled="!activeSprint"
+              @click="openPullDialog">
+        <Icon name="plus" /> Pull from backlog
+      </button>
     </div>
     <div class="col-body">
       <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t"
@@ -155,6 +207,55 @@ async function startNextSprint() {
       <p v-if="sprintTickets.length === 0" style="padding: 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
         アクティブスプリントにチケットがありません。
       </p>
+    </div>
+  </div>
+
+  <!-- Pull from backlog ダイアログ -->
+  <div v-if="showPullDialog" class="dialog-overlay" data-testid="pull-dialog" @click.self="showPullDialog = false">
+    <div class="dialog pull-dialog">
+      <div class="dialog-head">
+        <h2 class="dialog-title">バックログから追加</h2>
+        <button class="close-btn" @click="showPullDialog = false">×</button>
+      </div>
+      <div class="dialog-body" style="padding-bottom: 8px">
+        <p style="font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6">
+          アクティブスプリント (S{{ activeSprint?.number }}) に追加するチケットを選択してください。
+        </p>
+        <div class="pull-list">
+          <p v-if="backlogTickets.length === 0"
+             style="font-size: 13px; color: var(--ink-2); padding: 16px 0; margin: 0; text-align: center">
+            バックログにチケットがありません。
+          </p>
+          <div
+            v-for="t in backlogTickets"
+            :key="t.id"
+            :data-testid="`pull-row-${t.id}`"
+            :class="['pull-row', pullSelected.has(t.id) && 'pull-row--selected']"
+            @click="togglePullRow(t.id)"
+          >
+            <span class="pull-check">
+              <span v-if="pullSelected.has(t.id)" style="color: var(--accent)">✓</span>
+            </span>
+            <TypeMark :type="t.type" />
+            <span class="trow-id t-mono" style="font-size: 11px; color: var(--ink-3); min-width: 72px">{{ t.id }}</span>
+            <span class="pull-title">{{ t.title }}</span>
+            <span v-if="t.estimatePt != null" class="pull-sp">{{ t.estimatePt }} SP</span>
+            <span v-else class="pull-sp" style="color: var(--ink-3)">—</span>
+          </div>
+        </div>
+        <p v-if="pullError" class="msg-error" data-testid="pull-error">{{ pullError }}</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn-cancel" :disabled="pullBusy" @click="showPullDialog = false">キャンセル</button>
+        <button
+          class="btn-primary"
+          data-testid="pull-submit"
+          :disabled="pullSelected.size === 0 || pullBusy"
+          @click="submitPull"
+        >
+          {{ pullBusy ? '追加中…' : `${pullSelected.size} 件をスプリントへ →` }}
+        </button>
+      </div>
     </div>
   </div>
 
@@ -257,4 +358,53 @@ async function startNextSprint() {
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Pull from backlog ダイアログ — リスト */
+.pull-dialog { max-width: 560px; }
+.pull-list {
+  max-height: 50vh;
+  overflow-y: auto;
+  border: var(--hairline) solid var(--line-1);
+  border-radius: var(--radius);
+}
+.pull-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: var(--hairline) solid var(--line-1);
+  transition: background 0.1s;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-0);
+}
+.pull-row:last-child { border-bottom: none; }
+.pull-row:hover { background: var(--bg-2); }
+.pull-row--selected { background: var(--accent-bg, #fff3ee); }
+.pull-row--selected:hover { background: var(--accent-bg, #ffe8db); }
+.pull-check {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+.pull-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pull-sp {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
 </style>
