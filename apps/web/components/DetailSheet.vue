@@ -1,13 +1,81 @@
 <script setup lang="ts">
-import type { Ticket } from '@belvedere/shared';
+import type { Ticket, Priority, ValueImpact } from '@belvedere/shared';
+import type { PatchTicketInput } from '~/composables/useTickets';
 
 const props = defineProps<{ ticket: Ticket }>();
 const emit = defineEmits<{ close: [] }>();
 
-const { memberName } = useMembers();
-const { findingsFor } = useFindings();
+const { memberName, members } = useMembers();
+const { findingsFor, refresh: refreshFindings } = useFindings();
+const { patchTicket, deleteTicket } = useTickets();
+
 const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
+
+// ===== 編集モード (T10-1) =====
+const editing = ref(false);
+const saving = ref(false);
+const editError = ref<string | null>(null);
+const editTitle = ref('');
+const editDescription = ref('');
+const editAssignee = ref('');
+const editPriority = ref<Priority>('medium');
+const editValueImpact = ref<ValueImpact | ''>('');
+
+function startEdit(): void {
+  editTitle.value = props.ticket.title;
+  editDescription.value = props.ticket.description ?? '';
+  editAssignee.value = props.ticket.assigneeId ?? '';
+  editPriority.value = props.ticket.priority;
+  editValueImpact.value = props.ticket.valueImpact ?? '';
+  editError.value = null;
+  editing.value = true;
+}
+function cancelEdit(): void { editing.value = false; }
+
+async function saveEdit(): Promise<void> {
+  editError.value = null;
+  if (!editTitle.value.trim()) { editError.value = 'タイトルは必須です'; return; }
+  saving.value = true;
+  // estimatePt は編集対象外 (SP はポーカー経由 / T7)
+  const patch: PatchTicketInput = {
+    title: editTitle.value.trim(),
+    description: editDescription.value,
+    priority: editPriority.value,
+  };
+  if (editAssignee.value) patch.assigneeId = editAssignee.value;
+  if (editValueImpact.value) patch.valueImpact = editValueImpact.value;
+  const updated = await patchTicket(props.ticket.id, patch);
+  saving.value = false;
+  if (updated) {
+    editing.value = false;
+    void refreshFindings(); // 編集で指摘が解消され得る
+  } else {
+    editError.value = '保存に失敗しました';
+  }
+}
+
+// ===== 2 段階削除 (T10-2) =====
+const deleteArmed = ref(false);
+let deleteTimer: ReturnType<typeof setTimeout> | null = null;
+
+function onDelete(): void {
+  if (!deleteArmed.value) {
+    deleteArmed.value = true;
+    deleteTimer = setTimeout(() => { deleteArmed.value = false; }, 3000);
+    return;
+  }
+  if (deleteTimer) clearTimeout(deleteTimer);
+  void doDelete();
+}
+async function doDelete(): Promise<void> {
+  const ok = await deleteTicket(props.ticket.id);
+  if (ok) {
+    void refreshFindings();
+    emit('close');
+  }
+}
+onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 </script>
 
 <template>
@@ -19,12 +87,19 @@ const ownerName = computed(() => memberName(props.ticket.assigneeId));
       <StatusDot :status="ticket.status" />
       <StoryPoints :value="ticket.estimatePt ?? null" :critical="ticket.estimatePt == null" />
       <span style="flex: 1" />
-      <button class="ibtn"><Icon name="link" /></button>
+      <template v-if="editing">
+        <button class="ibtn-text" :disabled="saving" data-testid="save-ticket" @click="saveEdit">{{ saving ? '保存中…' : '保存' }}</button>
+        <button class="ibtn-text" @click="cancelEdit">キャンセル</button>
+      </template>
+      <button v-else class="ibtn-text" data-testid="edit-ticket" @click="startEdit">編集</button>
       <button class="ibtn" @click="emit('close')"><Icon name="x" /></button>
     </div>
 
     <div class="sheet-body">
-      <h2>{{ ticket.title }}</h2>
+      <!-- title -->
+      <input v-if="editing" v-model="editTitle" class="edit-title" data-testid="edit-title" maxlength="200" />
+      <h2 v-else>{{ ticket.title }}</h2>
+
       <div style="display: flex; gap: 10px; align-items: center; margin: 12px 0 22px; font-family: var(--mono); font-size: 11px; color: var(--ink-2)">
         <Avatar :user="ticket.assigneeId" />
         <span>{{ ownerName }}</span>
@@ -36,16 +111,50 @@ const ownerName = computed(() => memberName(props.ticket.assigneeId));
         </template>
       </div>
 
+      <!-- 編集フィールド (assignee / priority / valueImpact) -->
+      <div v-if="editing" class="edit-fields">
+        <div class="edit-field">
+          <label class="l">ASSIGNEE</label>
+          <select v-model="editAssignee" class="edit-input" data-testid="edit-assignee">
+            <option value="">（未割当）</option>
+            <option v-for="m in members" :key="m.userId" :value="m.userId">{{ m.displayName }}</option>
+          </select>
+        </div>
+        <div class="edit-field">
+          <label class="l">PRIORITY</label>
+          <select v-model="editPriority" class="edit-input" data-testid="edit-priority">
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="urgent">urgent</option>
+          </select>
+        </div>
+        <div class="edit-field">
+          <label class="l">VALUE IMPACT</label>
+          <select v-model="editValueImpact" class="edit-input" data-testid="edit-value-impact">
+            <option value="">（未設定）</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Description -->
       <div class="field">
         <div class="l">DESCRIPTION</div>
-        <div v-if="ticket.description" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.description }}</div>
-        <div v-else
-             style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
-          <span style="color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em">説明なし　</span>
-          詳細・ユーザーストーリーが記述されていません。
-        </div>
+        <textarea v-if="editing" v-model="editDescription" class="edit-input edit-textarea" data-testid="edit-description" rows="4" />
+        <template v-else>
+          <div v-if="ticket.description" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.description }}</div>
+          <div v-else
+               style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
+            <span style="color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em">説明なし　</span>
+            詳細・ユーザーストーリーが記述されていません。
+          </div>
+        </template>
       </div>
+
+      <p v-if="editError" class="edit-err" data-testid="edit-error">{{ editError }}</p>
 
       <!-- Acceptance -->
       <div class="field">
@@ -92,6 +201,50 @@ const ownerName = computed(() => memberName(props.ticket.assigneeId));
           <span v-for="l in (ticket.labels ?? [])" :key="l" class="chip">{{ l }}</span>
         </div>
       </div>
+
+      <!-- 削除 (2 段階クリック / T10-2) -->
+      <div class="field delete-zone">
+        <button :class="['delete-btn', deleteArmed && 'armed']" data-testid="delete-ticket" @click="onDelete">
+          {{ deleteArmed ? 'もう一度押すと削除します' : 'このチケットを削除' }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.ibtn-text {
+  padding: 4px 10px;
+  background: transparent;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  font-family: var(--sans); font-size: 12px; cursor: pointer;
+  color: var(--ink-1);
+}
+.ibtn-text:disabled { opacity: 0.5; cursor: not-allowed; }
+.edit-title {
+  width: 100%;
+  font-family: var(--display); font-size: 22px; font-weight: 600;
+  border: none; border-bottom: 2px solid var(--accent); background: transparent;
+  padding: 4px 0; color: var(--ink-0);
+}
+.edit-title:focus { outline: none; }
+.edit-fields { display: flex; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+.edit-field { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 120px; }
+.edit-input {
+  padding: 8px 10px;
+  border: var(--hairline) solid var(--line-2); border-radius: var(--radius);
+  background: var(--bg-0); font-family: var(--sans); font-size: 13px;
+}
+.edit-input:focus { outline: none; border-color: var(--accent); }
+.edit-textarea { width: 100%; resize: vertical; line-height: 1.5; }
+.edit-err { color: var(--err); font-size: 12px; margin: 0 0 12px; }
+.delete-zone { border-top: var(--hairline) solid var(--line-1); padding-top: 16px; margin-top: 8px; }
+.delete-btn {
+  padding: 8px 16px;
+  background: transparent; border: var(--hairline) solid var(--err);
+  border-radius: var(--radius); color: var(--err);
+  font-family: var(--sans); font-size: 13px; cursor: pointer;
+}
+.delete-btn.armed { background: var(--err); color: #FBF8F2; }
+</style>
