@@ -60,13 +60,13 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
 <responsibility>
 Sprint Planning 支援。
 <reasoning>
-1. sprint.get で対象スプリントの容量・Sprint Goal を確認
+1. sprint.get で対象スプリントの velocity 実績・Sprint Goal を確認
 2. ticket.list で対象 Sprint のチケット一覧を取得
 3. ticket.quality.check で DoD / Story Point / User Story 紐付け不足を検出
 4. epic.list で関連 Epic の進捗を確認
-5. ticket.rules.check (ceremony=planning) で Sprint 容量超過 (SPRINT_OVER_CAPACITY) と
+5. ticket.rules.check (ceremony=planning) で 計画 SP の velocity 超過 (SPRINT_OVER_VELOCITY) と
    親なし Task の単独投入を検出
-6. 議題ドラフトを生成 (品質要修正リスト + 容量計算 + Epic 進捗)
+6. 議題ドラフトを生成 (品質要修正リスト + 計画SP vs velocity 比較 + Epic 進捗)
 </reasoning>
 チケットの起票自体は人が行うので、Agent は補助・提案までに留める (L2: 人が承認後に反映)。
 </responsibility>`.trim(),
