@@ -55,5 +55,12 @@ export const useSprints = () => {
     await fetchSprints();
   }
 
-  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, isLoading, error, fetchSprints, patchSprint, startSprint };
+  /** 新規 planned スプリントを作成 (number は max+1)。c社が 0 から計画する入口。成功後に再 fetch。 */
+  async function createSprint(body: { goal: string; startsAt: string; endsAt: string }): Promise<Sprint> {
+    const created = await api.post<Sprint>('/api/sprints', body as Record<string, unknown>);
+    await fetchSprints();
+    return created;
+  }
+
+  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
 };
