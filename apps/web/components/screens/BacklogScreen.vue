@@ -16,6 +16,9 @@ const sprintTickets = computed(() =>
 );
 const backlogTickets = computed(() => {
   const activeId = activeSprint.value?.id;
+  // active sprint が無い (未取得 / 未設定) ときは全チケットを backlog 扱いにする。
+  // (filter(sprintId !== undefined) だと sprintId 無しチケットが両区画から漏れるため)
+  if (!activeId) return props.tickets;
   return props.tickets.filter((t) => t.sprintId !== activeId);
 });
 
