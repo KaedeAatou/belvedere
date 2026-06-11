@@ -11,6 +11,7 @@ import type { MiddlewareHandler } from 'hono';
 import type { RepoContainer } from '@belvedere/repo';
 import type { AuthenticatedUser } from './auth';
 import { buildMemberFromAllowlist } from '../config/email-allowlist';
+import { planInviteBind } from '../config/invite-bind';
 
 export interface WorkspaceContext {
   workspaceId: string;
@@ -30,6 +31,21 @@ export interface WorkspaceContext {
  *
  * 将来拡張: 複数 Workspace 所属時の選択 UI 連動、role 動的変更
  */
+/**
+ * workspace 解決を skip するルート (method + path 完全一致)。
+ *
+ * 「所属 Workspace ゼロでも呼べる」必要があるルートをここで通す。auth は通った後なので
+ * ctx.user は載っている。これにより invitation_required で新規ユーザーが Workspace を
+ * 1 つも作れずロックされる詰みを解消する (createWorkspace / listMyWorkspaces)。
+ *
+ * 注意: ここを skip したルートのハンドラは c.get('workspaceId') / c.get('role') を
+ * 参照してはいけない (set されないため undefined)。ctx.user のみ使うこと。
+ */
+const WORKSPACE_RESOLUTION_SKIP: ReadonlyArray<{ method: string; path: string }> = [
+  { method: 'GET', path: '/api/workspaces' },
+  { method: 'POST', path: '/api/workspaces' },
+];
+
 export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
   return async (c, next) => {
     const user = c.get('user') as AuthenticatedUser | undefined;
@@ -38,7 +54,33 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
       return c.json({ error: 'auth_middleware_not_applied' }, 500);
     }
 
+    // 所属 Workspace ゼロでも呼べるルートは workspace 解決を skip (auth は通過済)。
+    if (WORKSPACE_RESOLUTION_SKIP.some((r) => r.method === c.req.method && r.path === c.req.path)) {
+      await next();
+      return;
+    }
+
     let memberships = await repo.members.listByUserId(user.userId);
+
+    // 招待 bind: uid で Member が無い = まだどの ws にも実 uid で加入していない。
+    // email 一致の招待センチネル (`invite:<workspaceId>:<email>`) を実 uid に bind する
+    // (旧センチネル doc 削除 + 実 uid doc 作成)。複数 ws への招待は全部 bind する。
+    if (memberships.length === 0) {
+      const byEmail = await repo.members.listByEmail(user.email);
+      const bound: typeof memberships = [];
+      // 同じ email を持つ全候補について、招待センチネルを 1 件ずつ bind する。
+      for (const sentinel of byEmail) {
+        const plan = planInviteBind(user.userId, user.email, [sentinel]);
+        if (!plan) continue;
+        await repo.members.upsert(plan.bound);
+        await repo.members.delete(plan.sentinel.userId);
+        bound.push(plan.bound);
+        console.log(
+          `[workspace] invite bound: ${user.email} → ${plan.bound.workspaceId} (${plan.bound.role})`,
+        );
+      }
+      if (bound.length > 0) memberships = bound;
+    }
 
     // ブートストラップ: email allowlist 該当者は初回ログイン時に自動登録
     if (memberships.length === 0) {

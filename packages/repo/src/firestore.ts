@@ -13,6 +13,7 @@
 
 import { Firestore, type Query } from '@google-cloud/firestore';
 import type {
+  Workspace,
   Ticket,
   Sprint,
   Member,
@@ -27,6 +28,7 @@ import type {
   RetroTry,
 } from '@belvedere/shared';
 import {
+  WorkspaceSchema,
   TicketSchema,
   SprintSchema,
   ProjectSchema,
@@ -41,6 +43,7 @@ import {
 } from '@belvedere/shared';
 import { z } from 'zod';
 import type {
+  WorkspaceRepository,
   TicketRepository,
   SprintRepository,
   ProjectRepository,
@@ -122,6 +125,7 @@ function parseOne<T>(
 
 /** コレクション名定数 (フラット構造)。 */
 const COL = {
+  workspaces: 'workspaces',
   tickets: 'tickets',
   sprints: 'sprints',
   projects: 'projects',
@@ -134,6 +138,29 @@ const COL = {
   estimationSessions: 'estimationSessions',
   retroTries: 'retroTries',
 } as const;
+
+class FsWorkspaceRepo implements WorkspaceRepository {
+  async listByIds(ids: string[]): Promise<Workspace[]> {
+    if (ids.length === 0) return [];
+    // 個別 doc.get を Promise.all で並列引き (Firestore の `in` は 10 件上限があり、
+    // 所属 ws 数が増えても破綻しないよう doc id 直引きで取る)。存在しない id は null → 除外。
+    const snaps = await Promise.all(ids.map((id) => db().collection(COL.workspaces).doc(id).get()));
+    const valid: Workspace[] = [];
+    for (const doc of snaps) {
+      if (!doc.exists) continue;
+      const w = parseOne<Workspace>(COL.workspaces, doc.id, doc.data(), WorkspaceSchema);
+      if (w) valid.push(w);
+    }
+    return valid;
+  }
+  async get(id: string): Promise<Workspace | null> {
+    const doc = await db().collection(COL.workspaces).doc(id).get();
+    return doc.exists ? parseOne<Workspace>(COL.workspaces, id, doc.data(), WorkspaceSchema) : null;
+  }
+  async upsert(w: Workspace): Promise<void> {
+    await db().collection(COL.workspaces).doc(w.id).set(w);
+  }
+}
 
 class FsTicketRepo implements TicketRepository {
   async list(q: TicketQuery): Promise<Ticket[]> {
@@ -232,8 +259,19 @@ class FsMemberRepo implements MemberRepository {
     const snap = await db().collection(COL.members).where('userId', '==', userId).get();
     return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
+  /**
+   * email で全 Workspace 横断検索 (招待 bind 用)。招待センチネルは正規化済 email を
+   * 格納しているので equality where で引ける。
+   */
+  async listByEmail(email: string): Promise<Member[]> {
+    const snap = await db().collection(COL.members).where('email', '==', email.toLowerCase()).get();
+    return parseList<Member>(COL.members, snap.docs, MemberSchema);
+  }
   async upsert(m: Member): Promise<void> {
     await db().collection(COL.members).doc(m.userId).set(m);
+  }
+  async delete(userId: string): Promise<void> {
+    await db().collection(COL.members).doc(userId).delete();
   }
 }
 
@@ -336,6 +374,7 @@ class FsRetroTryRepo implements RetroTryRepository {
 
 export function createFirestoreRepoContainer(): RepoContainer {
   return {
+    workspaces: new FsWorkspaceRepo(),
     tickets: new FsTicketRepo(),
     sprints: new FsSprintRepo(),
     projects: new FsProjectRepo(),

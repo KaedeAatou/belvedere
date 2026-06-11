@@ -6,6 +6,7 @@
 // (API caller → buildTools(repo, workspaceId) → tools → repo.*.list({ workspaceId, ... }))。
 
 import type {
+  Workspace,
   Ticket,
   Sprint,
   Member,
@@ -20,6 +21,19 @@ import type {
   EstimationSession,
   RetroTry,
 } from '@belvedere/shared';
+
+export interface WorkspaceRepository {
+  /**
+   * 指定 id 群に該当する Workspace doc を返す。
+   * 認証ミドルウェア / listMyWorkspaces が「user の所属 ws を members から横断検索 →
+   * その workspaceId 群で Workspace doc を引く」流れで使う (workspaceId 縛りより前)。
+   * doc が存在しない id (seed 由来で Workspace doc を持たない ws-belvedere 等) は
+   * 結果に含まれない (呼び出し側でフォールバックする)。
+   */
+  listByIds(ids: string[]): Promise<Workspace[]>;
+  get(id: string): Promise<Workspace | null>;
+  upsert(w: Workspace): Promise<void>;
+}
 
 export interface TicketQuery {
   workspaceId: string;
@@ -70,10 +84,22 @@ export interface MemberRepository {
    */
   listByUserId(userId: string): Promise<Member[]>;
   /**
+   * email で全 Workspace 横断検索する。招待 → 初回ログイン bind (Phase 1-E) で、
+   * uid 未確定の招待センチネル (`invite:<workspaceId>:<email>`) を email で引くのに使う。
+   * workspaceMiddleware の前段で呼ばれるため workspaceId 縛りが効かない。
+   * 個人情報は userId / email / workspaceId / role に限定すること (PII リーク防止)。
+   */
+  listByEmail(email: string): Promise<Member[]>;
+  /**
    * 招待 UI (Phase 1-E) / 初回 owner 自動登録 (Phase 1-B / 2026-06-10) で使う。
    * doc id = userId なので、既存ユーザの role 変更は同じ userId で再投入する形になる。
    */
   upsert(m: Member): Promise<void>;
+  /**
+   * 招待 (`invite:<email>` センチネル) の取消、および招待 → 実 uid bind 時の旧 doc 削除で使う。
+   * doc id = userId (センチネルなら `invite:<email>`) を指定する。
+   */
+  delete(userId: string): Promise<void>;
 }
 
 export interface CeremonyRepository {
@@ -111,6 +137,7 @@ export interface RetroTryRepository {
  * ServiceLocator的に使う — 実装差し替えポイント。
  */
 export interface RepoContainer {
+  workspaces: WorkspaceRepository;
   tickets: TicketRepository;
   sprints: SprintRepository;
   projects: ProjectRepository;

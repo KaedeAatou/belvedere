@@ -2,6 +2,7 @@
 // Firestore に置き換える時はインタフェースのまま実装差し替え。
 
 import type {
+  Workspace,
   Ticket,
   Sprint,
   Member,
@@ -18,6 +19,7 @@ import type {
 import { stripUndefined } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
 import type {
+  WorkspaceRepository,
   TicketRepository,
   SprintRepository,
   ProjectRepository,
@@ -37,6 +39,16 @@ import type {
 // Firestore backend (firestore.ts) は `ignoreUndefinedProperties: true` で write 時に
 // undefined フィールドを silent drop するため、memory backend も write 時に undefined キーを
 // 除去して shape を揃える (そうしないと 'key' in obj / Object.keys / JSON 長が backend で乖離)。
+
+class MemWorkspaceRepo implements WorkspaceRepository {
+  private store = new Map<string, Workspace>();
+  async listByIds(ids: string[]): Promise<Workspace[]> {
+    const want = new Set(ids);
+    return [...this.store.values()].filter((w) => want.has(w.id));
+  }
+  async get(id: string): Promise<Workspace | null> { return this.store.get(id) ?? null; }
+  async upsert(w: Workspace): Promise<void> { this.store.set(w.id, stripUndefined({ ...w })); }
+}
 
 class MemTicketRepo implements TicketRepository {
   private store = new Map<string, Ticket>();
@@ -115,7 +127,12 @@ class MemMemberRepo implements MemberRepository {
   async listByUserId(userId: string): Promise<Member[]> {
     return [...this.store.values()].filter((m) => m.userId === userId);
   }
+  async listByEmail(email: string): Promise<Member[]> {
+    const e = email.toLowerCase();
+    return [...this.store.values()].filter((m) => m.email.toLowerCase() === e);
+  }
   async upsert(m: Member): Promise<void> { this.store.set(m.userId, stripUndefined({ ...m })); }
+  async delete(userId: string): Promise<void> { this.store.delete(userId); }
 }
 
 class MemCeremonyRepo implements CeremonyRepository {
@@ -182,6 +199,7 @@ class MemRetroTryRepo implements RetroTryRepository {
 
 export function createMemoryRepoContainer(): RepoContainer {
   return {
+    workspaces: new MemWorkspaceRepo(),
     tickets: new MemTicketRepo(seedTickets),
     sprints: new MemSprintRepo(seedSprints),
     projects: new MemProjectRepo(seedProjects),

@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 import type {
+  Workspace,
   Ticket,
   Sprint,
   Project,
@@ -49,6 +50,16 @@ export const AgentSourceSchema = z.union([
   ),
 ]);
 export const TicketTypeSchema = z.enum(['story', 'task', 'spike', 'bug', 'incident']);
+
+// === Workspace ===
+export const WorkspaceSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  slug: z.string(),
+  productGoal: z.string(),
+  ownerId: z.string(),
+  createdAt: z.string(),
+});
 
 // === Ticket ===
 export const TicketSchema = z.object({
@@ -284,6 +295,7 @@ export const RetroTrySchema = z.object({
 // 補助型: `Equal<A, B>` で双方向の互換性を厳密に判定する。
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
+const _check_Workspace: Equal<z.infer<typeof WorkspaceSchema>, Workspace> = true;
 const _check_Ticket: Equal<z.infer<typeof TicketSchema>, Ticket> = true;
 const _check_Sprint: Equal<z.infer<typeof SprintSchema>, Sprint> = true;
 const _check_Project: Equal<z.infer<typeof ProjectSchema>, Project> = true;
@@ -297,6 +309,7 @@ const _check_EstimationSession: Equal<z.infer<typeof EstimationSessionSchema>, E
 const _check_RetroTry: Equal<z.infer<typeof RetroTrySchema>, RetroTry> = true;
 
 // 未使用変数の typecheck warning を抑止 (本来の使い道は compile-time の側面)
+void _check_Workspace;
 void _check_Ticket;
 void _check_Sprint;
 void _check_Project;

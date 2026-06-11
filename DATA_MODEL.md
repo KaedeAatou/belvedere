@@ -33,6 +33,8 @@
 > **実装メモ (Phase 1-B / 2026-06-09)**: 上表のコレクションパスは論理設計 (将来のマルチテナント本格化時の目標形)。`packages/repo/src/firestore.ts` の Phase 1-B 実装は、`RepoContainer` インタフェースを無変更で memory backend と即 swap できることを優先し、**サブコレクションではなくトップレベルのフラットコレクション** (`/tickets/{id}` 等) を採用した。各ドキュメントは `workspaceId` / `projectId` をフィールドで保持し、ワークスペース分離は `where('workspaceId', '==', X)` で実現する (equality-only の AND は composite index 不要)。サブコレクション (`/workspaces/{wsId}/...`) への移行は、`RepoContainer` に `wsId` 引数を通す全層 (repo / tools / agent / mcp) 改修を伴うため Phase 4 以降に再検討する。
 - 既存 seed (`EP-1..4` / `US-101..US-402` / `WC-101..112`) は **デフォルト Project (Belvedere Core, idPrefix=BV)** 配下と解釈し、ID 値は変更しない
 
+> **実装メモ (Phase 1-E 前倒し / 2026-06-12)**: Workspace 作成 + メンバー招待 + Workspace 切替を実装した。Workspace は他エンティティと同じくフラットコレクション `/workspaces/{wsId}` に書き込む (`WorkspaceRepository.upsert`)。新規 Workspace は `POST /api/workspaces` で作成し作成者を `owner` Member に登録、`GET /api/workspaces` で所属一覧を返す (この 2 ルートのみ `workspaceMiddleware` を skip = 所属ゼロでも呼べる)。**招待は実 uid 未確定なので Member doc を `userId = invite:<workspaceId>:<email>` のセンチネルで事前作成**し、招待された人が初回ログインした時に `workspaceMiddleware` が email 一致でセンチネルを実 uid に bind する (旧センチネル doc 削除 + 実 uid doc 作成)。doc id に `workspaceId` を含めるのは同 email を複数 Workspace が招待しても doc id が衝突しないため。seed の `ws-belvedere` は Workspace doc を持たない (members のみ) ため、一覧では `{ id, name: id }` にフォールバックする。
+
 ---
 
 ## 2. TypeScript 型定義

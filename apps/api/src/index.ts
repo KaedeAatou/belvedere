@@ -32,8 +32,14 @@ import {
   type HandlerResult,
 } from './handlers/ticket-handlers';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
-import { patchSprint, startSprint } from './handlers/sprint-handlers';
+import { createSprint, patchSprint, startSprint } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
+import {
+  createWorkspace,
+  listMyWorkspaces,
+  inviteMember,
+  cancelInvite,
+} from './handlers/workspace-handlers';
 import { getFindings } from './handlers/finding-handlers';
 import {
   startEstimation,
@@ -213,6 +219,12 @@ app.delete('/api/tickets/:id', async (c) => {
   return respond(c, await deleteTicket(repo, buildCtx(c), c.req.param('id')));
 });
 
+// Sprint 新規作成 (c社が 0 から計画する入口、owner/sm/po のみ / 2026-06-12)
+app.post('/api/sprints', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createSprint(repo, buildCtx(c), body));
+});
+
 // Sprint の goal/期間編集 + 開始 (Planning でゴール先行プランニング、owner/sm/po のみ / 2026-06-11)
 app.patch('/api/sprints/:id', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
@@ -238,6 +250,25 @@ app.patch('/api/members/:userId', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
   return respond(c, await patchMember(repo, buildCtx(c), c.req.param('userId'), body));
 });
+
+// ------- Workspace 管理 (Phase 1-E 前倒し / 2026-06-12) -------
+// GET/POST /api/workspaces は workspaceMiddleware が skip する (所属ゼロでも呼べる)。
+// よって c.get('workspaceId') / c.get('role') は参照せず c.get('user') のみ使う。
+app.get('/api/workspaces', async (c) =>
+  respond(c, await listMyWorkspaces(repo, { user: c.get('user') })),
+);
+app.post('/api/workspaces', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createWorkspace(repo, { user: c.get('user') }, body));
+});
+// 招待 + 招待取消 (owner/sm のみ、handler 内で role ゲート)。workspace 確定済ルート。
+app.post('/api/workspaces/members/invite', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await inviteMember(repo, buildCtx(c), body));
+});
+app.delete('/api/workspaces/members/:userId', async (c) =>
+  respond(c, await cancelInvite(repo, buildCtx(c), c.req.param('userId'))),
+);
 
 // ------- 見積もりポーカー (T6) -------
 // 開始/開示/採用は owner/sm/po (handler 内で role ゲート)、投票/取得は member。
