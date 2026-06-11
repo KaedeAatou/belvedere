@@ -177,7 +177,7 @@ async function callWhoami(): Promise<void> {
           <div v-for="w in workspaces" :key="w.id"
                :class="['ws-row', w.id === currentId && 'ws-row--current']">
             <span class="ws-row-name">{{ w.name }}</span>
-            <span v-if="w.id === currentId" class="role-badge" style="margin-left: auto">表示中</span>
+            <span v-if="w.id === currentId" class="ws-current-badge" style="margin-left: auto">表示中</span>
             <span class="ws-row-role">{{ w.role }}</span>
           </div>
           <p v-if="workspaces.length === 0" class="muted">所属 Workspace がありません。下のフォームで作成してください。</p>
@@ -211,7 +211,7 @@ async function callWhoami(): Promise<void> {
           <span class="member-name">{{ m.displayName }}</span>
           <span class="member-email">{{ m.email }}</span>
           <span v-if="isPendingInvite(m)" class="pending-badge" data-testid="member-pending">招待中</span>
-          <span class="role-badge" style="margin-left: auto">{{ m.role }}</span>
+          <span class="member-role-badge" style="margin-left: auto">{{ m.role }}</span>
           <button v-if="canManage && isPendingInvite(m)" class="revoke-btn"
                   :data-testid="`invite-revoke-${m.userId}`" @click="revokeInvite(m.userId)">取消</button>
         </div>
@@ -343,7 +343,9 @@ async function callWhoami(): Promise<void> {
   word-break: break-all;
 }
 
-.role-badge {
+/* .role-badge は既存 e2e (profile.spec) が一意 locator として参照するため
+   プロフィール節の 1 箇所だけで使う。WS/メンバー一覧は別クラス名にする。 */
+.role-badge, .ws-current-badge, .member-role-badge {
   display: inline-block;
   background: var(--accent-bg);
   color: var(--accent);
@@ -491,7 +493,7 @@ async function callWhoami(): Promise<void> {
   color: var(--ink-0);
 }
 
-.ws-row-role, .member-row .role-badge {
+.ws-row-role, .member-row .member-role-badge {
   flex-shrink: 0;
 }
 
