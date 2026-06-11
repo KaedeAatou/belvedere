@@ -59,6 +59,26 @@ describe('createTicket', () => {
     expect(res.body.acceptanceCriteria).toEqual(['A', 'B']);
   });
 
+  it('正常系: type / timeboxHours を保存する (種別バッジ / Spike timebox の前提)', async () => {
+    const story = await createTicket(repo, CTX, { title: 'a story', type: 'story' });
+    expect(story.ok).toBe(true);
+    if (!story.ok) return;
+    expect(story.body.type).toBe('story');
+
+    const spike = await createTicket(repo, CTX, { title: 'a spike', type: 'spike', timeboxHours: 4 });
+    expect(spike.ok).toBe(true);
+    if (!spike.ok) return;
+    expect(spike.body.type).toBe('spike');
+    expect(spike.body.timeboxHours).toBe(4);
+  });
+
+  it('異常系: type が不正値 → 400', async () => {
+    const res = await createTicket(repo, CTX, { title: 'x', type: 'epic' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
   it('異常系: title が空文字 → 400 invalid_body', async () => {
     const res = await createTicket(repo, CTX, { title: '' });
     expect(res.ok).toBe(false);
