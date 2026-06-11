@@ -4,7 +4,7 @@
 // 注意: ScreenId は 5 画面 (Backlog + 4 儀式)。T9 で 'refinement' を floor 03 に追加し
 // Review→04 / Retro→05 に振り直す予定。
 
-export type ScreenId = 'backlog' | 'planning' | 'daily' | 'review' | 'retro';
+export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro';
 
 export interface ScreenDef {
   id: ScreenId;
@@ -23,13 +23,16 @@ export const SCREENS: ScreenDef[] = [
   { id: 'backlog', label: 'Backlog', floor: '00' },
   { id: 'planning', label: 'Sprint Planning', floor: '01' },
   { id: 'daily', label: 'Daily Scrum', floor: '02' },
-  { id: 'review', label: 'Sprint Review', floor: '03' },
-  { id: 'retro', label: 'Retrospective', floor: '04' },
+  { id: 'refinement', label: 'Backlog Refinement', floor: '03' },
+  { id: 'review', label: 'Sprint Review', floor: '04' },
+  { id: 'retro', label: 'Retrospective', floor: '05' },
 ];
 
+// CLAUDE.md の 5 儀式表と一致 (01 Planning / 02 Daily / 03 Refinement / 04 Review / 05 Retro)
 export const CEREMONIES: CeremonyDef[] = [
   { id: 'planning', label: 'Sprint Planning', floor: '01', sub: 'Sprint kickoff' },
   { id: 'daily', label: 'Daily Scrum', floor: '02', sub: 'Daily sync' },
-  { id: 'review', label: 'Sprint Review', floor: '03', sub: 'Demo' },
-  { id: 'retro', label: 'Retrospective', floor: '04', sub: 'Inspect & adapt' },
+  { id: 'refinement', label: 'Backlog Refinement', floor: '03', sub: 'Groom & estimate' },
+  { id: 'review', label: 'Sprint Review', floor: '04', sub: 'Demo' },
+  { id: 'retro', label: 'Retrospective', floor: '05', sub: 'Inspect & adapt' },
 ];
