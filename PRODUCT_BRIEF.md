@@ -22,7 +22,7 @@ Jiraを使っているチームで広く起きる症状:
 
 - **チケットの書き忘れ**: DoDが空、SP未定、User Story紐付けなしのまま「とりあえず作っちゃった」が溜まる
 - **儀式の形骸化**: デイリーが進捗報告会、レビューが社内デモ、ふりかえりが付箋大会で終わる
-- **言いっぱなし**: ふりかえりで Try が出るが翌スプリントに繋がらない / 見積もりの認識ズレが放置される
+- **言いっぱなし**: ふりかえりで Try が出るが翌スプリントに繋がらない / 見積もりの認識ズレが放置される。Try は carry-forward 積み上げ (RetroTry) としてスプリント横断で蓄積され、儀式 AI が参照する
 - **戦略の不在**: 戦略があるから開発するはずだが、開発者は **何のためにこのチケットをやっているか** を見失っている (Epic に Why が書かれていない / 書かれていても深い階層に埋もれて読まれない)
 - **疲弊**: スクラムマスターが議事・要約・転記・見積もり会の段取りで週8時間消費
 
@@ -90,7 +90,7 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
 「**チケットを書くのが軽くなる**」「**儀式の前後で何かが片付いている**」という驚き。
 
 例:
-- 月曜朝、Slackに「今週のプランニング議題4件・品質要修正3件・計画28pt(velocity 20pt 超過)」が届く
+- 月曜朝、Slackに「今週のプランニング議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」が届く
 - ふりかえり後、「上がった Try 3件のうち 2件は翌スプリントWIPに転記済 (parentTicketId付き)、1件は要確認」が共有される
 - ダッシュボードに「**儀式健全性 Daily が -8 で要注意**」と表示される
 
@@ -114,7 +114,7 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
         │  (Project ごとに idPrefix 自由設定 / 例: BV for Belvedere Core)
         │
         └─▶ Web UI (Nuxt 3 + Vue 3 SSR / Cloud Run / Claude Design)
-              5 画面: Backlog (Refinement 統合) / Planning / Daily / Review / Retrospective
+              6 画面: Backlog (00) + Planning / Daily / Refinement / Review / Retrospective (01-05、T9 で Refinement 専用画面を新設)
 ```
 
 GCPスタック (必須要件):

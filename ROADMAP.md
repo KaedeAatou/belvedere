@@ -41,7 +41,7 @@ gantt
     section 1-D. MCP Cloud Run
     MCP HTTP + Cloud Run + ドッグフード :2026-06-20, 5d
     section 1-E. マルチテナント完成
-    招待 UI 最小実装                 :2026-06-25, 2d
+    招待 UI 最小実装                 :done, 2026-06-25, 2d
     section 3-A. Agent 本実装
     Gemini + ADK + Orchestrator A2A  :2026-06-27, 4d
     section 2. Pub/Sub リアル配線
@@ -103,8 +103,8 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [x] **T9: Refinement 専用画面** (ルール別ワークキュー + ポーカー開始導線 / 2026-06-11)
 - [x] **T10: DetailSheet チケット編集 + 削除** (2026-06-11)
 - [x] **velocity 用語統一** (capacity 廃止 → SPRINT_OVER_VELOCITY。UI/ルール/prompt/Mock LLM/docs 一括 / 2026-06-11)
-- [x] **UI 再設計 (デザインフィードバック)**: 画面タイトル/stat 重複の排除、Daily Burndown を SP×velocity で再構成、Retro Try carry-forward 積み上げ (d&d)、サイドバー Artifacts 整理 (2026-06-11)
-- [x] **Sprint 開始フロー (B案)**: PATCH /api/sprints/:id + POST /api/sprints/:id/start (planned→active + velocity 確定)。ゴールは Planning のアウトプット (2026-06-11)
+- [x] **UI 再設計 (デザインフィードバック)**: 画面タイトル/stat 重複の排除、Daily Burndown を SP×velocity で再構成、Retro Try carry-forward 積み上げ (d&d)、サイドバー Artifacts 整理 (Firestore 永続 + retro.tries.list Tool で儀式 Agent のコンテキスト化 / 2026-06-12)
+- [x] **Sprint 開始フロー (B案)**: PATCH /api/sprints/:id + POST /api/sprints/:id/start (planned→active + velocity 確定)。ゴールは Planning のアウトプット + POST /api/sprints 新規作成 (0 から計画する入口 / 2026-06-12)
 - [ ] AI Integrity Panel は **空の枠だけ** (Phase 2 で配線)
 
 ### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
@@ -114,10 +114,11 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [ ] **「Belvedere 自身の開発を Belvedere + MCP + Claude Code で管理する」ドッグフード開始**
 
 ### Phase 1-E マルチテナント完成 (招待 UI 最小実装) / 6/25 〜 6/26 (2 日)
-- [ ] Workspace owner 画面に「メンバ招待」セクション追加
-- [ ] email 入力 → Firestore に Member レコード作成 (role: 'sm' / 'po' / 'dev' / 'guest' から選択)
-- [ ] 招待された人がログインすると自動加入
-- [ ] (最小実装: 招待メール送信は手動コピペ通知で OK / Cloud Function 不要)
+(2026-06-12 前倒し完了 — Phase 1-C 中に実装。Workspace 作成 + 切替 UI も追加)
+- [x] Workspace owner 画面に「メンバ招待」セクション追加
+- [x] email 入力 → Firestore に Member レコード作成 (role: 'sm' / 'po' / 'dev' / 'guest' から選択)
+- [x] 招待された人がログインすると自動加入
+- [x] (最小実装: 招待メール送信は手動コピペ通知で OK / Cloud Function 不要)
 
 ### Phase 3-A Gemini + ADK + Orchestrator Multi-Agent / 6/27 〜 6/30 (4 日) ★★ B-1 キラー
 
@@ -174,7 +175,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 | **2026-06-14** | Phase 1-B (認証 + IDOR fix) 完了見えない | IDOR fix を諦め、workspaceId 引数を全層に通すだけで実フィルタは Phase 5 (= 提出後別件) に逃がす |
 | **2026-06-19** | Phase 1-C (UI CRUD) 完了見えない | チケット起票機能だけに絞る、編集は提出後 |
 | **2026-06-24** | Phase 1-D (MCP Cloud Run) 完了見えない | MCP は stdio のまま提出、ドッグフードはローカル Claude Code 経由 |
-| **2026-06-26** | 招待 UI 完了見えない | 「個人開発 SaaS」のまま提出、ピッチで「マルチテナント設計は完備、招待 UI は次フェーズ」と説明 |
+| **2026-06-26** | 招待 UI 完了見えない → 2026-06-12 完了済 | 「個人開発 SaaS」のまま提出、ピッチで「マルチテナント設計は完備、招待 UI は次フェーズ」と説明 |
 | **2026-06-30** | Phase 3-A (ADK Multi-Agent) 不調 | 雛形 + Gemini 1 回呼び出しまで縮退、A-2 要件は守る |
 | **2026-07-03** | Phase 2 Pub/Sub 不調 | 「API 同期実行 + Web polling」の擬似リアルタイムに縮退 (見た目はリアルタイム) |
 | **2026-07-07** | Elastic RAG 完成見えない | L2 markdown を prompt 埋込で擬似 RAG (Elastic 接続なし)、協賛企業活用枠は失うが提出は守る |
