@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
 import type { Sprint, Ticket } from '@belvedere/shared';
-import { patchSprint, startSprint } from '../src/handlers/sprint-handlers';
+import { createSprint, patchSprint, startSprint } from '../src/handlers/sprint-handlers';
 
 const WS = 'ws-belvedere';
 const OWNER = { workspaceId: WS, user: { userId: 'u-owner', email: 'owner@example.com' }, role: 'owner' as const };
@@ -35,6 +35,60 @@ function ticket(p: Partial<Ticket> & Pick<Ticket, 'id' | 'status' | 'sprintId'>)
     ...p,
   };
 }
+
+describe('createSprint', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  const BODY = { goal: '最初のゴール', startsAt: '2026-06-15T00:00:00+09:00', endsAt: '2026-06-28T23:59:59+09:00' };
+
+  it('正常系: planned スプリントを作成 (number は既存 max+1)', async () => {
+    // WS には seed スプリントが既にある。max+1 を期待値として動的に算出する。
+    const before = await repo.sprints.list({ workspaceId: WS });
+    const expectedNumber = before.reduce((n, s) => Math.max(n, s.number), 0) + 1;
+    const res = await createSprint(repo, OWNER, BODY);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.status).toBe('planned');
+    expect(res.body.number).toBe(expectedNumber);
+    expect(res.body.goal).toBe('最初のゴール');
+    expect(res.body.workspaceId).toBe(WS);
+    // 永続化確認
+    const all = await repo.sprints.list({ workspaceId: WS });
+    expect(all.some((s) => s.id === res.body.id)).toBe(true);
+  });
+
+  it('既存スプリントが無ければ number は 1 (c社 0 からの計画)', async () => {
+    const emptyWsCtx = { workspaceId: 'ws-fresh', user: { userId: 'u-owner', email: 'o@x.com' }, role: 'owner' as const };
+    const res = await createSprint(repo, emptyWsCtx, BODY);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.number).toBe(1);
+  });
+
+  it('403: dev は作成不可', async () => {
+    const res = await createSprint(repo, DEV, BODY);
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+  });
+
+  it('400: goal 空は弾く', async () => {
+    const res = await createSprint(repo, OWNER, { ...BODY, goal: '' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('400: startsAt > endsAt は弾く', async () => {
+    const res = await createSprint(repo, OWNER, {
+      goal: 'x', startsAt: '2026-07-01T00:00:00+09:00', endsAt: '2026-06-01T00:00:00+09:00',
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+});
 
 describe('patchSprint', () => {
   let repo: RepoContainer;
