@@ -15,6 +15,7 @@ import {
   RitualSchema,
   StatusSchema,
   ValueImpactSchema,
+  TicketTypeSchema,
   stripUndefinedPartial,
   generateId,
   applyStatusTransition,
@@ -53,6 +54,8 @@ export const TicketCreateBodySchema = z.object({
   parentTicketId: z.string().optional(),
   blockedBy: z.array(z.string()).optional(),
   projectId: z.string().optional(),
+  type: TicketTypeSchema.optional(),
+  timeboxHours: z.number().min(0).optional(),
 });
 
 // PATCH /api/tickets/:id body — 全フィールドオプション (部分更新)、id / workspaceId / createdBy / createdAt は変更不可
@@ -92,6 +95,8 @@ export async function createTicket(
     ...(parsed.data.parentTicketId !== undefined && { parentTicketId: parsed.data.parentTicketId }),
     ...(parsed.data.blockedBy !== undefined && { blockedBy: parsed.data.blockedBy }),
     ...(parsed.data.projectId !== undefined && { projectId: parsed.data.projectId }),
+    ...(parsed.data.type !== undefined && { type: parsed.data.type }),
+    ...(parsed.data.timeboxHours !== undefined && { timeboxHours: parsed.data.timeboxHours }),
     createdAt: now,
     updatedAt: now,
     createdBy: 'human',
