@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DemoTicket } from '~/composables/useDemoData';
-import { TEAM, FLAG_DEFS } from '~/composables/useDemoData';
+import { TEAM } from '~/composables/useDemoData';
+import { FLAG_DEFS } from '~/composables/useUiMeta';
 
 const props = defineProps<{ ticket: DemoTicket }>();
 const emit = defineEmits<{ close: [] }>();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ScreenId } from '~/composables/useDemoData';
-import { SCREENS } from '~/composables/useDemoData';
+import type { ScreenId } from '~/composables/useUiMeta';
+import { SCREENS } from '~/composables/useUiMeta';
 
 const props = defineProps<{
   screen: ScreenId;
