@@ -287,12 +287,16 @@
 .outcome-cell .v { font-size: 28px; font-weight: 500; margin-top: 4px; font-variant-numeric: tabular-nums; }
 
 /* ===== retro ===== */
+/* KPT ボード (上段・主役) + アクション積み上げ (下段・Try の d&d 受け皿)。 */
 .retro {
+  display: flex; flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.retro-board {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: auto 1fr auto;
-  gap: 0;
-  height: 100%;
   overflow: hidden;
 }
 .retro-col {
@@ -324,6 +328,15 @@
   padding: 1px 6px;
 }
 .retro-note .vote.hot { color: var(--accent); border-color: var(--accent-dim); }
+.retro-note.draggable { cursor: grab; }
+.retro-note.draggable:active { cursor: grabbing; }
+.retro-note.draggable:hover { border-color: var(--accent-dim); }
+.retro-note.stacked { opacity: 0.45; }
+.retro-note .drag-hint {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 4px;
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ink-3);
+}
 .retro-add {
   margin: 12px;
   border: 1px dashed var(--line-2);
@@ -335,32 +348,56 @@
   text-align: center;
 }
 .retro-add:hover { border-color: var(--accent-dim); color: var(--accent); }
-.retro-actions {
-  grid-column: 1 / -1;
+/* アクション積み上げ (下段の Try ドロップゾーン) */
+.retro-stack {
+  flex: 0 0 auto;
   border-top: var(--hairline) solid var(--line-1);
-  padding: 14px 24px;
+  padding: 14px 24px 16px;
   background: var(--bg-1);
-  display: grid; grid-template-columns: 220px 1fr; gap: 24px;
-  max-height: 200px;
-  overflow: auto;
+  max-height: 230px;
+  display: flex; flex-direction: column;
+  transition: background 0.15s ease;
 }
-.retro-actions h3 { margin: 0; font-size: 13px; font-weight: 500; }
-.retro-actions h3 + p { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-2); max-width: 32ch; }
-.action-list { display: flex; flex-direction: column; gap: 4px; }
-.action-row {
+.retro-stack.drop-over { background: var(--accent-bg); }
+.retro-stack.drop-over .stack-list { outline: 1px dashed var(--accent-dim); outline-offset: 4px; }
+.stack-head h3 { margin: 0; font-size: 13px; font-weight: 500; }
+.stack-head h3 .carry { font-weight: 400; color: var(--ink-3); font-size: 12px; }
+.stack-head p { margin: 4px 0 10px; font-size: 11.5px; color: var(--ink-2); }
+.stack-head p b { color: var(--accent); }
+.stack-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; }
+.stack-item {
   display: grid; grid-template-columns: 14px 1fr auto auto;
   gap: 12px; align-items: center;
-  padding: 6px 10px;
+  padding: 7px 10px;
   border: var(--hairline) solid var(--line-1);
+  background: var(--bg-0);
   font-size: 12px;
 }
-.action-row.done .text { text-decoration: line-through; color: var(--ink-3); }
-.action-row .check {
+.stack-item.done .text { text-decoration: line-through; color: var(--ink-3); }
+.stack-item .check {
   width: 12px; height: 12px;
   border: var(--hairline) solid var(--line-3);
   display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
 }
-.action-row .check.on { background: var(--accent); border-color: var(--accent); color: #FBF8F2; }
+.stack-item .check.on { background: var(--accent); border-color: var(--accent); color: #FBF8F2; }
+.stack-item .sprint-badge {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em;
+  color: var(--ink-3);
+  border: var(--hairline) solid var(--line-2);
+  padding: 1px 6px;
+}
+.stack-item .rm {
+  background: none; border: none; color: var(--ink-3);
+  cursor: pointer; display: inline-flex; padding: 2px;
+}
+.stack-item .rm:hover { color: var(--accent); }
+.stack-empty {
+  padding: 18px; text-align: center;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--ink-3);
+  border: 1px dashed var(--line-2);
+}
 
 /* ===== detail panel (overlay sheet) ===== */
 .sheet-mask {
