@@ -51,16 +51,6 @@ const velMax = computed(() => Math.max(35, ...velocityHistory.value.map((v) => v
 </script>
 
 <template>
-  <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 01 / PLANNING</div>
-      <h1>{{ activeSprint ? `Sprint ${activeSprint.number} — Planning` : 'Sprint Planning' }}</h1>
-      <div class="subtitle">
-        ゴールの具体性、velocity 比較、リスクを点検します。AIが過剰計画とゴール紐付けを確認しています。
-      </div>
-    </div>
-  </div>
-
   <div class="planning">
     <!-- LEFT — goal + items -->
     <div class="col">

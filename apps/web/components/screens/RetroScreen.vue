@@ -50,13 +50,6 @@ const openActions = computed(() => actions.filter((a) => !a.done).length);
 
 <template>
   <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 04 / RETRO</div>
-      <h1>Sprint Retrospective</h1>
-      <div class="subtitle">
-        Keep / Problem / Try でチームを点検。AIが <span style="color: var(--accent)">議論候補</span>と<span style="color: var(--accent)">前回未実行</span>を提示。
-      </div>
-    </div>
     <div class="stat-row">
       <div class="stat"><div class="label">Notes</div><div class="v t-num">{{ totalNotes }}</div><div class="delta">{{ members.length }} contributors</div></div>
       <div class="stat"><div class="label">Votes</div><div class="v t-num">36</div><div class="delta">per member</div></div>

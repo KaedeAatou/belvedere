@@ -76,17 +76,6 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
 </script>
 
 <template>
-  <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 02 / DAILY</div>
-      <h1>Daily Scrum — Day {{ String(sprintDays.elapsed).padStart(2, '0') }}</h1>
-      <div class="subtitle">
-        昨日の前進、今日のコミット、ブロッカーを 15 分で。AIは
-        <span style="color: var(--accent)">滞留</span>と<span style="color: var(--accent)">ベロシティ乖離</span>を監視中。
-      </div>
-    </div>
-  </div>
-
   <div class="daily">
     <div class="daily-strip">
       <div class="cell">

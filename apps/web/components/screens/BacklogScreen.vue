@@ -25,7 +25,6 @@ const backlogTickets = computed(() => {
 
 // ルールエンジン findings 集計 (T5-3)
 function flagCount(t: Ticket): number { return findingsFor(t.id).length; }
-const issueCount = computed(() => Object.values(findingsByTicket.value).reduce((n, arr) => n + arr.length, 0));
 const noSP = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING')).length);
 const noAcc = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_DOD_MISSING')).length);
 const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
@@ -95,13 +94,6 @@ async function submitCreate(): Promise<void> {
 
 <template>
   <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 00 / BACKLOG</div>
-      <h1>Backlog</h1>
-      <div class="subtitle">
-        プロダクト全体の在庫。AIが <span style="color: var(--accent)">{{ issueCount }}件</span> の形骸化リスクを検出しています。
-      </div>
-    </div>
     <div class="stat-row">
       <div class="stat"><div class="label">Total</div><div class="v t-num">{{ tickets.length }}</div><div class="delta">issues</div></div>
       <div class="stat"><div class="label">No SP</div><div class="v t-num accent">{{ noSP }}</div><div class="delta">unestimated</div></div>
