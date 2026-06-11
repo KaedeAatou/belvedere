@@ -330,7 +330,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     spec: {
       name: 'ticket.rules.check',
       description:
-        'チケット種別ルールを儀式単位で実行し findings を返す。ceremony=refinement/planning/daily/review/retrospective。種別 (story/task/spike/bug/incident) 別の品質・停滞・容量・見積もり割れを検出。',
+        'チケット種別ルールを儀式単位で実行し findings を返す。ceremony=refinement/planning/daily/review/retrospective。種別 (story/task/spike/bug/incident) 別の品質・停滞・過剰計画 (velocity 超過)・見積もり割れを検出。',
       parameters: {
         type: 'object',
         properties: {

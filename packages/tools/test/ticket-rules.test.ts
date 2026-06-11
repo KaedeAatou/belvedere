@@ -158,17 +158,24 @@ describe('MISMATCH_SPIKE_TITLE', () => {
   });
 });
 
-describe('SPRINT_OVER_CAPACITY (aggregate)', () => {
-  const sprint = (over: Partial<Sprint> = {}): Sprint => ({
-    id: 'sprint-13', workspaceId: 'ws-belvedere', number: 13, startsAt: '', endsAt: '', goal: '', capacity: 10, status: 'active', ...over,
+describe('SPRINT_OVER_VELOCITY (aggregate)', () => {
+  const active = (over: Partial<Sprint> = {}): Sprint => ({
+    id: 'sprint-13', workspaceId: 'ws-belvedere', number: 13, startsAt: '', endsAt: '', goal: '', capacity: 32, status: 'active', ...over,
   });
-  it('合計 SP が容量超過で発火', () => {
-    const ctx = ctxOf([ticket({ id: 'A', type: 'story', sprintId: 'sprint-13', estimatePt: 8 }), ticket({ id: 'B', type: 'story', sprintId: 'sprint-13', estimatePt: 5 })], [sprint()]);
-    expect(fired('planning', ctx, 'SPRINT_OVER_CAPACITY')).toBe(true);
+  const completed = (velocity: number): Sprint => ({
+    id: 'sprint-12', workspaceId: 'ws-belvedere', number: 12, startsAt: '', endsAt: '', goal: '', capacity: 30, velocity, status: 'completed',
   });
-  it('容量内では発火しない', () => {
-    const ctx = ctxOf([ticket({ id: 'A', type: 'story', sprintId: 'sprint-13', estimatePt: 3 })], [sprint()]);
-    expect(fired('planning', ctx, 'SPRINT_OVER_CAPACITY')).toBe(false);
+  it('合計 SP が平均 velocity を超過で発火', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', sprintId: 'sprint-13', estimatePt: 8 }), ticket({ id: 'B', type: 'story', sprintId: 'sprint-13', estimatePt: 5 })], [active(), completed(10)]);
+    expect(fired('planning', ctx, 'SPRINT_OVER_VELOCITY')).toBe(true);
+  });
+  it('velocity 内では発火しない', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', sprintId: 'sprint-13', estimatePt: 3 })], [active(), completed(10)]);
+    expect(fired('planning', ctx, 'SPRINT_OVER_VELOCITY')).toBe(false);
+  });
+  it('velocity 実績が無ければ発火しない (判定不能)', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', sprintId: 'sprint-13', estimatePt: 99 })], [active()]);
+    expect(fired('planning', ctx, 'SPRINT_OVER_VELOCITY')).toBe(false);
   });
 });
 
