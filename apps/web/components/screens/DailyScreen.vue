@@ -85,20 +85,14 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
         <span style="color: var(--accent)">滞留</span>と<span style="color: var(--accent)">ベロシティ乖離</span>を監視中。
       </div>
     </div>
-    <div class="stat-row">
-      <div class="stat"><div class="label">Day</div><div class="v t-num">{{ String(sprintDays.elapsed).padStart(2, '0') }}<span style="color: var(--ink-3); font-size: 14px">/{{ sprintDays.total }}</span></div></div>
-      <div class="stat"><div class="label">Remain</div><div class="v t-num">{{ remaining }}</div><div class="delta">SP</div></div>
-      <div class="stat"><div class="label">Done</div><div class="v t-num accent">{{ doneSP }}</div><div class="delta">SP</div></div>
-      <div class="stat"><div class="label">In progress</div><div class="v t-num">{{ inProgressCount }}</div><div class="delta">tickets</div></div>
-    </div>
   </div>
 
   <div class="daily">
     <div class="daily-strip">
       <div class="cell">
-        <div class="l">COMMITTED</div>
-        <div class="v t-num">{{ totalSP }}<span class="u">SP</span></div>
-        <div class="sub">sprint commitment</div>
+        <div class="l">DONE</div>
+        <div class="v t-num">{{ doneSP }}<span class="u">SP</span></div>
+        <div class="sub">of {{ totalSP }}SP committed</div>
       </div>
       <div class="cell">
         <div class="l">IN PROGRESS</div>
@@ -180,22 +174,7 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
           <span v-for="i in [0, 2, 4, 6, 8, 10, 12, 14]" :key="i">D{{ String(i).padStart(2, '0') }}</span>
         </div>
 
-        <div class="burn-stat-row">
-          <div class="burn-stat">
-            <div class="l">Done</div>
-            <div class="v t-num">{{ doneSP }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
-          </div>
-          <div class="burn-stat">
-            <div class="l">Remaining</div>
-            <div class="v t-num">{{ remaining }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
-          </div>
-          <div class="burn-stat">
-            <div class="l">Committed</div>
-            <div class="v t-num">{{ totalSP }}<span style="font-size: 13px; color: var(--ink-3)">SP</span></div>
-          </div>
-        </div>
-
-        <div style="margin-top: 24px; padding: 14px; border: 1px solid var(--accent-dim); background: var(--accent-bg)">
+        <div style="margin-top: 20px; padding: 14px; border: 1px solid var(--accent-dim); background: var(--accent-bg)">
           <div class="t-cap" style="color: var(--accent); margin-bottom: 6px">AI INSIGHT</div>
           <div style="font-size: 12px; line-height: 1.55">
             in-progress に長く留まるチケットは分割を、ブロック中のものは理由の記録を推奨します。

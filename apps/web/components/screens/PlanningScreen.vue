@@ -59,12 +59,6 @@ const velMax = computed(() => Math.max(35, ...velocityHistory.value.map((v) => v
         ゴールの具体性、velocity 比較、リスクを点検します。AIが過剰計画とゴール紐付けを確認しています。
       </div>
     </div>
-    <div class="stat-row">
-      <div class="stat"><div class="label">Velocity</div><div class="v t-num">{{ hasVelocity ? avgVelocity : '—' }}</div><div class="delta">avg SP/sprint</div></div>
-      <div class="stat"><div class="label">Planned</div><div class="v t-num accent">{{ totalSP }}</div><div class="delta">{{ hasVelocity ? (overBy > 0 ? `+${overBy} over` : `${-overBy} room`) : 'tickets' }}</div></div>
-      <div class="stat"><div class="label">Items</div><div class="v t-num">{{ sprintTickets.length }}</div><div class="delta">tickets</div></div>
-      <div class="stat"><div class="label">Members</div><div class="v t-num">{{ members.length }}</div><div class="delta">team</div></div>
-    </div>
   </div>
 
   <div class="planning">
