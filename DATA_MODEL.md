@@ -21,6 +21,7 @@
 | `Ceremony` | 儀式の1回分 (5儀式: Planning / Daily / Refinement / Review / Retrospective) | `/workspaces/{wsId}/ceremonies/{ceremonyId}` |
 | `CeremonyHealthScore` | 儀式ごとの健全性スコア時系列 | `/workspaces/{wsId}/ceremonyHealth/{scoreId}` |
 | `EstimationSession` | 見積もりポーカーのセッション (隠蔽投票 → 開示 → 採用) | `/workspaces/{wsId}/estimationSessions/{sessionId}` |
+| `RetroTry` | レトロの carry-forward 積み上げ (スプリント横断で蓄積する継続改善アクション) | `/workspaces/{wsId}/retroTries/{tryId}` |
 | `AgentRun` | エージェント実行ログ | `/workspaces/{wsId}/agentRuns/{runId}` |
 | `Member` | チームメンバ | `/workspaces/{wsId}/members/{userId}` |
 
@@ -153,6 +154,20 @@ export interface EstimationSession {
   createdBy: string;       // userId
   revealedAt?: string;
   adoptedAt?: string;
+}
+
+// === RetroTry (carry-forward 積み上げ / 2026-06-11 追加) ===
+// Retrospective で「次に試すこと (Try)」を d&d で積み上げると生成される。
+// スプリントを跨いで蓄積され、各儀式 Agent がコンテキスト (retro.tries.list tool) として参照する。
+export interface RetroTry {
+  id: string;
+  workspaceId: string;
+  text: string;
+  sprintNumber: number;    // 由来スプリントの番号 (表示バッジ S{number})
+  sprintId?: string;       // 由来スプリント id (seed 由来等で不明なら省略)
+  done: boolean;
+  createdAt: string;
+  createdBy: string;       // userId
 }
 
 // === Ceremony ===

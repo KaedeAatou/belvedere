@@ -42,6 +42,12 @@ import {
   revealEstimation,
   adoptEstimation,
 } from './handlers/estimation-handlers';
+import {
+  listRetroTries,
+  createRetroTry,
+  patchRetroTry,
+  deleteRetroTry,
+} from './handlers/retro-try-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -252,6 +258,21 @@ app.post('/api/tickets/:id/estimation/reveal', async (c) =>
 app.post('/api/tickets/:id/estimation/adopt', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
   return respond(c, await adoptEstimation(repo, buildCtx(c), c.req.param('id'), body, new Date().toISOString()));
+});
+
+// ------- Retro Try 積み上げ (carry-forward stack) -------
+// レトロは全メンバー参加なので role ゲートなし。積み上げは各儀式 Agent のコンテキストになる。
+app.get('/api/retro-tries', async (c) => respond(c, await listRetroTries(repo, buildCtx(c))));
+app.post('/api/retro-tries', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createRetroTry(repo, buildCtx(c), body));
+});
+app.patch('/api/retro-tries/:id', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchRetroTry(repo, buildCtx(c), c.req.param('id'), body));
+});
+app.delete('/api/retro-tries/:id', async (c) => {
+  return respond(c, await deleteRetroTry(repo, buildCtx(c), c.req.param('id')));
 });
 
 // ------- /api/agents/:name (エージェント実行) -------

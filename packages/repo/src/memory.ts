@@ -13,6 +13,7 @@ import type {
   Project,
   Ritual,
   EstimationSession,
+  RetroTry,
 } from '@belvedere/shared';
 import { stripUndefined } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
@@ -27,6 +28,7 @@ import type {
   AgentRunRepository,
   CeremonyHealthRepository,
   EstimationRepository,
+  RetroTryRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -165,6 +167,19 @@ class MemEstimationRepo implements EstimationRepository {
   async upsert(s: EstimationSession): Promise<void> { this.store.set(s.id, stripUndefined({ ...s })); }
 }
 
+class MemRetroTryRepo implements RetroTryRepository {
+  private store = new Map<string, RetroTry>();
+  async list(opts: { workspaceId: string }): Promise<RetroTry[]> {
+    // createdAt 昇順 (firestore.ts と契約一致: 古い積み上げから順に並ぶ)
+    return [...this.store.values()]
+      .filter((t) => t.workspaceId === opts.workspaceId)
+      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }
+  async get(id: string): Promise<RetroTry | null> { return this.store.get(id) ?? null; }
+  async upsert(t: RetroTry): Promise<void> { this.store.set(t.id, stripUndefined({ ...t })); }
+  async delete(id: string): Promise<void> { this.store.delete(id); }
+}
+
 export function createMemoryRepoContainer(): RepoContainer {
   return {
     tickets: new MemTicketRepo(seedTickets),
@@ -177,5 +192,6 @@ export function createMemoryRepoContainer(): RepoContainer {
     agentRuns: new MemAgentRunRepo(),
     ceremonyHealth: new MemCeremonyHealthRepo(),
     estimations: new MemEstimationRepo(),
+    retroTries: new MemRetroTryRepo(),
   };
 }
