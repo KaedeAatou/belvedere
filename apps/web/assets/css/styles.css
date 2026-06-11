@@ -406,11 +406,15 @@ a { color: inherit; text-decoration: none; }
 /* ----- screen header (sub-toolbar inside main) ----- */
 .screen-head {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 14px 32px 20px;
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 28px;
+  flex-wrap: wrap;
+  padding: 14px 32px 16px;
   border-bottom: var(--hairline) solid var(--line-1);
 }
+.screen-head > div:first-child { min-width: 0; }
 .screen-head .floor {
   font-family: var(--display);
   font-size: 12px;
@@ -445,11 +449,11 @@ a { color: inherit; text-decoration: none; }
   margin-top: 10px;
   max-width: 64ch;
 }
+/* KPI クラスタはタイトル右上に寄せて上部余白を埋める (旧: タイトル下の帯) */
 .screen-head .stat-row {
-  display: flex; gap: 20px; align-items: stretch;
+  display: flex; gap: 18px; align-items: stretch;
   flex-wrap: wrap;
-  padding-top: 4px;
-  border-top: var(--hairline) solid var(--line-1);
+  margin-left: auto;
 }
 .stat {
   border-left: var(--hairline) solid var(--line-2);
