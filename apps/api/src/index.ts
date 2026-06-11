@@ -75,7 +75,7 @@ app.use(
       'https://belvedere-web-dev-cpszmcqmuq-an.a.run.app',
       'http://localhost:3000',
     ],
-    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Authorization', 'Content-Type', 'X-Workspace-Id'],
     maxAge: 600,
     credentials: false,
