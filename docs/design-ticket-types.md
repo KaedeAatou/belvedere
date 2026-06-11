@@ -160,7 +160,7 @@ export interface RuleContext {
 
 export interface TicketRule {
   id: string;
-  appliesTo: TicketType[] | 'all' | 'aggregate';   // aggregate = チケット横断 (容量超過など)
+  appliesTo: TicketType[] | 'all' | 'aggregate';   // aggregate = チケット横断 (過剰計画など)
   ceremonies: Ritual[];                             // どの儀式で発火するか
   check(t: Ticket | null, ctx: RuleContext): TicketFinding[];  // aggregate は t=null で呼ぶ
 }
@@ -196,7 +196,7 @@ export function runTicketRules(ceremony: Ritual, ctx: RuleContext): TicketFindin
 | INCIDENT_ACTIVE | incident | daily | error | `t.status !== 'done'` |
 | INCIDENT_NO_FOLLOWUP_BUG | incident | refinement | warn | `t.status === 'done' && !ctx.tickets.some(b => b.type === 'bug' && b.relatedIncidentId === t.id)`。`action: { kind: 'create-bug', label: '根本対応 Bug を起票' }` |
 | MISMATCH_SPIKE_TITLE | story, task | refinement | info | `/(調査|検証|比較|スパイク)/.test(t.title) && t.type !== 'spike'` |
-| SPRINT_OVER_CAPACITY | aggregate | planning | error | active sprint について `Σ(sprint 内 ticket の estimatePt) > sprint.capacity` |
+| SPRINT_OVER_VELOCITY | aggregate | planning | error | active sprint について `Σ(sprint 内 ticket の estimatePt) > 完了スプリントの平均 velocity`。velocity 実績が無ければ判定不能 (skip) |
 | ESTIMATE_DIVERGENCE | aggregate | refinement | info | revealed な session ごとに: '?' を除く votes の `fibIndex(max) - fibIndex(min) >= 2` → 「見積もりが大きく割れています (X と Y)。暗黙の前提が違う可能性。スコープを話し合って再投票を検討してください」。'?' 投票が 1 つでもあれば「情報不足のサイン」を追記 |
 
 **unit test**: ルール 1 個につき最低「発火する / しない」の 2 case。`packages/tools/test/ticket-rules.test.ts` 新規
