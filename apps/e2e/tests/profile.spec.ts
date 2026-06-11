@@ -30,7 +30,9 @@ test('settings/profile で email/role/workspace 表示 + Whoami debug で owner 
   }
 
   await expect(profile.roleBadge).toContainText('owner', { ignoreCase: true });
-  await expect(authedPage.getByText('ws-belvedere')).toBeVisible();
+  // Workspace 管理 UI 追加でページに複数の 'ws-belvedere' テキストが存在するため
+  // プロフィール節 (.value.readonly) に絞る。
+  await expect(authedPage.locator('.value.readonly', { hasText: 'ws-belvedere' }).first()).toBeVisible();
 
   await profile.clickWhoami();
   expect(await profile.whoamiContainsRole('owner')).toBe(true);
