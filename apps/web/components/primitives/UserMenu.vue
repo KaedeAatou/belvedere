@@ -5,10 +5,22 @@
 
 const { user, signOut } = useAuth();
 const { me, fetchMe } = useMe();
+const { workspaces, currentId, fetch: fetchWorkspaces, setCurrent, syncCurrentFromStorage } = useWorkspaces();
 const router = useRouter();
 
 const open = ref(false);
 const menuRef = ref<HTMLElement | null>(null);
+
+// 現在の Workspace 表示名 (一覧から currentId で引く。未取得時は currentId そのまま)。
+const currentWorkspaceName = computed(() => {
+  const w = workspaces.value.find((x) => x.id === currentId.value);
+  return w?.name ?? currentId.value ?? me.value?.workspaceId ?? '';
+});
+
+function switchWorkspace(id: string): void {
+  if (id === currentId.value) { open.value = false; return; }
+  setCurrent(id); // localStorage 更新 + location.reload() で全 composable 再取得
+}
 
 // 表示用: me が取れていればそちらを優先、なければ Firebase user
 const display = computed(() => ({
@@ -31,7 +43,9 @@ const initials = computed(() => {
 // page navigation (hard reload) 直後は user.value が null のまま onMounted が
 // 走るため、user.value チェックを入れると fetchMe が呼ばれず me が永遠に null になる。
 onMounted(async () => {
+  syncCurrentFromStorage();
   if (!me.value) await fetchMe();
+  if (workspaces.value.length === 0) await fetchWorkspaces();
 });
 
 // 外側クリックで閉じる
@@ -73,9 +87,31 @@ function goSettings(): void {
         <div class="info-email">{{ display.email }}</div>
         <div class="info-meta">
           <span v-if="display.role" class="badge badge-role">{{ display.role }}</span>
-          <span v-if="display.workspaceId" class="badge badge-ws">{{ display.workspaceId }}</span>
+          <span v-if="currentWorkspaceName" class="badge badge-ws">{{ currentWorkspaceName }}</span>
         </div>
       </div>
+      <div class="divider"></div>
+
+      <!-- Workspace 切替 -->
+      <div class="ws-section" data-testid="ws-switcher">
+        <div class="ws-cap">WORKSPACE</div>
+        <button
+          v-for="w in workspaces"
+          :key="w.id"
+          :class="['menu-item', 'ws-item', w.id === currentId && 'ws-item--active']"
+          :data-testid="`ws-option-${w.id}`"
+          @click="switchWorkspace(w.id)"
+        >
+          <span class="ws-check">{{ w.id === currentId ? '✓' : '' }}</span>
+          <span class="ws-name">{{ w.name }}</span>
+          <span class="badge badge-role" style="margin-left: auto">{{ w.role }}</span>
+        </button>
+        <button class="menu-item ws-new" data-testid="ws-create-open" @click="goSettings">
+          <Icon name="plus" />
+          <span>新規 Workspace</span>
+        </button>
+      </div>
+
       <div class="divider"></div>
       <button class="menu-item" @click="goSettings">
         <Icon name="settings" />
@@ -216,5 +252,44 @@ function goSettings(): void {
 
 .menu-item.danger:hover {
   background: rgba(184, 90, 74, 0.08);
+}
+
+.ws-section {
+  padding: 2px 0;
+}
+
+.ws-cap {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  padding: 4px 12px;
+}
+
+.ws-item {
+  font-size: 13px;
+}
+
+.ws-item--active {
+  color: var(--ink-0);
+  font-weight: 600;
+}
+
+.ws-check {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-new {
+  color: var(--accent);
 }
 </style>

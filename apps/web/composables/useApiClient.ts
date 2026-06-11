@@ -45,6 +45,12 @@ export const useApiClient = (): ApiClient => {
       ...(opts.headers as Record<string, string> | undefined),
     };
     if (token) headers['Authorization'] = `Bearer ${token}`;
+    // current Workspace が選択済なら X-Workspace-Id を付与 (API の workspaceMiddleware が解釈)。
+    // localStorage を直接読む (useWorkspaces への循環依存を避けるため。key は WORKSPACE_ID_KEY と一致)。
+    if (import.meta.client) {
+      const wsId = window.localStorage.getItem('belvedere.workspaceId');
+      if (wsId) headers['X-Workspace-Id'] = wsId;
+    }
     return await $fetch<T>(`${baseUrl}${path}`, { ...opts, headers });
   }
 

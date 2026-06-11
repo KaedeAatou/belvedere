@@ -5,14 +5,77 @@
 
 const { user } = useAuth();
 const { me, isLoading, error, fetchMe, updateDisplayName } = useMe();
+const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, syncCurrentFromStorage } = useWorkspaces();
+const { members, fetchMembers, isPendingInvite, invite, cancelInvite } = useMembers();
 const api = useApiClient();
 
 const editName = ref('');
 const saveSuccess = ref(false);
 
+// 管理操作 (招待 / 取消) は owner/sm のみ。me.role で判定。
+const canManage = computed(() => me.value?.role === 'owner' || me.value?.role === 'sm');
+
+// ===== Workspace 新規作成 =====
+const wsName = ref('');
+const wsGoal = ref('');
+const wsBusy = ref(false);
+const wsError = ref<string | null>(null);
+
+async function submitCreateWorkspace(): Promise<void> {
+  if (!wsName.value.trim()) { wsError.value = 'Workspace 名を入力してください。'; return; }
+  wsBusy.value = true; wsError.value = null;
+  try {
+    const created = await createWorkspace(wsName.value.trim(), wsGoal.value.trim() || undefined);
+    if (!created) wsError.value = 'Workspace の作成に失敗しました。';
+    // create 成功時は location.reload() が走るので以降の処理は基本到達しない。
+  } catch (e) {
+    wsError.value = errText(e);
+  } finally {
+    wsBusy.value = false;
+  }
+}
+
+// ===== メンバー招待 =====
+const inviteEmail = ref('');
+const inviteRole = ref<'sm' | 'po' | 'dev' | 'guest'>('dev');
+const inviteBusy = ref(false);
+const inviteError = ref<string | null>(null);
+const inviteSuccess = ref(false);
+
+async function submitInvite(): Promise<void> {
+  if (!inviteEmail.value.trim()) { inviteError.value = 'メールアドレスを入力してください。'; return; }
+  inviteBusy.value = true; inviteError.value = null; inviteSuccess.value = false;
+  try {
+    await invite(inviteEmail.value.trim(), inviteRole.value);
+    inviteSuccess.value = true;
+    inviteEmail.value = '';
+    setTimeout(() => { inviteSuccess.value = false; }, 2500);
+  } catch (e) {
+    inviteError.value = errText(e);
+  } finally {
+    inviteBusy.value = false;
+  }
+}
+
+async function revokeInvite(userId: string): Promise<void> {
+  inviteError.value = null;
+  try {
+    await cancelInvite(userId);
+  } catch (e) {
+    inviteError.value = errText(e);
+  }
+}
+
+function errText(e: unknown): string {
+  const err = e as { data?: { error?: string }; message?: string };
+  return err.data?.error ?? err.message ?? 'unknown error';
+}
+
 onMounted(async () => {
+  syncCurrentFromStorage();
   if (!me.value) await fetchMe();
   editName.value = me.value?.displayName ?? '';
+  await Promise.all([fetchWorkspaces(), fetchMembers()]);
 });
 
 watch(me, (m) => {
@@ -101,6 +164,80 @@ async function callWhoami(): Promise<void> {
       </div>
 
       <div v-else class="error">プロフィール取得失敗: {{ error ?? 'unknown' }}</div>
+    </section>
+
+    <!-- ===== Workspace 管理 (Phase 1-E 前倒し / 2026-06-12) ===== -->
+    <section class="card">
+      <h2 class="section-title">Workspace</h2>
+
+      <!-- 所属 Workspace 一覧 -->
+      <div class="field">
+        <label class="label">所属 Workspace</label>
+        <div class="ws-list">
+          <div v-for="w in workspaces" :key="w.id"
+               :class="['ws-row', w.id === currentId && 'ws-row--current']">
+            <span class="ws-row-name">{{ w.name }}</span>
+            <span v-if="w.id === currentId" class="role-badge" style="margin-left: auto">表示中</span>
+            <span class="ws-row-role">{{ w.role }}</span>
+          </div>
+          <p v-if="workspaces.length === 0" class="muted">所属 Workspace がありません。下のフォームで作成してください。</p>
+        </div>
+      </div>
+
+      <!-- 新規作成フォーム -->
+      <div class="field editable" style="margin-top: 20px">
+        <label class="label" for="wsName">新規 Workspace を作成</label>
+        <input id="wsName" v-model="wsName" type="text" class="text-input"
+               data-testid="ws-create-name" maxlength="80" placeholder="例: C社" :disabled="wsBusy" />
+        <input v-model="wsGoal" type="text" class="text-input" style="margin-top: 8px"
+               maxlength="280" placeholder="プロダクトゴール (任意)" :disabled="wsBusy" />
+        <div class="edit-row" style="margin-top: 8px">
+          <button class="save-btn" data-testid="ws-create-submit"
+                  :disabled="wsBusy || wsName.trim().length === 0" @click="submitCreateWorkspace">
+            {{ wsBusy ? '作成中…' : 'Workspace を作成して切替' }}
+          </button>
+        </div>
+        <p v-if="wsError" class="msg error" data-testid="ws-create-error">{{ wsError }}</p>
+      </div>
+    </section>
+
+    <!-- ===== メンバー管理 ===== -->
+    <section class="card">
+      <h2 class="section-title">メンバー</h2>
+
+      <div class="member-list">
+        <div v-for="m in members" :key="m.userId"
+             :data-testid="`member-row-${m.userId}`" class="member-row">
+          <span class="member-name">{{ m.displayName }}</span>
+          <span class="member-email">{{ m.email }}</span>
+          <span v-if="isPendingInvite(m)" class="pending-badge" data-testid="member-pending">招待中</span>
+          <span class="role-badge" style="margin-left: auto">{{ m.role }}</span>
+          <button v-if="canManage && isPendingInvite(m)" class="revoke-btn"
+                  :data-testid="`invite-revoke-${m.userId}`" @click="revokeInvite(m.userId)">取消</button>
+        </div>
+        <p v-if="members.length === 0" class="muted">メンバーがいません。</p>
+      </div>
+
+      <!-- 招待フォーム (owner/sm のみ) -->
+      <div v-if="canManage" class="field editable" style="margin-top: 20px">
+        <label class="label" for="inviteEmail">メンバーを招待</label>
+        <div class="edit-row">
+          <input id="inviteEmail" v-model="inviteEmail" type="email" class="text-input"
+                 data-testid="invite-email" placeholder="invitee@example.com" :disabled="inviteBusy" />
+          <select v-model="inviteRole" class="text-input role-select" data-testid="invite-role" :disabled="inviteBusy">
+            <option value="sm">sm</option>
+            <option value="po">po</option>
+            <option value="dev">dev</option>
+            <option value="guest">guest</option>
+          </select>
+          <button class="save-btn" data-testid="invite-submit"
+                  :disabled="inviteBusy || inviteEmail.trim().length === 0" @click="submitInvite">
+            {{ inviteBusy ? '送信中…' : '招待' }}
+          </button>
+        </div>
+        <p v-if="inviteSuccess" class="msg success">招待しました ✓ (相手の初回ログインで自動加入します)</p>
+        <p v-if="inviteError" class="msg error" data-testid="invite-error">{{ inviteError }}</p>
+      </div>
     </section>
 
     <section class="card debug">
@@ -317,5 +454,80 @@ async function callWhoami(): Promise<void> {
   color: var(--ink-1);
   overflow-x: auto;
   white-space: pre-wrap;
+}
+
+/* ===== Workspace / メンバー管理 ===== */
+.muted {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-2);
+  margin: 8px 0 0;
+}
+
+.ws-list, .member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-row, .member-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: var(--hairline) solid var(--line-1);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  font-family: var(--sans);
+  font-size: 13px;
+}
+
+.ws-row--current {
+  border-color: var(--accent);
+}
+
+.ws-row-name, .member-name {
+  font-weight: 500;
+  color: var(--ink-0);
+}
+
+.ws-row-role, .member-row .role-badge {
+  flex-shrink: 0;
+}
+
+.member-email {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+.pending-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: var(--bg-3);
+  color: var(--ink-2);
+  letter-spacing: 0.02em;
+}
+
+.revoke-btn {
+  padding: 4px 10px;
+  background: transparent;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--err);
+  cursor: pointer;
+}
+
+.revoke-btn:hover {
+  border-color: var(--err);
+}
+
+.role-select {
+  flex: 0 0 auto;
+  width: 90px;
 }
 </style>
