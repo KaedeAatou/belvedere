@@ -89,6 +89,16 @@ apps/
 
 > 新しい top-level `*.md` を勝手に作らない。既存を更新する。
 
+## 開発フロー (must)
+
+**計画 → 実装 → 検証 → デプロイ/CI → クローズ** の 5 フェーズで回す。各フェーズで使う skill / subagent / hook の対応表・委譲ガイド・エスカレーション基準は **`autonomous-run` skill** に集約 (無人実行時は必読、有人時も同じフロー)。要点:
+
+- prompts.ts / agents.py 編集 → `agent-prompt-sync` skill + `mock-llm-reviewer` subagent
+- 大きな変更後の docs 乖離 → `architecture-consistency-checker` subagent で監査
+- e2e 失敗 → CI 修正ループ (artifact 解析 → 原因分類 → 修正 → 再 push、3 周上限)
+- UI 変更 → §V スクショ検証 (playwright-results の screens/*.png を Read で目視)
+- e2e は **並行 2 本が同一 WS を共有** — 件数厳密比較の assert は書かない (テキスト存在 + 自己清掃)
+
 ## Git commit (must)
 
 `git commit` 前に必ず **`belvedere-commit`** skill を呼ぶ。フォーマット強制 (1 行目 `[<種別>]<要約>` / 2 行目 空 / 3 行目以降 変更理由)。詳細: `.claude/skills/belvedere-commit/`。`commit-commands:commit` plugin は使わない。
