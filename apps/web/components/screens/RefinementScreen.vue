@@ -47,26 +47,10 @@ const groups = computed<Group[]>(() => {
   return [...map.values()].sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
 });
 
-const totalFindings = computed(() => groups.value.reduce((n, g) => n + g.findings.length, 0));
-
 const sevClass: Record<FindingSeverity, string> = { error: 'sev-err', warn: 'sev-warn', info: 'sev-info' };
 </script>
 
 <template>
-  <div class="screen-head">
-    <div>
-      <div class="floor"><span class="step" />FLOOR 03 / REFINEMENT</div>
-      <h1>Backlog Refinement</h1>
-      <div class="subtitle">
-        Refinement Agent の指摘を <span style="color: var(--accent)">ルール別</span>に整理しました。上から潰すと品質スコアが上がります。
-      </div>
-    </div>
-    <div class="stat-row">
-      <div class="stat"><div class="label">Groups</div><div class="v t-num">{{ groups.length }}</div><div class="delta">rules</div></div>
-      <div class="stat"><div class="label">Findings</div><div class="v t-num accent">{{ totalFindings }}</div><div class="delta">to groom</div></div>
-    </div>
-  </div>
-
   <div class="screen-body" data-testid="refinement-body">
     <p v-if="isLoading && groups.length === 0" class="refine-msg">読み込み中…</p>
     <p v-else-if="groups.length === 0" class="refine-msg" data-testid="refine-empty">

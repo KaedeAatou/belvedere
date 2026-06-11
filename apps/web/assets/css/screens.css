@@ -68,18 +68,12 @@
 .backlog-section-head .meta b { color: var(--ink-0); font-weight: 600; font-family: var(--display); font-size: 14px; }
 
 /* ===== planning ===== */
+/* 単一カラム: チケット一覧を全幅で見せる (velocity チャート / per-member load は廃止)。 */
 .planning {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  display: flex; flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
-.planning .col {
-  display: flex; flex-direction: column;
-  overflow: hidden;
-  border-right: var(--hairline) solid var(--line-1);
-}
-.planning .col:last-child { border-right: 0; }
 .planning .col-head {
   padding: 14px 18px;
   border-bottom: var(--hairline) solid var(--line-1);
@@ -122,78 +116,39 @@
 .smart-cell.ok .letter { color: var(--ok); }
 .smart-cell.weak .letter { color: var(--accent); }
 
-/* capacity meter */
-.capacity {
-  padding: 16px 18px;
-  border-bottom: var(--hairline) solid var(--line-1);
+/* planned SP vs velocity (SMART 下のコンパクト 1 行表示) */
+.vel-inline {
+  display: flex; align-items: center; gap: 14px;
+  margin-top: 14px; padding-top: 12px;
+  border-top: var(--hairline) solid var(--line-1);
 }
-.capacity-head {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-bottom: 10px;
-}
-.capacity-num {
-  font-size: 32px; font-weight: 500; letter-spacing: -0.02em;
+.vel-inline .nums {
+  font-size: 20px; font-weight: 500; letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
-.capacity-num .div { color: var(--ink-3); margin: 0 6px; font-weight: 300; }
-.capacity-num .total { color: var(--ink-2); }
-.capacity-bar {
-  height: 8px; background: var(--bg-2);
+.vel-inline .nums .div { color: var(--ink-3); margin: 0 4px; font-weight: 300; }
+.vel-inline .nums .total { color: var(--ink-2); }
+.vel-inline .delta { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; }
+.vel-inline .bar {
+  flex: 1; height: 6px; background: var(--bg-2);
   display: grid; grid-auto-flow: column; grid-auto-columns: 1fr;
   gap: 2px;
 }
-.capacity-bar i { background: var(--ink-2); }
-.capacity-bar i.over { background: var(--accent); }
-.capacity-bar i.empty { background: var(--bg-3); }
-.capacity-legend { display: flex; gap: 16px; margin-top: 10px; }
-.capacity-legend .it { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--ink-2); }
-.capacity-legend .it i { width: 8px; height: 8px; display: inline-block; }
-
-/* per-member capacity */
-.member-rows { padding: 4px 0; }
-.member-row {
-  display: grid; grid-template-columns: 18px 80px 1fr auto;
-  gap: 12px; align-items: center;
-  height: 32px; padding: 0 18px;
-  border-bottom: var(--hairline) solid var(--line-1);
-  font-size: 12px;
-}
-.member-row .meter { width: 100%; }
-.member-row .v { font-family: var(--mono); font-size: 11px; color: var(--ink-1); }
-.member-row .v .max { color: var(--ink-3); }
+.vel-inline .bar i { background: var(--ink-2); }
+.vel-inline .bar i.over { background: var(--accent); }
 
 /* ===== daily ===== */
+/* ボード (主役) を全幅で上段に、Burndown を横長で下段に分離 (横並びだと互いに狭くなるため)。 */
 .daily {
-  display: grid;
-  grid-template-columns: 1fr;
-  grid-template-rows: auto 1fr;
+  display: flex; flex-direction: column;
   height: 100%;
   overflow: hidden;
 }
-.daily-strip {
+.daily-board {
+  flex: 1;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   border-bottom: var(--hairline) solid var(--line-1);
-}
-.daily-strip .cell {
-  padding: 16px 18px;
-  border-right: var(--hairline) solid var(--line-1);
-}
-.daily-strip .cell:last-child { border-right: 0; }
-.daily-strip .l { font-family: var(--mono); font-size: 9px; letter-spacing: 0.18em; color: var(--ink-3); text-transform: uppercase; }
-.daily-strip .v { font-size: 26px; font-weight: 500; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
-.daily-strip .v .u { font-size: 12px; color: var(--ink-3); margin-left: 4px; }
-.daily-strip .sub { font-family: var(--mono); font-size: 10px; color: var(--ink-2); margin-top: 6px; }
-
-.daily-body {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr;
-  overflow: hidden;
-}
-.daily-board {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  border-right: var(--hairline) solid var(--line-1);
   overflow: hidden;
 }
 .col-board {
@@ -236,33 +191,35 @@
 }
 .tcard .age.warn { color: var(--accent); }
 
-/* burndown chart panel */
-.burn {
-  padding: 18px;
+/* burndown (横長・ボード下段) */
+.daily-burn {
+  flex: 0 0 auto;
+  height: 184px;
+  display: grid;
+  grid-template-columns: 1fr 300px;
+}
+.burn-chart-wrap {
+  padding: 14px 20px 12px;
   display: flex; flex-direction: column;
-  overflow: auto;
+  overflow: hidden;
 }
-.burn-chart {
-  height: 220px;
-  position: relative;
-  border-bottom: var(--hairline) solid var(--line-2);
-  border-left: var(--hairline) solid var(--line-2);
-  margin: 14px 0 6px;
+.burn-head { display: flex; align-items: baseline; gap: 18px; }
+.burn-head h3 { margin: 0; font-size: 13px; font-weight: 500; }
+.burn-head .legend { display: flex; gap: 16px; font-family: var(--mono); font-size: 10px; color: var(--ink-2); }
+.burn-head .legend i { width: 16px; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.burn-head .legend i.actual { height: 2px; background: var(--accent); }
+.burn-head .legend i.target { height: 0; border-top: 1.5px dashed var(--ink-3); }
+.burn-svg {
+  flex: 1; width: 100%; min-height: 0;
+  margin: 8px 0 4px;
 }
-.burn h3 { margin: 0; font-size: 13px; font-weight: 500; }
-.burn .legend { display: flex; gap: 16px; margin-top: 4px; font-family: var(--mono); font-size: 10px; color: var(--ink-2); }
-.burn .legend i { width: 16px; height: 1px; display: inline-block; vertical-align: middle; margin-right: 6px; }
-.burn .axis-x { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; color: var(--ink-3); margin-top: 4px; }
-.burn-stat-row {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
-  margin-top: 18px;
+.burn-axis { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 9px; color: var(--ink-3); }
+.burn-insight {
+  border-left: var(--hairline) solid var(--line-1);
+  padding: 14px 18px;
+  background: var(--bg-1);
+  display: flex; flex-direction: column; justify-content: center;
 }
-.burn-stat {
-  border: var(--hairline) solid var(--line-2);
-  padding: 12px;
-}
-.burn-stat .l { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--ink-3); text-transform: uppercase; }
-.burn-stat .v { font-size: 22px; font-weight: 500; margin-top: 4px; font-variant-numeric: tabular-nums; }
 
 /* ===== review ===== */
 .review {
@@ -272,6 +229,20 @@
   overflow: hidden;
 }
 .review-main { overflow: auto; padding: 24px 28px; }
+.review-velocity { margin-bottom: 4px; }
+.review-velocity .rv-bar {
+  height: 8px; background: var(--bg-2); overflow: hidden;
+}
+.review-velocity .rv-bar i { display: block; height: 100%; background: var(--accent); }
+.review-velocity .rv-nums {
+  display: flex; align-items: baseline; gap: 8px; margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.review-velocity .rv-nums .big { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; color: var(--accent); }
+.review-velocity .rv-nums .sep { color: var(--ink-3); font-weight: 300; }
+.review-velocity .rv-nums .vel { font-size: 20px; font-weight: 500; color: var(--ink-2); }
+.review-velocity .rv-nums .lbl { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-3); }
+.review-velocity .rv-nums .pct { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--accent); }
 .review-aside {
   border-left: var(--hairline) solid var(--line-1);
   overflow: auto; padding: 24px;
