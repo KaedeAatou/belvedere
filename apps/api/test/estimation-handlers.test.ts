@@ -129,14 +129,25 @@ describe('vote / reveal / adopt フロー', () => {
     expect(res.status).toBe(403);
   });
 
-  it('adopt で ticket.estimatePt が更新される', async () => {
+  it('adopt で ticket.estimatePt が更新される + adopted view を返す', async () => {
     await voteEstimation(repo, dev, 'WC-EST', { value: 5 }, NOW);
     await voteEstimation(repo, dev2, 'WC-EST', { value: 5 }, NOW);
     await revealEstimation(repo, owner, 'WC-EST', NOW);
     const res = await adoptEstimation(repo, owner, 'WC-EST', { value: 5 }, NOW);
     expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // web が「採用済」を描画できるよう EstimationView (status='adopted') を返す
+    expect(res.body.status).toBe('adopted');
+    if (res.body.status === 'voting') return;
+    expect(res.body.adoptedValue).toBe(5);
     const t = await repo.tickets.get('WC-EST');
     expect(t?.estimatePt).toBe(5);
+    // adopt 後も GET は adopted を返す (404 でなく / polling・再開で採用済が残る)
+    const get = await getEstimation(repo, dev, 'WC-EST');
+    expect(get.ok).toBe(true);
+    if (!get.ok || get.body.status === 'voting') return;
+    expect(get.body.status).toBe('adopted');
+    expect(get.body.adoptedValue).toBe(5);
   });
 
   it('未開示での adopt は 409', async () => {
