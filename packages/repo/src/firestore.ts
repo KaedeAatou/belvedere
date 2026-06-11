@@ -24,6 +24,7 @@ import type {
   Project,
   Ritual,
   EstimationSession,
+  RetroTry,
 } from '@belvedere/shared';
 import {
   TicketSchema,
@@ -36,6 +37,7 @@ import {
   AgentRunSchema,
   CeremonyHealthScoreSchema,
   EstimationSessionSchema,
+  RetroTrySchema,
 } from '@belvedere/shared';
 import { z } from 'zod';
 import type {
@@ -49,6 +51,7 @@ import type {
   AgentRunRepository,
   CeremonyHealthRepository,
   EstimationRepository,
+  RetroTryRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -129,6 +132,7 @@ const COL = {
   agentRuns: 'agentRuns',
   ceremonyHealth: 'ceremonyHealth',
   estimationSessions: 'estimationSessions',
+  retroTries: 'retroTries',
 } as const;
 
 class FsTicketRepo implements TicketRepository {
@@ -310,6 +314,26 @@ class FsEstimationRepo implements EstimationRepository {
   }
 }
 
+class FsRetroTryRepo implements RetroTryRepository {
+  async list(opts: { workspaceId: string }): Promise<RetroTry[]> {
+    const snap = await db().collection(COL.retroTries).where('workspaceId', '==', opts.workspaceId).get();
+    const xs = parseList<RetroTry>(COL.retroTries, snap.docs, RetroTrySchema);
+    // ソートはクライアント側 (orderBy 由来の composite index 要求を回避)。createdAt 昇順。
+    xs.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+    return xs;
+  }
+  async get(id: string): Promise<RetroTry | null> {
+    const doc = await db().collection(COL.retroTries).doc(id).get();
+    return doc.exists ? parseOne<RetroTry>(COL.retroTries, id, doc.data(), RetroTrySchema) : null;
+  }
+  async upsert(t: RetroTry): Promise<void> {
+    await db().collection(COL.retroTries).doc(t.id).set(t);
+  }
+  async delete(id: string): Promise<void> {
+    await db().collection(COL.retroTries).doc(id).delete();
+  }
+}
+
 export function createFirestoreRepoContainer(): RepoContainer {
   return {
     tickets: new FsTicketRepo(),
@@ -322,5 +346,6 @@ export function createFirestoreRepoContainer(): RepoContainer {
     agentRuns: new FsAgentRunRepo(),
     ceremonyHealth: new FsCeremonyHealthRepo(),
     estimations: new FsEstimationRepo(),
+    retroTries: new FsRetroTryRepo(),
   };
 }

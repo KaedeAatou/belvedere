@@ -18,9 +18,33 @@
 
 import { createRepoContainer } from '@belvedere/repo';
 import { seedTickets, seedSprints, seedMembers, seedEpics } from '@belvedere/seed';
+import type { RetroTry } from '@belvedere/shared';
 
 const TARGET_PROJECT = 'belvedere-dev-atrium';
 const WORKSPACE = 'ws-belvedere';
+
+// Retro Try 積み上げ (carry-forward stack) の初期 fixture。過去スプリント由来の継続改善アクション。
+// seed package は immutable fixture のため、dev 専用のこのスクリプトに直接定義する。
+const seedRetroTries: RetroTry[] = [
+  {
+    id: 'try-s11-review-24h',
+    workspaceId: WORKSPACE,
+    text: 'PR レビューは依頼から 24h 以内に着手する。',
+    sprintNumber: 11,
+    done: true,
+    createdAt: '2026-04-21T10:00:00+09:00',
+    createdBy: 'kaede',
+  },
+  {
+    id: 'try-s12-daily-blocked',
+    workspaceId: WORKSPACE,
+    text: 'デイリーで前日の停滞チケットを必ず 1 件共有する。',
+    sprintNumber: 12,
+    done: false,
+    createdAt: '2026-05-05T10:00:00+09:00',
+    createdBy: 'uehara',
+  },
+];
 
 function assertGuards(): void {
   if (process.env.REPO_BACKEND !== 'firestore') {
@@ -53,6 +77,9 @@ async function main(): Promise<void> {
 
   for (const t of seedTickets) await repo.tickets.upsert(t);
   console.log(`  ✓ tickets: ${seedTickets.length}`);
+
+  for (const r of seedRetroTries) await repo.retroTries.upsert(r);
+  console.log(`  ✓ retroTries: ${seedRetroTries.length}`);
 
   if (clean) {
     const all = await repo.tickets.list({ workspaceId: WORKSPACE });

@@ -18,6 +18,7 @@ import type {
   Status,
   Ritual,
   EstimationSession,
+  RetroTry,
 } from '@belvedere/shared';
 
 export interface TicketQuery {
@@ -98,6 +99,13 @@ export interface EstimationRepository {
   upsert(s: EstimationSession): Promise<void>;
 }
 
+export interface RetroTryRepository {
+  list(opts: { workspaceId: string }): Promise<RetroTry[]>;
+  get(id: string): Promise<RetroTry | null>;
+  upsert(t: RetroTry): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 /**
  * 全リポジトリを束ねたコンテナ。
  * ServiceLocator的に使う — 実装差し替えポイント。
@@ -113,4 +121,5 @@ export interface RepoContainer {
   agentRuns: AgentRunRepository;
   ceremonyHealth: CeremonyHealthRepository;
   estimations: EstimationRepository;
+  retroTries: RetroTryRepository;
 }

@@ -132,6 +132,28 @@ export interface EstimationSession {
   adoptedAt?: string;
 }
 
+// === RetroTry (carry-forward 積み上げ / 2026-06-11) ===
+/**
+ * Retrospective で「次に試すこと (Try)」を d&d で積み上げると生成される、
+ * スプリントを跨いで蓄積される改善アクション。
+ * この積み上げ (carry-forward stack) は各儀式 Agent がコンテキストとして参照する。
+ */
+export interface RetroTry {
+  id: string;
+  workspaceId: string;
+  /** Try の本文 */
+  text: string;
+  /** 由来スプリントの番号 (表示用バッジ、例: 13) */
+  sprintNumber: number;
+  /** 由来スプリントの id。seed 由来等で不明なら省略 */
+  sprintId?: string;
+  /** 完了チェック (積み上げ上で「片付いた」とマークしたか) */
+  done: boolean;
+  createdAt: string; // ISO8601
+  /** 積み上げに追加した人 (ctx.user.userId) */
+  createdBy: string;
+}
+
 // === Ceremony ===
 export interface AgendaItem {
   topic: string;
