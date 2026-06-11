@@ -28,6 +28,7 @@ export interface CreateTicketInput {
 export interface PatchTicketInput {
   title?: string;
   description?: string;
+  status?: Status;
   priority?: Priority;
   valueImpact?: ValueImpact;
   sprintId?: string;
