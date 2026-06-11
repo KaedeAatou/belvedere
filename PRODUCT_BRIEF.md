@@ -90,7 +90,7 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
 「**チケットを書くのが軽くなる**」「**儀式の前後で何かが片付いている**」という驚き。
 
 例:
-- 月曜朝、Slackに「今週のプランニング議題4件・品質要修正3件・容量24pt/30pt」が届く
+- 月曜朝、Slackに「今週のプランニング議題4件・品質要修正3件・計画28pt(velocity 20pt 超過)」が届く
 - ふりかえり後、「上がった Try 3件のうち 2件は翌スプリントWIPに転記済 (parentTicketId付き)、1件は要確認」が共有される
 - ダッシュボードに「**儀式健全性 Daily が -8 で要注意**」と表示される
 
