@@ -8,6 +8,15 @@
 **2026-06-11 ユーザー承認**: UI epic の無人実行を許可 (「仕事中に他モデルに作業させたい」)。
 前回の「視覚判断が要るため停止」は本書 §V のスクリーンショット自己検証プロトコルで代替する。
 
+**2026-06-11 デザイン決定** (docs/mockups/ui-patterns.html の 3 パターン比較後、ユーザー判断):
+- **既存シェルを維持**: 上部 Backlog/Events Segmented Control + 左レール + 右 Integrity AI パネル。
+  パターン B (パネル主役) / C (儀式没入) の大規模再構成は**不採用**
+- 見積もりポーカーは **A 案 (DetailSheet 内セクション)** で実装する (§T7)
+- ポーカーの主動線は **Refinement イベント** に紐づける → Events レールに Refinement が
+  存在しないため **T9 で新設** (CLAUDE.md の 5 儀式表との乖離解消を兼ねる)
+- **finding バッジは C 案 (ラベル付きピル)**: 行内に `種別なし` `SP未定` のような短ラベルを
+  severity 色のピルで表示。ホバー不要で読めることを優先 (§T5-3 を C 仕様に改訂済)
+
 ---
 
 ## §V. スクリーンショット自己検証プロトコル (視覚判断の無人化)
@@ -17,7 +26,8 @@
 ### V-1. 検証基盤 (T0 / 最初に 1 回だけ作る)
 
 1. `apps/web/components/RailPanel.vue` の各階ボタンに `data-testid="rail-<screenId>"` を付与
-   (backlog / planning / daily / review / retro。レイアウト変更なし、属性追加のみ)
+   (backlog / planning / daily / review / retro。レイアウト変更なし、属性追加のみ。
+   **T9 で refinement が増えたら巡回リストに `rail-refinement` を追加**)
 2. `apps/e2e/tests/screenshots.spec.ts` 新規:
    - authedPage で `/` を開き、`rail-backlog` → `rail-planning` → `rail-daily` → `rail-review` → `rail-retro`
      の順にクリックし、各画面で `page.screenshot({ fullPage: true, path: 'test-results/screens/<id>.png' })`
@@ -56,9 +66,10 @@
 ```
 T0  検証基盤 (rail testid + screenshots.spec)             0.5h
 R3  Demo/Live 統一 (refactoring-plan §R3-1 の 8 手順)      1.5-2 日 ← 画面単位 commit + V-2 ループ
-T5  種別バッジ + ダイアログ種別 + finding バッジ            0.5-1 日
-T7  見積もりパネル (DetailSheet)                           1 日
-T8  e2e (ポーカー happy path + バッジ)                     0.5 日
+T5  種別バッジ + ダイアログ種別 + finding ピル (C 案)       0.5-1 日
+T9  Refinement イベント画面 新設 (findings ワークキュー)    0.5-1 日
+T7  見積もりパネル (DetailSheet / A 案)                    1 日
+T8  e2e (ポーカー happy path + ピル)                       0.5 日
 ```
 
 ---
@@ -85,21 +96,61 @@ T8  e2e (ポーカー happy path + バッジ)                     0.5 日
 - type='task' 選択時: SP 入力を隠す (Task は SP を使わない)
 - POST body に `type` / `timeboxHours` を含める (`useTickets.createTicket` の input 型を拡張)
 
-### T5-3. finding バッジ (ルールエンジンの可視化)
+### T5-3. finding バッジ (ルールエンジンの可視化) — C 案: ラベル付きピル
 
 - `apps/web/composables/useFindings.ts` 新規:
   `fetchFindings(ceremony)` → `GET /api/findings?ceremony=...` → `Map<ticketId, TicketFinding[]>`
-  を useState で共有。チケット CRUD 後に再取得する `refresh()` を公開
+  を useState で共有。チケット CRUD 後に再取得する `refresh()` を公開。
+  **ruleId → 短ラベルの辞書**もここに持つ (例: TYPE_MISSING=`種別なし` / STORY_SP_MISSING=`SP未定` /
+  STORY_STALL=`{n}日停滞` / STORY_DOD_MISSING=`DoDなし` / SPIKE_NO_TIMEBOX=`timebox未設定` …17 ルール分)
 - Backlog 画面 mount 時に `fetchFindings('refinement')`
-- `TicketRow` に finding バッジ: その ticketId の findings があれば
-  最悪 severity の色 (error=`--err` / warn=`--warn` / info=`--info`) のドット + 件数
-  (`data-testid="finding-badge"`)。ホバーで `title` 属性に message 一覧 (改行区切り) — 最小実装
+- `TicketRow` に finding ピル (`data-testid="finding-badge"`):
+  - severity 色の小ピル (error=`--err` / warn=`--warn` / info=`--info` の背景薄め + 同色文字、
+    既存 FlagPill のスタイルを流用) に短ラベルを表示
+  - **行内は最大 2 個 + 超過分は `+n` ピル**に丸める (横溢れ防止)。`+n` ホバーで `title` 属性に全 message
+  - severity の悪い順に表示 (error → warn → info)
 - R3 の暫定 `computeLocalFlags` (useFlags.ts) は **T5-3 完了時に削除**し、FlagPill 表示も
-  findings ベースに置換 (ruleId → 短ラベルの辞書を useFindings.ts に持つ)
+  findings ベースに置換
 
 ---
 
-## T7 詳細仕様 (見積もりパネル)
+## T9 詳細仕様 (Refinement イベント画面 新設)
+
+> 背景: web の Events レールは Planning(01)/Daily(02)/Review(03)/Retro(04) の 4 つで、
+> CLAUDE.md の 5 儀式表 (03 = Refinement) と乖離している。本タスクで解消し、
+> 見積もりポーカーの主動線をここに置く。
+
+### T9-1. レール / 画面登録
+
+- `useDemoData.ts` (R3 後は移設先の screens 定義) の `ScreenId` に `'refinement'` を追加
+- `SCREENS` / `CEREMONIES` に Refinement を **floor 03** で挿入し、
+  Review → `04` / Retro → `05` に振り直す (CLAUDE.md の 5 儀式表と一致させる):
+  `{ id: 'refinement', label: 'Backlog Refinement', floor: '03', sub: 'Groom & estimate' }`
+- `pages/index.vue` の画面切替に `RefinementScreen` を配線
+- rail testid `rail-refinement` が自動で付く (T0 の `rail-<screenId>` 実装に従う) →
+  `screenshots.spec.ts` の巡回リストに `refinement` を追加 (T9 完了 commit に含める)
+
+### T9-2. RefinementScreen.vue (findings ワークキュー)
+
+`apps/web/components/screens/RefinementScreen.vue` 新規。Refinement Agent の検出結果を
+「会で上から潰すワークキュー」として表示する:
+
+- mount 時に `useFindings.fetchFindings('refinement')` (T5-3 と同じデータ、再利用)
+- **ルール別グループ表示** (グループヘッダ = 短ラベル + 件数、severity 悪い順):
+  例「SP 未見積もり (3)」「種別なし (1)」「粒度過大 SP>8 (1)」「Epic rationale 欠落 (1)」
+- 各行 = TicketRow 流用 (ID + 種別バッジ + タイトル + finding ピル)。クリックで DetailSheet
+- **`STORY_SP_MISSING` グループの行には「ポーカー開始」ボタン**
+  (`data-testid="ref-start-poker-<ticketId>"`): クリックで DetailSheet を開き、
+  estimation panel の `start` を即時呼び出す (T7 の主動線)
+- 空状態: 「指摘はありません — バックログは健全です」の 1 行
+- 既存儀式画面 (Planning 等) のレイアウト文法 (ヘッダ + セクション) を踏襲、新デザイン要素は発明しない
+
+---
+
+## T7 詳細仕様 (見積もりパネル / A 案: DetailSheet 内セクション)
+
+> 動線は 2 つ: **主 = Refinement 画面のポーカー開始ボタン (T9-2)** / 副 = Backlog から
+> DetailSheet を開いた時の見積もりセクション。実装はどちらも同じ DetailSheet パネル 1 個。
 
 ### T7-1. composable
 
@@ -128,11 +179,14 @@ T8  e2e (ポーカー happy path + バッジ)                     0.5 日
 
 `apps/e2e/tests/estimation.spec.ts` 新規 (既存 fixture / POM パターン踏襲):
 
-1. **ポーカー happy path**: Backlog → SP 無し story を新規作成 (種別セレクタで story) →
-   DetailSheet を開く → `est-start` → `est-vote-5` → `est-reveal` → `est-adopt-5` →
-   SP 表示が 5 になることを assert (robot は owner なので privileged 操作可)
-2. **バッジ**: seed の WC-108 行に `finding-badge` が表示される (TYPE_MISSING)
-3. BacklogPage / 新規 `DetailSheetPage` の Page Object に上記 testid のメソッドを追加
+1. **ポーカー happy path (主動線 = Refinement 経由)**: Backlog → SP 無し story を新規作成
+   (種別セレクタで story) → Events → Refinement 画面 →「SP 未見積もり」グループに表示される →
+   `ref-start-poker-<id>` → DetailSheet が開き voting 状態 → `est-vote-5` → `est-reveal` →
+   `est-adopt-5` → SP 表示が 5 になることを assert (robot は owner なので privileged 操作可)
+2. **finding ピル**: seed の WC-108 行 (Backlog) に `finding-badge` ピルが「種別なし」ラベルで
+   表示される (TYPE_MISSING / C 案)
+3. BacklogPage / 新規 `RefinementPage` / 新規 `DetailSheetPage` の Page Object に上記 testid の
+   メソッドを追加
 
 ---
 
@@ -140,10 +194,11 @@ T8  e2e (ポーカー happy path + バッジ)                     0.5 日
 
 ```
 □ grep -rn "DemoTicket|useDemoData" apps/web → ゼロ
-□ 全 5 画面 + settings のスクリーンショットを実行モデルが目視して崩れなし
+□ 全 6 画面 (Refinement 含む) + settings のスクリーンショットを実行モデルが目視して崩れなし
 □ e2e 9 本 (既存 6 + screenshots 1 + estimation 2) が CI 緑
-□ 本番 URL で: Backlog に WC seed + 種別バッジ + finding バッジ / Daily で status 移動が永続化 /
-  DetailSheet で見積もりポーカー一巡 (start→vote→reveal→adopt)
+□ 本番 URL で: Backlog に WC seed + 種別バッジ + finding ピル (C 案) /
+  Refinement 画面に findings ワークキュー / Daily で status 移動が永続化 /
+  Refinement →「ポーカー開始」→ DetailSheet で一巡 (start→vote→reveal→adopt)
 □ 実行ログ (autonomous-run.md) に画面ごとの結果 + 迷った判断のメモ
 ```
 
@@ -151,7 +206,7 @@ T8  e2e (ポーカー happy path + バッジ)                     0.5 日
 
 ```
 docs/design-ui-unification.md に従って UI epic を無人実行して。
-順序: T0 → R3 (refactoring-plan §R3 参照) → T5 → T7 → T8。
+順序: T0 → R3 (refactoring-plan §R3 参照) → T5 → T9 → T7 → T8。
 §V のスクリーンショット自己検証を画面 commit ごとに必ず回す。
 refactoring-plan §1 不可侵 / §6 検証ゲート / §7 エスカレーションを厳守。
 ```
