@@ -13,11 +13,57 @@
 
 import { z } from 'zod';
 import type { Sprint } from '@belvedere/shared';
+import { generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
 
 const PRIVILEGED: ReadonlyArray<string> = ['owner', 'sm', 'po'];
 const isPrivileged = (ctx: HandlerContext) => !!ctx.role && PRIVILEGED.includes(ctx.role);
+
+// POST /api/sprints body — ゴール先行で planned スプリントを新規作成する。
+// c社が 0 から計画を始めるための入口 (まだ active も planned も無い状態に対応)。
+export const SprintCreateBodySchema = z.object({
+  goal: z.string().min(1, 'goal must not be empty'),
+  startsAt: z.string().min(1),
+  endsAt: z.string().min(1),
+});
+
+/**
+ * POST /api/sprints — 新規 planned スプリントを作成する。
+ * number は当該 ws の max+1 (無ければ 1)。owner/sm/po のみ。startsAt>endsAt は 400。
+ * capacity は velocity 駆動プランニング方針では UI に出さないが、型必須なので 0 で初期化する
+ * (.claude/rules/project.md: capacity フィールド自体は別文脈として保持可)。
+ */
+export async function createSprint(
+  repo: RepoContainer,
+  ctx: HandlerContext,
+  body: unknown,
+): Promise<HandlerResult<Sprint>> {
+  if (!isPrivileged(ctx)) {
+    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  }
+  const parsed = SprintCreateBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
+  }
+  if (Date.parse(parsed.data.startsAt) > Date.parse(parsed.data.endsAt)) {
+    return { ok: false, status: 400, body: { error: 'starts_after_ends' } };
+  }
+  const all = await repo.sprints.list({ workspaceId: ctx.workspaceId });
+  const maxNumber = all.reduce((n, s) => Math.max(n, s.number), 0);
+  const sprint: Sprint = {
+    id: generateId('SPRINT'),
+    workspaceId: ctx.workspaceId,
+    number: maxNumber + 1,
+    startsAt: parsed.data.startsAt,
+    endsAt: parsed.data.endsAt,
+    goal: parsed.data.goal,
+    capacity: 0,
+    status: 'planned',
+  };
+  await repo.sprints.upsert(sprint);
+  return { ok: true, status: 201, body: sprint };
+}
 
 // goal / 期間の編集 (planned・active のみ)。空ゴールは許さない。
 export const SprintPatchBodySchema = z
