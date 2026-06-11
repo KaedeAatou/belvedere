@@ -29,6 +29,18 @@
 .trow-flags { display: inline-flex; gap: 4px; align-items: center; }
 .trow-labels { display: flex; gap: 4px; }
 
+/* ===== finding ピル (T5-3 / C 案: ラベル付き severity ピル) ===== */
+.finding-badge {
+  display: inline-flex; align-items: center;
+  font-family: var(--mono); font-size: 10px; line-height: 1.4;
+  padding: 1px 6px; border-radius: 3px; white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.finding-badge.sev-err  { color: var(--err);  background: rgba(184,90,74,0.12); }
+.finding-badge.sev-warn { color: var(--warn); background: rgba(200,154,58,0.16); }
+.finding-badge.sev-info { color: var(--info); background: rgba(110,138,160,0.16); }
+.finding-badge.sev-more { color: var(--ink-3); background: var(--bg-3); cursor: default; }
+
 /* ===== backlog ===== */
 .backlog-toolbar {
   display: flex; align-items: center; gap: 8px;

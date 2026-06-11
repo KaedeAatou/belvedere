@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Ticket, Priority } from '@belvedere/shared';
+import type { Ticket, Priority, TicketType } from '@belvedere/shared';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -9,6 +9,7 @@ const emit = defineEmits<{ select: [id: string] }>();
 
 const { activeSprint } = useSprints();
 const { createTicket, isLoading: createLoading, error: liveError } = useTickets();
+const { findingsFor, findingsByTicket, refresh: refreshFindings } = useFindings();
 
 // active sprint のチケット / それ以外 (= プロダクトバックログ) に二分
 const sprintTickets = computed(() =>
@@ -22,11 +23,11 @@ const backlogTickets = computed(() => {
   return props.tickets.filter((t) => t.sprintId !== activeId);
 });
 
-// 暫定 flag 集計 (T5-3 で findings に置換)
-function flagCount(t: Ticket): number { return computeLocalFlags(t).length; }
-const issueCount = computed(() => props.tickets.reduce((n, t) => n + flagCount(t), 0));
-const noSP = computed(() => props.tickets.filter((t) => computeLocalFlags(t).includes('no-points')).length);
-const noAcc = computed(() => props.tickets.filter((t) => computeLocalFlags(t).includes('no-acceptance')).length);
+// ルールエンジン findings 集計 (T5-3)
+function flagCount(t: Ticket): number { return findingsFor(t.id).length; }
+const issueCount = computed(() => Object.values(findingsByTicket.value).reduce((n, arr) => n + arr.length, 0));
+const noSP = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING')).length);
+const noAcc = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_DOD_MISSING')).length);
 const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 
 const sprintStats = computed(() => ({
@@ -45,14 +46,22 @@ const sprintLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.
 // 新規作成ダイアログ
 const showCreateDialog = ref(false);
 const newTitle = ref('');
+const newType = ref<TicketType>('story');
 const newPriority = ref<Priority>('medium');
 const newEstimatePt = ref<number | null>(null);
+const newTimebox = ref<number | null>(null);
 const createError = ref<string | null>(null);
+
+// 調査系タイトルなら Spike を推奨 (inline 提案)
+const suggestSpike = computed(() => /(調査|検証|比較|スパイク)/.test(newTitle.value) && newType.value !== 'spike');
+function applySpike(): void { newType.value = 'spike'; }
 
 function openCreate(): void {
   newTitle.value = '';
+  newType.value = 'story';
   newPriority.value = 'medium';
   newEstimatePt.value = null;
+  newTimebox.value = null;
   createError.value = null;
   showCreateDialog.value = true;
 }
@@ -63,14 +72,21 @@ async function submitCreate(): Promise<void> {
     createError.value = 'タイトルは必須です';
     return;
   }
-  const input: { title: string; priority: Priority; estimatePt?: number } = {
+  const input: { title: string; priority: Priority; type: TicketType; estimatePt?: number; timeboxHours?: number } = {
     title: newTitle.value.trim(),
     priority: newPriority.value,
+    type: newType.value,
   };
-  if (newEstimatePt.value !== null) input.estimatePt = newEstimatePt.value;
+  if (newType.value === 'spike') {
+    if (newTimebox.value !== null) input.timeboxHours = newTimebox.value;
+  } else if (newType.value !== 'task') {
+    // Task は SP を使わない。story / bug / incident のみ SP を送る
+    if (newEstimatePt.value !== null) input.estimatePt = newEstimatePt.value;
+  }
   const created = await createTicket(input);
   if (created) {
     showCreateDialog.value = false;
+    void refreshFindings(); // 新規チケットの指摘を反映
   } else {
     createError.value = liveError.value ?? 'API 呼出失敗';
   }
@@ -171,7 +187,21 @@ async function submitCreate(): Promise<void> {
             placeholder="例: ログイン画面の入力 validation を追加"
           />
         </div>
+        <div v-if="suggestSpike" class="spike-hint">
+          <span>💡 調査系のタイトルです。Spike にしますか?</span>
+          <button type="button" class="spike-btn" data-testid="suggest-spike" @click="applySpike">Spike にする</button>
+        </div>
         <div class="field-row">
+          <div class="field">
+            <label class="label" for="new-type">種別</label>
+            <select id="new-type" v-model="newType" data-testid="new-ticket-type" class="select-input">
+              <option value="story">story</option>
+              <option value="task">task</option>
+              <option value="spike">spike</option>
+              <option value="bug">bug</option>
+              <option value="incident">incident</option>
+            </select>
+          </div>
           <div class="field">
             <label class="label" for="new-priority">優先度</label>
             <select id="new-priority" v-model="newPriority" data-testid="new-ticket-priority" class="select-input">
@@ -181,7 +211,22 @@ async function submitCreate(): Promise<void> {
               <option value="urgent">urgent</option>
             </select>
           </div>
-          <div class="field">
+        </div>
+        <div class="field-row">
+          <div v-if="newType === 'spike'" class="field">
+            <label class="label" for="new-timebox">Timebox (時間)</label>
+            <input
+              id="new-timebox"
+              v-model.number="newTimebox"
+              data-testid="new-ticket-timebox"
+              type="number"
+              class="text-input"
+              min="0"
+              max="80"
+              placeholder="4"
+            />
+          </div>
+          <div v-else-if="newType !== 'task'" class="field">
             <label class="label" for="new-sp">Story Point (任意)</label>
             <input
               id="new-sp"
@@ -280,6 +325,22 @@ async function submitCreate(): Promise<void> {
   text-transform: uppercase;
 }
 .req { color: var(--accent); }
+.spike-hint {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  border: 1px dashed var(--accent-dim);
+  background: var(--accent-bg);
+  border-radius: var(--radius);
+  font-size: 12px; color: var(--ink-1);
+}
+.spike-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  background: var(--accent); color: #FBF8F2;
+  border: none; border-radius: var(--radius);
+  font-family: var(--sans); font-size: 12px; cursor: pointer;
+  white-space: nowrap;
+}
 .text-input, .select-input {
   padding: 10px 12px;
   border: var(--hairline) solid var(--line-2);

@@ -11,6 +11,7 @@ const emit = defineEmits<{
 }>();
 
 const { activeSprint } = useSprints();
+const { findingsFor } = useFindings();
 
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
@@ -132,7 +133,7 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
             <template v-for="t in colItems(col)" :key="t.id">
               <div :class="[
                      'tcard',
-                     computeLocalFlags(t).length > 0 && 'flagged',
+                     findingsFor(t.id).length > 0 && 'flagged',
                      drag === t.id && 'dragging',
                    ]"
                    draggable="true"
@@ -146,7 +147,7 @@ const idealPath = computed(() => ideal.value.map((v, i) => `${i === 0 ? 'M' : 'L
                 <div class="title">{{ t.title }}</div>
                 <div class="row">
                   <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
-                  <FlagPill v-for="f in computeLocalFlags(t).slice(0, 2)" :key="f" :flag="f" mini />
+                  <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
                   <span class="spacer" />
                   <span v-if="col === 'in-progress' && t.startedAt"
                         :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">

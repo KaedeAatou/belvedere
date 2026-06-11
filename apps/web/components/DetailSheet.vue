@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import type { Ticket } from '@belvedere/shared';
-import { FLAG_DEFS } from '~/composables/useUiMeta';
 
 const props = defineProps<{ ticket: Ticket }>();
 const emit = defineEmits<{ close: [] }>();
 
 const { memberName } = useMembers();
-const flags = computed(() => computeLocalFlags(props.ticket));
+const { findingsFor } = useFindings();
+const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
 </script>
 
@@ -62,19 +62,17 @@ const ownerName = computed(() => memberName(props.ticket.assigneeId));
         </div>
       </div>
 
-      <!-- AI Integrity -->
-      <div v-if="flags.length > 0" class="field">
-        <div class="l" style="color: var(--accent)">AI INTEGRITY · {{ flags.length }} ISSUE{{ flags.length > 1 ? 'S' : '' }}</div>
+      <!-- AI Integrity (ルールエンジン findings) -->
+      <div v-if="findings.length > 0" class="field">
+        <div class="l" style="color: var(--accent)">AI INTEGRITY · {{ findings.length }} ISSUE{{ findings.length > 1 ? 'S' : '' }}</div>
         <div class="flag-stack">
-          <template v-for="f in flags" :key="f">
-            <div v-if="FLAG_DEFS[f]" :class="['flag-card', FLAG_DEFS[f]?.sev === 'err' && 'err']">
-              <span :style="{ color: FLAG_DEFS[f]?.sev === 'err' ? 'var(--accent)' : 'var(--ink-2)' }"><Icon name="warn" /></span>
-              <div>
-                <div class="lab">{{ FLAG_DEFS[f]?.label }}</div>
-                <div class="desc">{{ FLAG_DEFS[f]?.desc }}</div>
-              </div>
+          <div v-for="f in findings" :key="f.ruleId" :class="['flag-card', f.severity === 'error' && 'err']">
+            <span :style="{ color: f.severity === 'error' ? 'var(--accent)' : 'var(--ink-2)' }"><Icon name="warn" /></span>
+            <div>
+              <div class="lab">{{ findingLabel(f) }}</div>
+              <div class="desc">{{ f.message }}</div>
             </div>
-          </template>
+          </div>
         </div>
       </div>
       <div v-else class="field">
