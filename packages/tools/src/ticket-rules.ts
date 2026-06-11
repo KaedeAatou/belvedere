@@ -232,17 +232,22 @@ export const ticketRules: TicketRule[] = [
         : [],
   },
   {
-    id: 'SPRINT_OVER_CAPACITY',
+    id: 'SPRINT_OVER_VELOCITY',
     appliesTo: 'aggregate',
     ceremonies: ['planning'],
     check: (_t, ctx) => {
       const active = ctx.sprints.find((s) => s.status === 'active');
       if (!active) return [];
+      // 相対見積もり (SP) の積み上げを過去スプリントの velocity 実績と比較する。
+      // 時間稼働ベースの capacity は使わない。velocity 実績がなければ判定不能 (skip)。
+      const completed = ctx.sprints.filter((s) => s.status === 'completed' && s.velocity !== undefined);
+      if (completed.length === 0) return [];
+      const avgVelocity = Math.round(completed.reduce((acc, s) => acc + (s.velocity ?? 0), 0) / completed.length);
       const sum = ctx.tickets
         .filter((t) => t.sprintId === active.id)
         .reduce((acc, t) => acc + (t.estimatePt ?? 0), 0);
-      return sum > active.capacity
-        ? [{ ruleId: 'SPRINT_OVER_CAPACITY', ticketId: active.id, severity: 'error', message: `Sprint 容量超過: ${sum} / ${active.capacity} SP。低 valueImpact の Story を次スプリントに回すか Sprint Goal を絞ってください。` }]
+      return sum > avgVelocity
+        ? [{ ruleId: 'SPRINT_OVER_VELOCITY', ticketId: active.id, severity: 'error', message: `計画が velocity 実績を超過: ${sum} / ${avgVelocity} SP。低 valueImpact の Story を次スプリントに回すか Sprint Goal を絞ってください。` }]
         : [];
     },
   },
