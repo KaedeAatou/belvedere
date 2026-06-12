@@ -5,6 +5,7 @@
 > 2026-05-03: Refinement Agent (5番目) を追加 + Project エンティティ + valueImpact (priority と独立した high/medium/low 軸) を導入。
 > 2026-05-05: **MCP (Model Context Protocol) サーバ追加** — Belvedere は単独 SaaS ではなく **Claude Code / Cursor / 他 AI Agent クライアントから直接呼べる** 開発支援エージェント。Phase 0 で stdio + 11 Tools (read 6 + invoke 1 + CRUD 4) 動作確認済 (smoke test 14/14 pass)、Phase 1 で HTTP + Cloud Run + OAuth。
 > 2026-06-11: **Reviewer Multimodal (録画→指摘抽出) を縮退** (2026-06-10)。代わりに **Orchestrator マルチエージェント + チケット種別ルールエンジン (17 観点) + 見積もりポーカー** を差別化の中心に。「なぜ Gemini か」は ADK で Orchestrator + 5 Agent を宣言的に編成できる点に統一。
+> 2026-06-13: **儀式モデル確定**。チケットライフサイクルを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike に分割し CURRENT 確定)** の一方向フローに整理。Backlog / Refinement / Planning の 3 画面を **CURRENT / NEXT / BACKLOG の 3 区画ビュー (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)** に統一し、画面差は「起票できる種別」と目的のみ。Refinement の「ルール別グループ表示」は廃止 (品質指摘は行内 finding ピルで提示)。
 
 ---
 
@@ -106,7 +107,7 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
    │                           └─▶ 障害観測 (Sentry)
    ├─▶ Planner Agent       (Sprint Planning 支援)
    ├─▶ Daily Agent         (Daily Scrum 支援)
-   ├─▶ Refinement Agent    (Backlog Refinement 5観点診断)
+   ├─▶ Refinement Agent    (US を最小価値 Story に分割 + 品質ピル)
    ├─▶ Reviewer Agent      (Sprint Review 準備)
    └─▶ Retrospective Agent (Retrospective Try 抽出)
         │
@@ -114,7 +115,9 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
         │  (Project ごとに idPrefix 自由設定 / 例: BV for Belvedere Core)
         │
         └─▶ Web UI (Nuxt 3 + Vue 3 SSR / Cloud Run / Claude Design)
-              6 画面: Backlog (00) + Planning / Daily / Refinement / Review / Retrospective (01-05、T9 で Refinement 専用画面を新設)
+              6 画面: Backlog (00) + Planning / Daily / Refinement / Review / Retrospective (01-05)
+              Backlog / Refinement / Planning は CURRENT / NEXT / BACKLOG の 3 区画ビュー (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)。画面差は起票できる種別と目的のみ
+              (Backlog=story+incident/bug の受付 / Refinement=最小価値 Story への分割 / Planning=task/spike への分割で CURRENT 確定)
 ```
 
 GCPスタック (必須要件):

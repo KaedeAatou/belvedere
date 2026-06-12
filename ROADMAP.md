@@ -100,12 +100,13 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [x] **T5: 種別バッジ + 作成ダイアログ種別セレクタ + 行内 finding バッジ** (2026-06-11)
 - [x] **T7: 見積もりパネル (DetailSheet) + ポーリング** (2026-06-11)
 - [x] **T8: ポーカー happy-path + Backlog バッジ e2e** (2026-06-11 / e2e で API バグ 3 件検出→修正)
-- [x] **T9: Refinement 専用画面** (ルール別ワークキュー + ポーカー開始導線 / 2026-06-11)
+- [x] **T9: Refinement 専用画面** (2026-06-11 / ルール別ワークキュー + ポーカー開始導線。2026-06-13 儀式モデル確定で **3 区画ビューへの作り直しが必要になった** → 下の「儀式画面を 3 区画モデルに再設計」項目で扱う / コード未追随)
 - [x] **T10: DetailSheet チケット編集 + 削除** (2026-06-11)
 - [x] **velocity 用語統一** (capacity 廃止 → SPRINT_OVER_VELOCITY。UI/ルール/prompt/Mock LLM/docs 一括 / 2026-06-11)
 - [x] **UI 再設計 (デザインフィードバック)**: 画面タイトル/stat 重複の排除、Daily Burndown を SP×velocity で再構成、Retro Try carry-forward 積み上げ (d&d)、サイドバー Artifacts 整理 (Firestore 永続 + retro.tries.list Tool で儀式 Agent のコンテキスト化 / 2026-06-12)
 - [x] **Sprint 開始フロー (B案)**: PATCH /api/sprints/:id + POST /api/sprints/:id/start (planned→active + velocity 確定)。ゴールは Planning のアウトプット + POST /api/sprints 新規作成 (0 から計画する入口 / 2026-06-12)
 - [ ] AI Integrity Panel は **空の枠だけ** (Phase 2 で配線)
+- [ ] **儀式画面を 3 区画モデルに再設計 (2026-06-13 / 進行中)**: Backlog / Refinement / Planning を CURRENT/NEXT/BACKLOG の 3 区画共通ビューに統一 (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)。画面差は起票できる種別と目的のみ。チケットの流れは Backlog で US 起票 → Refinement で最小価値 Story に分割 → Planning で task/spike に分割
 
 ### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
 - [ ] **MCP server を Cloud Run にデプロイ** (HTTP / Streamable HTTP transport 追加、stdio と両対応)

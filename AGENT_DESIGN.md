@@ -7,6 +7,7 @@
 > 2026-06-11 改訂: **Reviewer Multimodal (録画 → 指摘抽出 / ReviewRecording / video.extractIssues) を縮退削除** (2026-06-10)。代わりに **チケット種別 (Story/Task/Spike/Bug/Incident) + ルールエンジン (17 観点) + 見積もりポーカー** を導入。Refinement に第 7 観点「種別ルール」を追加。差別化の中心は **Orchestrator マルチエージェント (ADK で 5 Agent を編成)**。
 > 2026-05-05 (夜) 改訂: **MCP (Model Context Protocol) サーバ追加** — `apps/mcp-server` で Belvedere の Tool / Agent を MCP 形式で外部公開。Phase 0 で stdio mode + 11 Tools (読み取り 6 + invoke_agent + CRUD 4 全実装)、Smoke test 14/14 pass。Phase 1-D で HTTP transport + Cloud Run + Firestore + OAuth 2.1。書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲する設計 (MCP server 側に dryRun ロジックを持たない)。
 > 2026-06-12 改訂: RetroTry (carry-forward 積み上げ) + retro.tries.list Tool 追加。Workspace 管理 (作成/招待/切替) を Phase 1-E 前倒しで実装。
+> 2026-06-13 改訂: **儀式モデル確定**。チケットライフサイクルを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike に分割し CURRENT 確定)** の一方向フローに整理。Backlog / Refinement / Planning の 3 画面を **CURRENT SPRINT / NEXT SPRINT / BACKLOG の 3 区画ビュー (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)** に統一し、画面差は「起票できる種別」と目的のみ。Refinement の **「ルール別グループ表示 (ワークキュー)」を廃止** — 品質指摘は行内 finding ピルで見せる。Planning は 2 週間スプリント初日に CURRENT の中身 (タスク/スパイク分割・スコープ) を確定する儀式と位置づけ直し。
 
 ---
 
@@ -18,6 +19,49 @@
 4. **ツール越しに世界と接続**: Slack / GitHub / Calendar / Sentry / Firestore は全部 Tool として抽象化
 5. **記憶と学習**: 過去スプリントの議事・Try をベクトル検索 (RAG) でエージェントに渡す
 6. **可観測性**: 全 thought / tool_call / tool_result を `AgentRun` に記録
+
+---
+
+## 0.5. 儀式モデル / チケットライフサイクル (2026-06-13 確定)
+
+エージェントが「どの儀式で・何を補助するか」は、下記のスプリント運用とチケットフローに固定する。
+
+### スプリント運用 (2 週間スプリント)
+
+```
+(Retro で前スプリントを締める = velocity 確定 + 次スプリント active 化)
+  → スプリント初日に Planning: CURRENT スプリントの中身を確定
+     (ストーリーをタスク/スパイクに分割、どこまでやるか決定)
+  → 日々 Daily → 週 1 Refinement → 2 週目末に Review → Retro → 次スプリントへ
+```
+
+- スプリントを締めるのは **Retrospective** (velocity 確定 + 次スプリントを active 化)。
+- **Planning** はスプリント初日に CURRENT の中身 (Task/Spike 分割・スコープ決定) を固める儀式。
+- **Refinement** は週 1 回、BACKLOG を最小価値ストーリーへ分割する整理の儀式 (将来分の仕込み)。
+
+### チケットライフサイクル (一方向フロー)
+
+```
+Backlog でユーザーストーリー起票
+  → Refinement で最小価値ストーリーに分割
+  → Planning でタスク/スパイクに分割 (parentTicketId で親ストーリーに紐付け)
+```
+
+### 3 区画ビュー (Backlog / Refinement / Planning 共通)
+
+- 3 画面とも **CURRENT SPRINT / NEXT SPRINT / BACKLOG** の 3 セクションを表示する。
+- 並び順 (`orderIndex`) は全画面で共有する。
+- 区画を跨ぐ d&d でスプリント移動 (BACKLOG → CURRENT / NEXT)。
+- **Refinement の「ルール別グループ表示 (ワークキュー)」は廃止** — 品質指摘は行内 finding ピル (種別ルール + 6観点) で見せる。
+- 画面の違いは「起票できる種別」と目的だけ:
+
+| 画面 | 起票できる種別 | 目的 |
+|---|---|---|
+| Backlog | story + incident/bug | US の受付。誰が / なぜ / 何を の 3 入力欄で起票 |
+| Refinement | story (親 US から分割) + incident/bug | 最小価値ストーリーへの分割 |
+| Planning | task / spike (ストーリーから分割) + incident/bug | CURRENT の確定 (タスク化・スコープ決定) |
+
+> incident / bug は全画面で起票可能。
 
 ---
 
@@ -61,10 +105,10 @@
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | プランニング会議の議題ドラフト + バックログのチケット品質診断 |
-| 起動 | プランニング 30分前 (Cloud Scheduler) / 手動 |
-| 入力 | 現スプリント `Sprint`, バックログ `Ticket[]`, RetroTry 積み上げ (retro.tries.list), Epic 進捗 |
-| 出力 | 議題候補 / 品質要修正リスト (DoD/SP/US紐付け不足) / 候補値 |
+| 役割 | スプリント初日のプランニング支援。CURRENT スプリントの中身を確定する補助 — Story → Task/Spike 分割の提案 (parentTicketId で親 Story に紐付け)、計画 ΣSP vs velocity 実績の超過診断、議題ドラフト、Task のチケット品質診断 |
+| 起動 | スプリント初日のプランニング 30分前 (Cloud Scheduler) / 手動 |
+| 入力 | CURRENT `Sprint`, CURRENT/NEXT/BACKLOG の `Ticket[]`, RetroTry 積み上げ (retro.tries.list), Epic 進捗, velocity 実績 |
+| 出力 | 議題候補 / Task・Spike 分割候補 / 品質要修正リスト (DoD/SP/親 Story 紐付け不足) / 計画 ΣSP vs velocity 超過アラート / 候補値 |
 | LLM | gemini-2.5-pro (推論重め) |
 | 主な Tool | `firestore.query`, `ticket.list`, `ticket.quality.check`, `epic.list`, `slack.message.post` |
 | 自律性 | L2 (提案 → 人が承認) |
@@ -85,10 +129,10 @@
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | Backlog Refinement 運営支援。次スプリント以降の候補 Story を **6観点で診断** (戦略整合性を含む) |
+| 役割 | 週 1 回の Backlog Refinement 運営支援。BACKLOG / NEXT の候補 US を **最小価値ストーリーに分割** する補助が主役務。分割した子 Story は親 US に `parentTicketId` で紐付ける。品質面はルールエンジン (17 ルール / 6観点) を **AI 診断のバックエンド**として呼び、結果は画面上の行内 finding ピル (赤/黄) で見せる (ルール別グループ表示は廃止 → §0.5) |
 | 起動 | Refinement 30分前 / 手動 / `topic.ticket.created` (新規 Story 起票時) |
-| 入力 | 次スプリント候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story, **`Epic.rationale` / `successMetric`** |
-| 出力 | 形骸化シグナル一覧 (6観点) + 修正提案 |
+| 入力 | NEXT/BACKLOG 区画の候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story, **`Epic.rationale` / `successMetric`** |
+| 出力 | 最小価値ストーリーへの分割候補 + 形骸化シグナル一覧 (6観点 / 行内 finding ピルとして UI 表示) + 修正提案 |
 | LLM | gemini-2.5-pro |
 | 主な Tool | `project.list`, `epic.list`, `ticket.list`, `backlog.refinement.check` (6観点を一括診断する専用 Tool) |
 | 自律性 | L2 (提案 → 人が承認後に反映) |
@@ -128,7 +172,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | ふりかえり進行支援。Try抽出 + 翌スプリントWIP転記候補 |
+| 役割 | ふりかえり進行支援。Try抽出 + 翌スプリントWIP転記候補。**スプリントを締める儀式** (velocity 確定 + 次スプリントを active 化 = §0.5 の運用) の進行も支える |
 | 起動 | ふりかえり開始時 / 終了時 |
 | 入力 | 議事テキスト (Slack スレッド or 手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
 | 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新。carry-forward 積み上げ (RetroTry / Firestore 永続) への蓄積は人間の d&d 操作 (L2 原則) |

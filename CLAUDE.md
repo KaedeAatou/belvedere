@@ -12,9 +12,9 @@
 
 | Floor | Ritual | Agent | 役割 (検出シグナル) | 自律性 |
 |---|---|---|---|---|
-| 01 | Planning | Planner | Sprint Goal / 計画SP vs velocity (過剰計画) / DoD・US紐付け診断 | L2 |
+| 01 | Planning | Planner | スプリント初日に CURRENT 確定 (Story→task/spike 分割) / Sprint Goal / 計画SP vs velocity (過剰計画) / DoD・US紐付け診断 | L2 |
 | 02 | Daily | Daily | Velocity 整合 / 2日完了率 / 3日停滞 | L3 通知 / L2 メンション |
-| 03 | Refinement | Refinement | 粒度 (SP>8) / 依存 / valueImpact / `priority×valueImpact` / SP分散 / **Epic.rationale 欠落 (戦略整合性)** | L2 |
+| 03 | Refinement | Refinement | US を最小価値 Story に分割 + 品質ピル (粒度SP>8 / 依存 / valueImpact / `priority×valueImpact` / SP分散 / **Epic.rationale 欠落** をルールエンジンが診断) | L2 |
 | 04 | Review | Reviewer | (会前) デモシナリオ / Cloud Run preview URL集 / ステークホルダ通知 (録画 Multimodal は 2026-06-10 縮退削除) | L2 |
 | 05 | Retrospective | Retrospective | Try 抽出 / 翌スプリント WIP 転記 | L2 |
 | — | (router) | Orchestrator | 5 agent の起動順判定 (gemini-flash class) | — |

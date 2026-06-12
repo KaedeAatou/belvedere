@@ -5,6 +5,7 @@
 > 2026-05-03 改訂: **`Project` エンティティ追加** (Jira プロジェクト相当、`idPrefix` 自由設定) + **`valueImpact` 軸** (priority と独立した high/medium/low) + **`blockedBy`** (依存関係) + **`Ritual = 'refinement'` 追加** (5 リテラル化)。
 > 2026-05-05 改訂: **Epic に `rationale` / `successMetric` / `strategicTheme` 追加** — 戦略意図 (Why) と達成判定の数値指標を明示する。Refinement Agent の **第 6 観点「戦略整合性」** が `Epic.rationale` 欠落を検出し、配下チケットが「何のために?」を見失う形骸化サインを警告する。
 > 2026-06-11 改訂: **`ReviewRecording` エンティティ + Ticket の `source*` 4 フィールドを縮退削除** (録画 → 指摘抽出機能の縮退 2026-06-10)。代わりに **Ticket に `type` (種別) / `epicId` / `relatedIncidentId` / `timeboxHours` / `startedAt` / `completedAt` を追加** + **`EstimationSession` エンティティ (見積もりポーカー) を新設**。
+> 2026-06-13 改訂: **儀式モデル確定によるチケットライフサイクルの明文化**。データ型の新フィールド追加は無し (既存 `parentTicketId` / `sprintId` / `orderIndex` / `type` で表現可能)。`Ticket.parentTicketId` = US 起票 → Refinement で最小価値 Story に分割 → Planning で Task/Spike に分割という一方向フローの親子線。`Ticket.sprintId` の有無 + 値で **CURRENT / NEXT / BACKLOG の 3 区画**を判定し、`orderIndex` が Backlog / Refinement / Planning の **3 画面共通の並び順** (区画跨ぎ d&d でスプリント移動)。Refinement の「ルール別グループ」クエリは廃止 (行内 finding ピルで品質指摘を見せるため、種別別/ルール別の事前グルーピングは不要)。
 
 ---
 
@@ -132,10 +133,11 @@ export interface Ticket {
   estimatePt?: number;
   acceptanceCriteria?: string[];  // = Definition of Done
   labels?: string[];
-  parentTicketId?: string;        // 親 Story (US-xxx) や 元 Try
+  orderIndex?: number;            // 3 区画ビュー (CURRENT/NEXT/BACKLOG) 共通の並び順 (手動 d&d / 区画跨ぎでスプリント移動)
+  parentTicketId?: string;        // 親 Story (US-xxx) や 元 Try。ライフサイクル: Backlog で US 起票 → Refinement で最小価値 Story に分割 → Planning で Task/Spike に分割し親 Story を指す
   blockedBy?: string[];           // 依存先チケット ID (このチケットを進める前に完了が必要)
   // 種別 + 見積もり/停滞判定フィールド (2026-06-10 追加)
-  type?: TicketType;              // 種別 (未設定は TYPE_MISSING ルールが検出)
+  type?: TicketType;              // 種別 (未設定は TYPE_MISSING ルールが検出)。起票元: story=Backlog 直接 / 子 story=Refinement の分割 / task・spike=Planning の分割でのみ生成 / incident・bug=全画面で起票可
   epicId?: string;               // type='story' の親 Epic (Story を Epic に直結)
   relatedIncidentId?: string;     // type='bug' が Incident の根本対応なら、その Incident の id
   timeboxHours?: number;          // type='spike' のタイムボックス (時間)
@@ -238,6 +240,7 @@ export interface CeremonyHealthScore {
 | ユースケース | クエリ | 必要インデックス |
 |---|---|---|
 | Project 配下のチケット | `/tickets` where `projectId == X` orderBy `priority desc` | `(projectId, priority)` |
+| 3 区画ビュー (Backlog/Refinement/Planning 共通) | `/tickets` where `workspaceId == X` を取得し、`sprintId` (CURRENT/NEXT) と未設定 (BACKLOG) で 3 区画に振り分け、各区画内を `orderIndex` 昇順表示 | `workspaceId` (区画分け・並びはクライアント側) |
 | 現スプリントのチケット一覧 | `/tickets` where `sprintId == X` orderBy `priority desc` | `(sprintId, priority)` |
 | Refinement 候補 (high valueImpact / 未見積) | where `projectId == X and valueImpact == 'high' and estimatePt == null` | `(projectId, valueImpact, estimatePt)` |
 | priority × valueImpact ミスマッチ | where `priority == 'urgent' and valueImpact == 'low'` | `(priority, valueImpact)` |
