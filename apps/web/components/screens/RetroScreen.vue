@@ -1,109 +1,152 @@
 <script setup lang="ts">
+import type { RetroNote } from '@belvedere/shared';
+
 const { memberName } = useMembers();
 const { activeSprint } = useSprints();
-const { tries: stack, fetchTries, create, toggleDone, remove } = useRetroTries();
+const { me, fetchMe } = useMe();
+const { notes, fetchNotes, create: createNote, toggleVote, remove: removeNote } = useRetroNotes();
+// 積み上げ (RetroTry) は KPT ノートとは別の永続。Try 列のノートを昇格してここに溜める。
+const { tries: stack, fetchTries, create: createTry, toggleDone, remove: removeTry } = useRetroTries();
 
-// 積み上げは Firestore 永続 (GET /api/retro-tries)。過去スプリント由来の Try は最初から積み上がっている。
-onMounted(() => fetchTries());
-
-// KPT ボード (Retro は tickets を受けない / demo シード)。who は実メンバー userId を参照する。
-const cols = ref({
-  keep: [
-    { id: 'k1', text: '新機能リリース後、社内利用が +60% 増えた。導線として効いている。', who: 'kagayayuuki', votes: 5, hot: true },
-    { id: 'k2', text: 'AI形骸化チェックがプランニングで2件のスコープ漏れを事前に拾った。', who: 'uehara', votes: 4, hot: true },
-    { id: 'k3', text: 'ペアレビューを REVIEW 列で実施したのは良かった。', who: 'okubo', votes: 2, hot: false },
-  ],
-  problem: [
-    { id: 'p1', text: 'Spike が長期 DOING に留まった。タイムボックスが弱い。', who: 'hirai', votes: 6, hot: true },
-    { id: 'p2', text: 'BLOCKED チケットの理由が空のまま2日経過していた。', who: 'uehara', votes: 3, hot: true },
-    { id: 'p3', text: 'ゴールのMが弱く、レビュー時に判定が割れた。', who: 'kagayayuuki', votes: 3, hot: false },
-    { id: 'p4', text: '週後半の更新頻度が落ちた（金曜の更新 0件）。', who: 'hayashi', votes: 1, hot: false },
-  ],
-  try: [
-    { id: 'try1', text: 'Spikeに 1.5日のハードタイムボックス、超過時は自動でレトロ議題に。', who: 'okubo', votes: 5, hot: true },
-    { id: 'try2', text: 'BLOCKED に遷移したら理由必須にする（Belvedere AIで強制）。', who: 'uehara', votes: 4, hot: true },
-    { id: 'try3', text: '金曜午前に "micro-daily" を実施し更新を促す。', who: 'hayashi', votes: 2, hot: false },
-  ],
+// ノートと積み上げは Firestore 永続。レトロを実際に開催するための実データ。
+onMounted(() => {
+  fetchMe();
+  fetchNotes();
+  fetchTries();
 });
 
-const dotColor: Record<string, string> = {
+type ColKey = 'keep' | 'problem' | 'try';
+
+const dotColor: Record<ColKey, string> = {
   keep: 'var(--ok)',
   problem: 'var(--err)',
   try: 'var(--accent)',
 };
 
-const colDefs = [
-  { key: 'keep' as const, label: 'Keep', desc: '続けたいこと' },
-  { key: 'problem' as const, label: 'Problem', desc: '困ったこと' },
-  { key: 'try' as const, label: 'Try', desc: '次に試す候補' },
+const colDefs: { key: ColKey; label: string; desc: string }[] = [
+  { key: 'keep', label: 'Keep', desc: '続けたいこと' },
+  { key: 'problem', label: 'Problem', desc: '困ったこと' },
+  { key: 'try', label: 'Try', desc: '次に試す候補' },
 ];
 
-function sorted(key: 'keep' | 'problem' | 'try') {
-  return [...cols.value[key]].sort((a, b) => b.votes - a.votes);
+// 列ごとに votes 数で降順表示。
+function notesIn(key: ColKey): RetroNote[] {
+  return notes.value
+    .filter((n) => n.column === key)
+    .sort((a, b) => b.votes.length - a.votes.length);
+}
+
+const myId = computed(() => me.value?.userId ?? null);
+const hasVoted = (n: RetroNote) => (myId.value ? n.votes.includes(myId.value) : false);
+const isMine = (n: RetroNote) => myId.value !== null && n.authorId === myId.value;
+
+// ===== インラインのノート追加 =====
+const addingCol = ref<ColKey | null>(null);
+const draftText = ref('');
+
+function startAdd(key: ColKey) {
+  addingCol.value = key;
+  draftText.value = '';
+}
+function cancelAdd() {
+  addingCol.value = null;
+  draftText.value = '';
+}
+async function submitAdd(key: ColKey) {
+  const text = draftText.value.trim();
+  if (!text) return;
+  await createNote({ text, column: key, sprintNumber: activeSprint.value?.number ?? 0 });
+  // 続けて追加できるよう入力欄は開いたまま空にする
+  draftText.value = '';
 }
 
 // ===== アクション積み上げ (carry-forward stack) =====
-// 「次に試すこと(Try)」を d&d で積み上げに移すと、スプリントを跨いで蓄積される。
-// この積み上げが各儀式 AI のコンテキストになる (Firestore 永続 / useRetroTries 経由)。
-// 過去スプリント由来の Try は最初から積み上がっている。
+// Try 列のノートを d&d で積み上げに移すと RetroTry として永続化され、
+// スプリントを跨いで蓄積される (各儀式 AI のコンテキスト)。重複は text 比較で抑止。
 const dragTryId = ref<string | null>(null);
 const stackOver = ref(false);
 
 function onTryDragStart(id: string) { dragTryId.value = id; }
 function onTryDragEnd() { dragTryId.value = null; }
 
+const inStack = (noteText: string) => stack.value.some((s) => s.text === noteText);
+
 async function onStackDrop(e: DragEvent) {
   e.preventDefault();
   stackOver.value = false;
-  const t = cols.value.try.find((x) => x.id === dragTryId.value);
+  const note = notes.value.find((n) => n.id === dragTryId.value);
   dragTryId.value = null;
-  if (!t) return;
-  // id 形式が変わったため重複判定は「同一 text が既に積み上げに存在するか」で行う。
-  if (stack.value.some((s) => s.text === t.text)) return;
-  // 由来スプリントは active sprint。number はバッジ表示 / Agent コンテキスト用。
-  await create({
-    text: t.text,
+  if (!note) return;
+  // 重複判定は「同一 text が既に積み上げに存在するか」(現状ロジック踏襲)。
+  if (inStack(note.text)) return;
+  await createTry({
+    text: note.text,
     sprintNumber: activeSprint.value?.number ?? 0,
     ...(activeSprint.value && { sprintId: activeSprint.value.id }),
   });
 }
-
-const inStack = (tryText: string) => stack.value.some((s) => s.text === tryText);
 </script>
 
 <template>
   <div class="retro">
     <div class="retro-board">
-      <div v-for="c in colDefs" :key="c.key" class="retro-col">
+      <div v-for="c in colDefs" :key="c.key" class="retro-col" :data-testid="`retro-col-${c.key}`">
         <div class="retro-col-head">
           <span class="dot" :style="{ background: dotColor[c.key] }" />
           <span class="name">{{ c.label }}</span>
           <span style="font-size: 11px; color: var(--ink-3); margin-left: 4px">{{ c.desc }}</span>
-          <span class="ct">{{ sorted(c.key).length }}</span>
+          <span class="ct">{{ notesIn(c.key).length }}</span>
         </div>
         <div class="retro-col-body">
-          <div v-for="n in sorted(c.key)" :key="n.id"
+          <div v-for="n in notesIn(c.key)" :key="n.id"
+               data-testid="retro-note"
                :class="['retro-note', c.key === 'try' && 'draggable', c.key === 'try' && inStack(n.text) && 'stacked']"
                :draggable="c.key === 'try'"
                @dragstart="c.key === 'try' && onTryDragStart(n.id)"
                @dragend="onTryDragEnd">
             <div class="text">{{ n.text }}</div>
             <div class="meta">
-              <Avatar :user="n.who" />
-              <span>{{ memberName(n.who) }}</span>
+              <Avatar :user="n.authorId" />
+              <span>{{ memberName(n.authorId) }}</span>
               <span v-if="c.key === 'try'" class="drag-hint"><Icon name="branch" :size="11" /> 積み上げへ</span>
-              <span v-else :class="['vote', n.hot && 'hot']">
+              <button
+                data-testid="retro-vote"
+                :class="['vote', hasVoted(n) && 'hot']"
+                title="投票"
+                @click="toggleVote(n.id)">
                 <Icon name="up" />
-                <span style="font-family: var(--mono); font-size: 10px">{{ n.votes }}</span>
-              </span>
+                <span style="font-family: var(--mono); font-size: 10px">{{ n.votes.length }}</span>
+              </button>
+              <button v-if="isMine(n)" class="note-rm" title="ノートを削除"
+                      data-testid="retro-note-rm" @click="removeNote(n.id)">
+                <Icon name="x" :size="11" />
+              </button>
             </div>
           </div>
-          <div class="retro-add">+ ADD NOTE</div>
+
+          <!-- インライン追加 -->
+          <div v-if="addingCol === c.key" class="retro-add-form" :data-testid="`retro-add-form-${c.key}`">
+            <textarea
+              v-model="draftText"
+              class="retro-add-input"
+              :data-testid="`retro-add-input-${c.key}`"
+              rows="2"
+              placeholder="ノートを入力… (⌘/Ctrl+Enter で追加)"
+              @keydown.meta.enter.prevent="submitAdd(c.key)"
+              @keydown.ctrl.enter.prevent="submitAdd(c.key)"
+              @keydown.esc="cancelAdd" />
+            <div class="retro-add-actions">
+              <button class="h-btn h-btn--primary" :data-testid="`retro-add-submit-${c.key}`"
+                      :disabled="!draftText.trim()" @click="submitAdd(c.key)">追加</button>
+              <button class="h-btn" @click="cancelAdd">閉じる</button>
+            </div>
+          </div>
+          <div v-else class="retro-add" :data-testid="`retro-add-${c.key}`" @click="startAdd(c.key)">+ ノート追加</div>
         </div>
       </div>
     </div>
 
-    <!-- アクション積み上げ: Try を d&d で蓄積 / スプリントを跨いで担当 AI のコンテキストになる -->
+    <!-- アクション積み上げ: Try ノートを d&d で蓄積 / スプリントを跨いで担当 AI のコンテキストになる -->
     <div :class="['retro-stack', stackOver && 'drop-over']"
          data-testid="retro-stack"
          @dragover.prevent="stackOver = true"
@@ -111,7 +154,7 @@ const inStack = (tryText: string) => stack.value.some((s) => s.text === tryText)
          @drop="onStackDrop">
       <div class="stack-head">
         <h3>Action items <span class="carry">— carry-forward 積み上げ</span></h3>
-        <p>Try を <b>ドラッグ</b>して積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
+        <p>Try ノートを <b>ドラッグ</b>して積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
       </div>
       <div class="stack-list">
         <div v-for="a in stack" :key="a.id" data-testid="retro-stack-item" :class="['stack-item', a.done && 'done']">
@@ -120,12 +163,12 @@ const inStack = (tryText: string) => stack.value.some((s) => s.text === tryText)
           </span>
           <span class="text">{{ a.text }}</span>
           <span class="sprint-badge">S{{ a.sprintNumber }}</span>
-          <button class="rm" title="積み上げから削除" @click="remove(a.id)">
+          <button class="rm" title="積み上げから削除" @click="removeTry(a.id)">
             <Icon name="x" :size="12" />
           </button>
         </div>
         <div v-if="stack.length === 0" class="stack-empty">
-          Try をここにドラッグして積み上げを開始
+          Try ノートをここにドラッグして積み上げを開始
         </div>
       </div>
     </div>
