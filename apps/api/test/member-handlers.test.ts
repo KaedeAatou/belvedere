@@ -97,7 +97,7 @@ describe('patchMember', () => {
     if (res.ok) return;
     expect(res.status).toBe(404);
     // 実データはそのまま
-    const other = await repo.members.get(OTHER_USERID);
+    const other = await repo.members.get(WS, OTHER_USERID);
     expect(other?.displayName).toBe('Other');
   });
 

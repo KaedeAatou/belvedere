@@ -195,7 +195,8 @@ export async function cancelInvite(
   if (!ctx.role || !INVITE_PRIVILEGED.includes(ctx.role)) {
     return { ok: false, status: 403, body: { error: 'forbidden' } };
   }
-  const existing = await repo.members.get(paramUserId);
+  // paramUserId は招待センチネル userId。複合キー = `${ctx.workspaceId}:${paramUserId}`。
+  const existing = await repo.members.get(ctx.workspaceId, paramUserId);
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
@@ -203,6 +204,6 @@ export async function cancelInvite(
     // 加入済メンバーの削除はここでは許さない (招待取消専用)。
     return { ok: false, status: 409, body: { error: 'not_a_pending_invite' } };
   }
-  await repo.members.delete(paramUserId);
+  await repo.members.delete(ctx.workspaceId, paramUserId);
   return { ok: true, status: 200, body: { deleted: paramUserId } };
 }

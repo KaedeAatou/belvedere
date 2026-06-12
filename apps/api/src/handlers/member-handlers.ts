@@ -25,11 +25,13 @@ export async function getMe(
   repo: RepoContainer,
   ctx: HandlerContext,
 ): Promise<HandlerResult<Member>> {
-  const me = await repo.members.get(ctx.user.userId);
+  // 複合キー (workspaceId, userId) でスコープ取得する。複合キー化前は workspaceId を
+  // 無視して「唯一の member doc」を返していた = 別 ws の所属を取り違える潜在バグだった。
+  const me = await repo.members.get(ctx.workspaceId, ctx.user.userId);
   if (!me) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
-  // workspace 解決と member の workspaceId が一致しない = 攻撃 or データ破損
+  // get が複合キーでスコープ済なので workspaceId は必ず一致するが、データ破損の保険で照合を残す。
   if (me.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
@@ -56,7 +58,7 @@ export async function patchMember(
   if (paramUserId !== ctx.user.userId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
-  const existing = await repo.members.get(paramUserId);
+  const existing = await repo.members.get(ctx.workspaceId, paramUserId);
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }

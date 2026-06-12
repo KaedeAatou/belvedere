@@ -33,7 +33,7 @@ describe('createWorkspace', () => {
     // 永続化確認
     const stored = await repo.workspaces.get(res.body.workspace.id);
     expect(stored?.name).toBe('C社');
-    const mem = await repo.members.get('uid-me');
+    const mem = await repo.members.get(res.body.workspace.id, 'uid-me');
     expect(mem?.role).toBe('owner');
   });
 
@@ -136,7 +136,7 @@ describe('inviteMember / cancelInvite', () => {
     if (!inv.ok) return;
     const res = await cancelInvite(repo, OWNER, inv.body.userId);
     expect(res.ok).toBe(true);
-    expect(await repo.members.get(inv.body.userId)).toBeNull();
+    expect(await repo.members.get(OWNER.workspaceId, inv.body.userId)).toBeNull();
   });
 
   it('cancelInvite 409: 加入済メンバー (実 uid) は取消対象外', async () => {

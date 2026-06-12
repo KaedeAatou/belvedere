@@ -121,12 +121,20 @@ class MemUserStoryRepo implements UserStoryRepository {
 }
 
 class MemMemberRepo implements MemberRepository {
+  // Map のキーは複合キー `${workspaceId}:${userId}` (firestore.ts memberDocId と完全一致)。
+  // userId 単独キーだと、別 Workspace の同 user を upsert した時に前の所属を上書きしてしまい
+  // 1 user が複数 Workspace に所属できなくなる (マルチテナント破壊)。
   private store = new Map<string, Member>();
-  constructor(seed: Member[]) { for (const m of seed) this.store.set(m.userId, stripUndefined({ ...m })); }
+  private keyOf(workspaceId: string, userId: string): string { return `${workspaceId}:${userId}`; }
+  constructor(seed: Member[]) {
+    for (const m of seed) this.store.set(this.keyOf(m.workspaceId, m.userId), stripUndefined({ ...m }));
+  }
   async list(opts: { workspaceId: string }): Promise<Member[]> {
     return [...this.store.values()].filter((m) => m.workspaceId === opts.workspaceId);
   }
-  async get(userId: string): Promise<Member | null> { return this.store.get(userId) ?? null; }
+  async get(workspaceId: string, userId: string): Promise<Member | null> {
+    return this.store.get(this.keyOf(workspaceId, userId)) ?? null;
+  }
   async listByUserId(userId: string): Promise<Member[]> {
     return [...this.store.values()].filter((m) => m.userId === userId);
   }
@@ -134,8 +142,12 @@ class MemMemberRepo implements MemberRepository {
     const e = email.toLowerCase();
     return [...this.store.values()].filter((m) => m.email.toLowerCase() === e);
   }
-  async upsert(m: Member): Promise<void> { this.store.set(m.userId, stripUndefined({ ...m })); }
-  async delete(userId: string): Promise<void> { this.store.delete(userId); }
+  async upsert(m: Member): Promise<void> {
+    this.store.set(this.keyOf(m.workspaceId, m.userId), stripUndefined({ ...m }));
+  }
+  async delete(workspaceId: string, userId: string): Promise<void> {
+    this.store.delete(this.keyOf(workspaceId, userId));
+  }
 }
 
 class MemCeremonyRepo implements CeremonyRepository {
