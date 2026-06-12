@@ -1,11 +1,8 @@
 <script setup lang="ts">
-// Backlog Refinement 画面 (T9)。Refinement Agent の検出結果を「会で上から潰すワークキュー」
-// としてルール別に表示する。STORY_SP_MISSING のストーリーは「ポーカー開始」で T7 の見積もりへ。
-// タブ切替: 「ルール別」グループ表示 / 「優先順」フラットリスト表示。
+// Backlog Refinement 画面 (floor 03 / Wave 1 で 3 区画共通ビューに統一)。
+// ルール別グルーピング / 優先順タブは廃止し、CURRENT / NEXT / BACKLOG の 3 区画で表示する。
+// finding ピルは TicketRow が行内に描く。STORY_SP_MISSING のストーリーは行右の「ポーカー開始」で見積もりへ。
 import type { Ticket } from '@belvedere/shared';
-import { compareTicketOrder } from '@belvedere/shared';
-import type { FindingSeverity, TicketFinding } from '~/composables/useFindings';
-import { RULE_LABELS } from '~/composables/useFindings';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -17,275 +14,61 @@ const emit = defineEmits<{
 }>();
 
 const { patchTicket } = useTickets();
-const { findingsByTicket, fetchFindings, findingsFor, isLoading } = useFindings();
+const { fetchFindings, findingsFor } = useFindings();
 const { members } = useMembers();
-const { sprints } = useSprints();
+const { activeSprint, nextPlanned, sprints } = useSprints();
 onMounted(() => { fetchFindings('refinement'); });
 
-// ===== 表示モード =====
-const mode = ref<'rules' | 'priority'>('rules');
+// 全チケットを 3 区画へ振り分ける (フィルタなし)。
+const allTickets = computed(() => props.tickets);
+const { current, next, backlog } = useSprintSections(allTickets);
 
-// 複数選択 → 一括変更/削除 (画面ローカル。グループ跨ぎ選択可)。
-const sel = useTicketSelection();
+const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
+const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
 
-function ticketById(id: string): Ticket | undefined {
-  return props.tickets.find((t) => t.id === id);
+// SP 未見積もりのストーリーか (ポーカー開始ボタンの表示条件)。
+function needsPoker(t: Ticket): boolean {
+  return findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING');
 }
 
-const SEV_ORDER: Record<FindingSeverity, number> = { error: 0, warn: 1, info: 2 };
-
-interface Group {
-  ruleId: string;
-  label: string;
-  severity: FindingSeverity;
-  findings: TicketFinding[];
-}
-
-// ルール別グループ (severity 悪い順)。ticket に解決できない aggregate finding は除外。
-// グループ内チケットは compareTicketOrder (orderIndex 昇順 → priority → createdAt) でソート。
-const groups = computed<Group[]>(() => {
-  const map = new Map<string, Group>();
-  for (const arr of Object.values(findingsByTicket.value)) {
-    for (const f of arr) {
-      if (!ticketById(f.ticketId)) continue;
-      let g = map.get(f.ruleId);
-      if (!g) {
-        g = { ruleId: f.ruleId, label: RULE_LABELS[f.ruleId] ?? f.ruleId, severity: f.severity, findings: [] };
-        map.set(f.ruleId, g);
-      }
-      g.findings.push(f);
-    }
+// ===== 区画跨ぎ d&d 移動 (sprintId 変更) =====
+async function onMoveToSection(ticketId: string, section: 'current' | 'next' | 'backlog'): Promise<void> {
+  if (section === 'current') {
+    if (!activeSprint.value) return;
+    await patchTicket(ticketId, { sprintId: activeSprint.value.id });
+  } else if (section === 'next') {
+    if (!nextPlanned.value) return;
+    await patchTicket(ticketId, { sprintId: nextPlanned.value.id });
+  } else {
+    await patchTicket(ticketId, { sprintId: null });
   }
-  // findings 内のチケットを compareTicketOrder でソートする (並び替え結果を視覚に反映)。
-  const result = [...map.values()].sort((a, b) => SEV_ORDER[a.severity] - SEV_ORDER[b.severity]);
-  for (const g of result) {
-    g.findings.sort((a, b) => {
-      const ta = ticketById(a.ticketId);
-      const tb = ticketById(b.ticketId);
-      if (!ta || !tb) return 0;
-      return compareTicketOrder(ta, tb);
-    });
-  }
-  return result;
-});
-
-// 一括操作の全選択対象 = 全グループの表示中チケット id (重複は除去 — 同一チケットが
-// 複数ルールでヒットし複数グループに現れるため)。
-const allVisibleIds = computed(() => {
-  const seen = new Set<string>();
-  for (const g of groups.value) {
-    for (const f of g.findings) seen.add(f.ticketId);
-  }
-  return [...seen];
-});
-
-// ===== 優先順ビュー: 精緻化候補チケットを compareTicketOrder でソートしたフラットリスト =====
-// findings を持つチケットを対象とし、orderIndex→priority→createdAt 順に並べる。
-const priorityTickets = computed<Ticket[]>(() => {
-  const ids = allVisibleIds.value;
-  return ids
-    .map((id) => ticketById(id))
-    .filter((t): t is Ticket => t !== undefined)
-    .sort(compareTicketOrder);
-});
-
-// 優先順ビュー用の reorder composable (グループなしのシンプル配線)。
-const {
-  dropEdgeFor: priorityDropEdgeFor,
-  onReorderStart: priorityReorderStart,
-  onReorderOver: priorityReorderOver,
-  onReorderDrop: priorityReorderDrop,
-  onReorderEnd: priorityReorderEnd,
-} = useTicketReorder({
-  sorted: priorityTickets,
-  patch: (id, body) => patchTicket(id, body),
-});
-
-// ===== グループ内並び替え =====
-// draggingGroupId: ドラッグ中の行が属するグループの ruleId。
-// onReorderOver / onReorderDrop は同一グループ内の行にのみ適用する。
-const draggingGroupId = ref<string | null>(null);
-
-// グループ内のチケット配列 (compareTicketOrder 済み) を sorted として渡す。
-// グループが変わると groups computed が再計算されるため、
-// sortedForGroup は都度計算する (ドロップ時にも最新の順を参照する必要がある)。
-function sortedTicketsForGroup(ruleId: string): Ticket[] {
-  const g = groups.value.find((x) => x.ruleId === ruleId);
-  if (!g) return [];
-  return g.findings.map((f) => ticketById(f.ticketId)).filter((t): t is Ticket => t !== undefined);
 }
-
-// 全グループ共通の reorder composable インスタンス。
-// sorted は「現在ドラッグ中のグループのチケット配列」を動的に参照する。
-// draggingGroupId が null のときは空配列 (onReorderDrop が呼ばれないため問題なし)。
-const _refSorted = computed<Ticket[]>(() => {
-  if (!draggingGroupId.value) return [];
-  return sortedTicketsForGroup(draggingGroupId.value);
-});
-
-const { dropEdgeFor, onReorderStart: _reorderStart, onReorderOver, onReorderDrop, onReorderEnd: _reorderEnd } =
-  useTicketReorder({
-    sorted: _refSorted,
-    patch: (id, body) => patchTicket(id, body),
-  });
-
-function onReorderStart(id: string, ruleId: string): void {
-  draggingGroupId.value = ruleId;
-  _reorderStart(id);
-}
-
-function onReorderEnd(): void {
-  draggingGroupId.value = null;
-  _reorderEnd();
-}
-
-// 同一グループ内の行にのみ dragover / drop を転送する。
-function onGroupReorderOver(id: string, ruleId: string, evt: DragEvent): void {
-  if (draggingGroupId.value !== ruleId) return;
-  onReorderOver(id, evt);
-}
-
-function onGroupReorderDrop(id: string, ruleId: string): void {
-  if (draggingGroupId.value !== ruleId) return;
-  void onReorderDrop(id);
-}
-
-const sevClass: Record<FindingSeverity, string> = { error: 'sev-err', warn: 'sev-warn', info: 'sev-info' };
 </script>
 
 <template>
-  <div class="screen-body" data-testid="refinement-body">
-    <!-- タブ切替 segmented control -->
-    <div class="refine-toolbar">
-      <div class="seg-ctrl refine-seg">
-        <button
-          :class="['seg-btn', mode === 'rules' && 'active']"
-          data-testid="refine-mode-rules"
-          @click="mode = 'rules'"
-        >ルール別</button>
-        <button
-          :class="['seg-btn', mode === 'priority' && 'active']"
-          data-testid="refine-mode-priority"
-          @click="mode = 'priority'"
-        >優先順</button>
-      </div>
-    </div>
-
-    <BulkActionBar
-      v-if="sel.count.value > 0"
-      :count="sel.count.value"
-      :members="members"
-      :sprints="sprints"
-      :busy="sel.isBusy.value"
-      @set-status="(s) => sel.applyToSelected({ status: s })"
-      @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
-      @set-priority="(p) => sel.applyToSelected({ priority: p })"
-      @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
-      @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
-      @remove="sel.removeSelected"
-      @clear="sel.clear"
-      @select-all="() => sel.selectMany(allVisibleIds)"
-    />
-
-    <!-- ルール別ビュー -->
-    <template v-if="mode === 'rules'">
-      <p v-if="isLoading && groups.length === 0" class="refine-msg">読み込み中…</p>
-      <p v-else-if="groups.length === 0" class="refine-msg" data-testid="refine-empty">
-        指摘はありません — バックログは健全です。
-      </p>
-
-      <div v-for="g in groups" :key="g.ruleId" class="refine-group">
-        <div class="refine-group-head">
-          <span class="finding-badge" :class="sevClass[g.severity]">{{ g.label }}</span>
-          <span class="refine-count">{{ g.findings.length }}</span>
-        </div>
-        <TicketRow v-for="f in g.findings" :key="`${g.ruleId}-${f.ticketId}`"
-                   :t="ticketById(f.ticketId)!"
-                   :selected="selectedId === f.ticketId"
-                   drag-handle reorderable
-                   selectable :bulk-selected="sel.isSelected(f.ticketId)"
-                   :drop-edge="dropEdgeFor(f.ticketId)"
-                   @click="emit('select', f.ticketId)"
-                   @toggle-select="sel.toggle(f.ticketId)"
-                   @reorder-start="onReorderStart(f.ticketId, g.ruleId)"
-                   @reorder-over="(e) => onGroupReorderOver(f.ticketId, g.ruleId, e)"
-                   @reorder-drop="onGroupReorderDrop(f.ticketId, g.ruleId)"
-                   @reorder-end="onReorderEnd">
-          <template #extra>
-            <button v-if="g.ruleId === 'STORY_SP_MISSING'"
-                    class="poker-btn"
-                    :data-testid="`ref-start-poker-${f.ticketId}`"
-                    @click.stop="emit('startPoker', f.ticketId)">
-              ポーカー開始
-            </button>
-          </template>
-        </TicketRow>
-      </div>
-    </template>
-
-    <!-- 優先順ビュー -->
-    <template v-else>
-      <p v-if="isLoading && priorityTickets.length === 0" class="refine-msg">読み込み中…</p>
-      <p v-else-if="priorityTickets.length === 0" class="refine-msg">
-        精緻化が必要なチケットはありません。
-      </p>
-      <div v-else data-testid="refine-priority-list">
-        <TicketRow v-for="t in priorityTickets" :key="t.id"
-                   :t="t"
-                   :selected="selectedId === t.id"
-                   drag-handle reorderable
-                   selectable :bulk-selected="sel.isSelected(t.id)"
-                   :drop-edge="priorityDropEdgeFor(t.id)"
-                   @click="emit('select', t.id)"
-                   @toggle-select="sel.toggle(t.id)"
-                   @reorder-start="priorityReorderStart(t.id)"
-                   @reorder-over="(e) => priorityReorderOver(t.id, e)"
-                   @reorder-drop="priorityReorderDrop(t.id)"
-                   @reorder-end="priorityReorderEnd">
-          <template #extra>
-            <button v-if="findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING')"
-                    class="poker-btn"
-                    :data-testid="`ref-start-poker-${t.id}`"
-                    @click.stop="emit('startPoker', t.id)">
-              ポーカー開始
-            </button>
-          </template>
-        </TicketRow>
-      </div>
-    </template>
+  <div data-testid="refinement-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden">
+    <SprintSectionedList
+      :current="current" :next="next" :backlog="backlog"
+      :selected-id="selectedId"
+      :members="members" :sprints="sprints"
+      :current-label="currentLabel" :next-label="nextLabel"
+      :allowed-types="['incident', 'bug']"
+      @select="(id) => emit('select', id)"
+      @move-to-section="onMoveToSection"
+    >
+      <template #row-extra="{ ticket }">
+        <button v-if="needsPoker(ticket)"
+                class="poker-btn"
+                :data-testid="`ref-start-poker-${ticket.id}`"
+                @click.stop="emit('startPoker', ticket.id)">
+          ポーカー開始
+        </button>
+      </template>
+    </SprintSectionedList>
   </div>
 </template>
 
 <style scoped>
-.refine-toolbar {
-  display: flex;
-  align-items: center;
-  padding: 10px 24px 6px;
-  border-bottom: var(--hairline) solid var(--line-1);
-}
-.refine-seg {
-  margin-right: 0;
-}
-.refine-msg {
-  padding: 16px 24px;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink-2);
-}
-.refine-group {
-  margin-bottom: 8px;
-}
-.refine-group-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 24px 8px;
-}
-.refine-count {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-3);
-}
 .poker-btn {
   padding: 4px 12px;
   background: var(--accent);

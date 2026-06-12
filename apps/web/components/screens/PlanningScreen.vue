@@ -1,6 +1,9 @@
 <script setup lang="ts">
+// Planning 画面 (floor 01 / Wave 1 で 3 区画共通ビューに統一)。
+// ゴール / SMART / PLANNED-VELOCITY は CURRENT (active sprint) に対して表示する。
+// その下に SprintSectionedList (CURRENT / NEXT / BACKLOG)。
+// 「スプリント計画/開始」ダイアログ + Pull from backlog は次スプリント (nextPlanned) を練る入口として維持する。
 import type { Ticket } from '@belvedere/shared';
-import { compareTicketOrder } from '@belvedere/shared';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -8,34 +11,19 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { sprints, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
+const { sprints, velocityHistory, activeSprint, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
 const { patchTicket } = useTickets();
 const { members } = useMembers();
 
-// 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = sprint items 全件。
-const sel = useTicketSelection();
+// 全チケットを 3 区画へ。
+const allTickets = computed(() => props.tickets);
+const { current, next, backlog } = useSprintSections(allTickets);
 
-// planSprint: Planning 画面の主役は nextPlanned (planned スプリント) のみ。
-// active スプリントは Daily / Review が担当するため Planning には出さない。
-const planSprint = nextPlanned;
+const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
+const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
 
-const sprintTicketsSorted = computed(() => {
-  const raw = planSprint.value
-    ? props.tickets.filter((t) => t.sprintId === planSprint.value!.id)
-    : [];
-  return [...raw].sort(compareTicketOrder);
-});
-// 後方互換: totalSP 等が参照する配列 (並び順は totalSP に影響しない)
-const sprintTickets = sprintTicketsSorted;
-
-const { dropEdgeFor: planDropEdgeFor, onReorderStart: planReorderStart, onReorderOver: planReorderOver, onReorderDrop: planReorderDrop, onReorderEnd: planReorderEnd } =
-  useTicketReorder({
-    sorted: sprintTicketsSorted,
-    patch: (id, body) => patchTicket(id, body),
-  });
-const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
-// 相対見積もり (SP) の積み上げを過去スプリントの velocity 実績と比較する。
-// 時間稼働ベースの capacity は使わない (SP ベースの velocity 駆動プランニング)。
+// ゴール / velocity は CURRENT (active sprint) に対して算出する。
+const totalSP = computed(() => current.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const avgVelocity = computed(() => {
   const vs = velocityHistory.value;
   if (vs.length === 0) return 0;
@@ -43,7 +31,7 @@ const avgVelocity = computed(() => {
 });
 const hasVelocity = computed(() => avgVelocity.value > 0);
 const overBy = computed(() => totalSP.value - avgVelocity.value);
-const goal = computed(() => planSprint.value?.goal ?? 'スプリントゴール未設定');
+const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴール未設定');
 
 // 1 セグメント = 1 SP。velocity を超えた分が over (accent) になる。
 const barTotal = computed(() => Math.max(totalSP.value, avgVelocity.value, 1));
@@ -57,12 +45,21 @@ const smart = [
   { letter: 'T', name: 'Time-bound', ok: true, note: '期限が明確か' },
 ];
 
+// ===== 区画跨ぎ d&d 移動 (sprintId 変更) =====
+async function onMoveToSection(ticketId: string, section: 'current' | 'next' | 'backlog'): Promise<void> {
+  if (section === 'current') {
+    if (!activeSprint.value) return;
+    await patchTicket(ticketId, { sprintId: activeSprint.value.id });
+  } else if (section === 'next') {
+    if (!nextPlanned.value) return;
+    await patchTicket(ticketId, { sprintId: nextPlanned.value.id });
+  } else {
+    await patchTicket(ticketId, { sprintId: null });
+  }
+}
+
 // ===== 次スプリント計画 (B案: ゴール先行で planned を練り「開始」で active 化) =====
-// ゴールはプランニングのアウトプット。ゴール + 期間を決めて開始すると現 active は
-// completed になり velocity が確定する。
 const showSprintDialog = ref(false);
-// createMode: planned スプリントが 1 つも無い時に「新規スプリントを計画」で新規作成する。
-// false (= 既存 nextPlanned を編集/開始) と createMode を 1 ダイアログで兼ねる。
 const createMode = ref(false);
 const draftGoal = ref('');
 const draftStart = ref(''); // YYYY-MM-DD (input[type=date])
@@ -74,7 +71,6 @@ const toDate = (iso: string) => iso.slice(0, 10);
 const fromStart = (d: string) => `${d}T00:00:00+09:00`;
 const fromEnd = (d: string) => `${d}T23:59:59+09:00`;
 
-// 新規作成のデフォルト期間: 今日 → 2 週間後 (2 週スプリントの慣例)。
 function defaultRange(): { start: string; end: string } {
   const now = new Date();
   const end = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -150,15 +146,15 @@ async function startNextSprint() {
   } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
 }
 
-// ===== Pull from backlog ダイアログ =====
-// バックログチケット: sprintId が無い、または active sprint に属さない、かつ status === 'backlog'
+// ===== Pull from backlog ダイアログ (次スプリント nextPlanned へ積む) =====
 const showPullDialog = ref(false);
 const pullSelected = ref<Set<string>>(new Set());
 const pullBusy = ref(false);
 const pullError = ref<string | null>(null);
 
-const backlogTickets = computed(() => {
-  const planId = planSprint.value?.id;
+// バックログチケット: nextPlanned に属さず status === 'backlog'
+const pullableBacklog = computed(() => {
+  const planId = nextPlanned.value?.id;
   return props.tickets.filter((t) => {
     const notInPlanSprint = !planId || t.sprintId !== planId;
     return notInPlanSprint && t.status === 'backlog';
@@ -178,7 +174,7 @@ function togglePullRow(id: string): void {
 }
 
 async function submitPull(): Promise<void> {
-  const sprint = planSprint.value;
+  const sprint = nextPlanned.value;
   if (!sprint) return;
   const ids = [...pullSelected.value];
   if (ids.length === 0) return;
@@ -216,21 +212,20 @@ onMounted(() => {
     <div class="goal-block">
       <div style="display: flex; align-items: center; margin-bottom: 8px">
         <div class="t-cap">
-          <template v-if="planSprint">Sprint {{ planSprint.number }} を計画</template>
+          <template v-if="activeSprint">Sprint {{ activeSprint.number }} (進行中)</template>
           <template v-else>SPRINT GOAL</template>
         </div>
-        <div v-if="planSprint" style="margin-left: auto; display: flex; gap: 8px">
-          <button class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog">
-            <Icon name="edit" /> ゴール・期間を編集
+        <div style="margin-left: auto; display: flex; gap: 8px">
+          <button v-if="nextPlanned" class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog">
+            <Icon name="edit" /> 次スプリントを計画
           </button>
-          <button class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog">
+          <button v-if="nextPlanned" class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog">
             スプリントを開始 →
           </button>
+          <button v-else class="h-btn" data-testid="create-sprint" @click="openCreateDialog">
+            <Icon name="plus" /> 新規スプリントを計画
+          </button>
         </div>
-        <button v-else class="h-btn" style="margin-left: auto"
-                data-testid="create-sprint" @click="openCreateDialog">
-          <Icon name="plus" /> 新規スプリントを計画
-        </button>
       </div>
       <div class="goal-text">{{ goal }}</div>
       <div class="smart-row">
@@ -243,7 +238,7 @@ onMounted(() => {
         </div>
       </div>
 
-      <!-- PLANNED / VELOCITY — SMART の下にコンパクト表示 (チケット幅を確保するため右カラムは廃止) -->
+      <!-- PLANNED / VELOCITY — CURRENT (active sprint) の積み上げ SP vs velocity 実績 -->
       <div class="vel-inline">
         <span class="t-cap">PLANNED / VELOCITY</span>
         <span class="nums">
@@ -266,59 +261,29 @@ onMounted(() => {
     </div>
 
     <div class="col-head" style="border-top: none">
-      <h2>Sprint items</h2>
-      <span class="t-cap">{{ sprintTickets.length }} planned</span>
+      <h2>Sprint planning</h2>
       <span style="margin-left: auto" />
       <button class="h-btn" data-testid="pull-from-backlog"
-              :disabled="!planSprint"
+              :disabled="!nextPlanned"
               @click="openPullDialog">
         <Icon name="plus" /> Pull from backlog
       </button>
     </div>
+
     <div class="col-body">
-      <BulkActionBar
-        v-if="sel.count.value > 0"
-        :count="sel.count.value"
-        :members="members"
-        :sprints="sprints"
-        :busy="sel.isBusy.value"
-        @set-status="(s) => sel.applyToSelected({ status: s })"
-        @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
-        @set-priority="(p) => sel.applyToSelected({ priority: p })"
-        @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
-        @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
-        @remove="sel.removeSelected"
-        @clear="sel.clear"
-        @select-all="() => sel.selectMany(sprintTicketsSorted.map((t) => t.id))"
+      <SprintSectionedList
+        :current="current" :next="next" :backlog="backlog"
+        :selected-id="selectedId"
+        :members="members" :sprints="sprints"
+        :current-label="currentLabel" :next-label="nextLabel"
+        :allowed-types="['incident', 'bug']"
+        @select="(id) => emit('select', id)"
+        @move-to-section="onMoveToSection"
       />
-      <TicketRow v-for="t in sprintTicketsSorted" :key="t.id" :t="t"
-                 :selected="selectedId === t.id" drag-handle reorderable
-                 selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="planDropEdgeFor(t.id)"
-                 @click="emit('select', t.id)"
-                 @toggle-select="sel.toggle(t.id)"
-                 @reorder-start="planReorderStart(t.id)"
-                 @reorder-over="(e) => planReorderOver(t.id, e)"
-                 @reorder-drop="planReorderDrop(t.id)"
-                 @reorder-end="planReorderEnd" />
-      <div v-if="sprintTickets.length === 0" style="padding: 32px 16px; text-align: center; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
-        <template v-if="planSprint">
-          <p style="margin: 0 0 12px">計画中のスプリントにチケットがありません。</p>
-          <button class="h-btn" data-testid="pull-from-backlog-empty" @click="openPullDialog">
-            <Icon name="plus" /> Pull from backlog
-          </button>
-        </template>
-        <template v-else>
-          <p style="margin: 0 0 12px">計画中のスプリントがありません。</p>
-          <button class="h-btn" data-testid="create-sprint-empty" @click="openCreateDialog">
-            <Icon name="plus" /> 新規スプリントを計画
-          </button>
-        </template>
-      </div>
     </div>
   </div>
 
-  <!-- Pull from backlog ダイアログ -->
+  <!-- Pull from backlog ダイアログ (次スプリント nextPlanned へ積む) -->
   <div v-if="showPullDialog" class="dialog-overlay" data-testid="pull-dialog" @click.self="showPullDialog = false">
     <div class="dialog pull-dialog">
       <div class="dialog-head">
@@ -327,15 +292,15 @@ onMounted(() => {
       </div>
       <div class="dialog-body" style="padding-bottom: 8px">
         <p style="font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6">
-          Sprint {{ planSprint?.number }} (計画中) に追加するチケットを選択してください。
+          Sprint {{ nextPlanned?.number }} (計画中) に追加するチケットを選択してください。
         </p>
         <div class="pull-list">
-          <p v-if="backlogTickets.length === 0"
+          <p v-if="pullableBacklog.length === 0"
              style="font-size: 13px; color: var(--ink-2); padding: 16px 0; margin: 0; text-align: center">
             バックログにチケットがありません。
           </p>
           <div
-            v-for="t in backlogTickets"
+            v-for="t in pullableBacklog"
             :key="t.id"
             :data-testid="`pull-row-${t.id}`"
             :class="['pull-row', pullSelected.has(t.id) && 'pull-row--selected']"
@@ -409,7 +374,7 @@ onMounted(() => {
           </button>
         </template>
         <template v-else>
-          <button class="btn-cancel" :disabled="sprintBusy" @click="saveSprint" data-testid="sprint-save">
+          <button class="btn-cancel" :disabled="sprintBusy" data-testid="sprint-save" @click="saveSprint">
             保存 (開始せず)
           </button>
           <button class="btn-primary" :disabled="sprintBusy" data-testid="sprint-start" @click="startNextSprint">
@@ -422,8 +387,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 次スプリント計画ダイアログ (Backlog の生成ダイアログと同系。.field 等の汎用名が
-   EstimationPanel と衝突するためグローバル化せず scoped で持つ)。 */
 .dialog-overlay {
   position: fixed; inset: 0;
   background: rgba(8, 8, 8, 0.4);
