@@ -38,6 +38,7 @@ export interface PatchTicketInput {
   labels?: string[];
   type?: TicketType;
   timeboxHours?: number;
+  orderIndex?: number;
 }
 
 export const useTickets = () => {
