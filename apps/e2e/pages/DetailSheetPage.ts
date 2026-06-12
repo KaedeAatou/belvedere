@@ -13,7 +13,11 @@ export class DetailSheetPage extends BasePage {
   readonly deleteBtn: Locator;
   readonly title: Locator;
 
-  /** 現在開いているシートのチケット ID (`.sheet-head` 内の `.t-mono` テキスト)。 */
+  /**
+   * 現在開いているシートのチケット ID 表示要素。
+   * sheet-head には `.t-mono` が複数存在する可能性がある (ID コピーボタン内 span + その他)。
+   * strict mode 違反を避けるため `.first()` を使う (getTicketId 参照)。
+   */
   readonly ticketIdEl: Locator;
 
   constructor(page: Page) {
@@ -28,9 +32,28 @@ export class DetailSheetPage extends BasePage {
     this.ticketIdEl = page.locator('.sheet .sheet-head .t-mono');
   }
 
-  /** 現在開いているシートのチケット ID 文字列を返す。 */
+  /** 現在開いているシートのチケット ID 文字列を返す。
+   *
+   * sheet-head に `.t-mono` は複数存在し得る (ID コピーボタン内の span + 他の chip 等)。
+   * `.first()` で最初の要素 (= チケット ID 表示 span) を確実に取る。
+   */
   async getTicketId(): Promise<string> {
-    return (await this.ticketIdEl.textContent())?.trim() ?? '';
+    return (await this.ticketIdEl.first().textContent())?.trim() ?? '';
+  }
+
+  // ----- シート開閉 -----
+
+  /**
+   * シートが開いていれば ESC で閉じ、hidden になるまで待つ。
+   * teardown の先頭で呼ぶことで「開いているシートがポインタを遮って openTicketByTitle が
+   * timeout する」問題 (T10 teardown) を解消する。
+   * シートが既に閉じていれば何もしない。
+   */
+  async closeIfOpen(): Promise<void> {
+    if (await this.sheet.isVisible()) {
+      await this.page.keyboard.press('Escape');
+      await this.sheet.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined);
+    }
   }
 
   // ----- 見積もりポーカー (T7) -----
