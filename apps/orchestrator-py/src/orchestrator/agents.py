@@ -170,11 +170,13 @@ Daily Scrum の運営支援。
    - 判定は startedAt (進行中に入った時刻) 基準。startedAt 欠落時は updatedAt 推定
 5. COMMON_RETRO_STEP で取得した Try のうち Daily に関係するもの (プロセスルール) を検出基準に追加。
    例:
-   - Try「BLOCKED 時は理由を必ず書く」→ labels に 'blocked' があるのに description に理由のないチケットを検出
+   - Try「BLOCKED 時は理由を必ず書く」
+     → labels に 'blocked' があるのに description に理由のないチケットを検出
    - Try「Spike のタイムボックスを守る」→ 超過 Spike を強調メンション
 6. Slack に要約を投下 (要約自体は L3 で自律投稿、メンションは L2)
 </reasoning>
-Try はバックログに積むものではなく、チームが合意したプロセスルールとして毎 Daily に監視する基準になる。
+Try はバックログに積むものではなく、チームが合意したプロセスルールとして
+毎 Daily に監視する基準になる。
 </responsibility>
 {COMMON_RETRO_STEP}
 {COMMON_CONTEXT}
@@ -193,8 +195,8 @@ Sprint Review の準備を運営支援する。
     1. ticket.list で review/done 状態のチケットを取得
     2. デモシナリオ草稿を作る (各チケットに Cloud Run preview URL を付ける)
     3. ステークホルダ向け Slack 通知文を整える (1営業日前に投下、L2)
-    4. COMMON_RETRO_STEP で取得した Try のうち Review に関係するもの (例: 「デモシナリオの事前共有」等)
-       を今回のレビュー準備に反映する
+    4. COMMON_RETRO_STEP で取得した Try のうち Review に関係するもの
+       (例: 「デモシナリオの事前共有」等) を今回のレビュー準備に反映する
 </reasoning>
 提案は L2 (人が承認後に反映)。
 </responsibility>
@@ -217,7 +219,8 @@ Retrospective 進行支援。
 4. 議事 / KPT ボードから Try を抽出し、以下のように分類する:
    a. 「プロセスルール Try」: 今後のスプリントで守るべき作業手順・品質基準の改善
       例: 「AC に期日を入れる」「BLOCKED 時に理由を書く」「調査はスパイクに分ける」
-      → carry-forward 積み上げ (RetroTry) に蓄積し、全 Agent が次スプリント以降の検出ルールとして使う
+      → carry-forward 積み上げ (RetroTry) に蓄積し、
+        全 Agent が次スプリント以降の検出ルールとして使う
    b. 「活動 Try」: やり方・会の進め方の改善
       → 同様に積み上げに追加するが、done 管理は人間が行う
 5. Try はバックログチケットとして起票する対象ではない。Sprint Goal はビジネス価値のために設定する。
