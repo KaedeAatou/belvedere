@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Ticket, Priority, ValueImpact } from '@belvedere/shared';
+import type { Ticket, Priority, ValueImpact, Status } from '@belvedere/shared';
 import type { PatchTicketInput } from '~/composables/useTickets';
 
 const props = defineProps<{ ticket: Ticket }>();
@@ -8,6 +8,7 @@ const emit = defineEmits<{ close: [] }>();
 const { memberName, members } = useMembers();
 const { findingsFor, refresh: refreshFindings } = useFindings();
 const { patchTicket, deleteTicket } = useTickets();
+const { sprints } = useSprints();
 
 const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
@@ -21,6 +22,9 @@ const editDescription = ref('');
 const editAssignee = ref('');
 const editPriority = ref<Priority>('medium');
 const editValueImpact = ref<ValueImpact | ''>('');
+const editStatus = ref<Status>('backlog');
+const editAC = ref('');       // 改行区切りの AC テキスト
+const editSprintId = ref(''); // 空文字 = 未割当/変更なし
 
 function startEdit(): void {
   editTitle.value = props.ticket.title;
@@ -28,6 +32,9 @@ function startEdit(): void {
   editAssignee.value = props.ticket.assigneeId ?? '';
   editPriority.value = props.ticket.priority;
   editValueImpact.value = props.ticket.valueImpact ?? '';
+  editStatus.value = props.ticket.status;
+  editAC.value = (props.ticket.acceptanceCriteria ?? []).join('\n');
+  editSprintId.value = props.ticket.sprintId ?? '';
   editError.value = null;
   editing.value = true;
 }
@@ -42,9 +49,17 @@ async function saveEdit(): Promise<void> {
     title: editTitle.value.trim(),
     description: editDescription.value,
     priority: editPriority.value,
+    status: editStatus.value,
+    acceptanceCriteria: editAC.value
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
   };
   if (editAssignee.value) patch.assigneeId = editAssignee.value;
   if (editValueImpact.value) patch.valueImpact = editValueImpact.value;
+  // sprintId: API は null/空での解除をサポートしないため、選択がある場合のみ送信する。
+  // 「バックログ (なし)」選択肢は提供しない (解除不可のため)。
+  if (editSprintId.value) patch.sprintId = editSprintId.value;
   const updated = await patchTicket(props.ticket.id, patch);
   saving.value = false;
   if (updated) {
@@ -123,8 +138,18 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </template>
       </div>
 
-      <!-- 編集フィールド (assignee / priority / valueImpact) -->
+      <!-- 編集フィールド (assignee / priority / valueImpact / status / sprint) -->
       <div v-if="editing" class="edit-fields">
+        <div class="edit-field">
+          <label class="l">STATUS</label>
+          <select v-model="editStatus" class="edit-input" data-testid="sheet-edit-status">
+            <option value="backlog">backlog</option>
+            <option value="todo">todo</option>
+            <option value="in-progress">in-progress</option>
+            <option value="review">review</option>
+            <option value="done">done</option>
+          </select>
+        </div>
         <div class="edit-field">
           <label class="l">ASSIGNEE</label>
           <select v-model="editAssignee" class="edit-input" data-testid="edit-assignee">
@@ -150,6 +175,17 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
             <option value="high">high</option>
           </select>
         </div>
+        <div class="edit-field">
+          <label class="l">SPRINT</label>
+          <!-- sprintId 解除は API 非対応 (z.string() のみ / null 不可) のため「なし」選択肢は出さない。
+               未割当チケットは空値のまま → 保存時に sprintId を送らず現状維持。 -->
+          <select v-model="editSprintId" class="edit-input" data-testid="sheet-edit-sprint">
+            <option v-if="!ticket.sprintId" value="">（未割当）</option>
+            <option v-for="s in sprints" :key="s.id" :value="s.id">
+              S{{ s.number }} {{ s.goal.slice(0, 20) }}{{ s.goal.length > 20 ? '…' : '' }}
+            </option>
+          </select>
+        </div>
       </div>
 
       <!-- Description -->
@@ -171,16 +207,26 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
       <!-- Acceptance -->
       <div class="field">
         <div class="l">ACCEPTANCE CRITERIA</div>
-        <div v-if="ticket.acceptanceCriteria && ticket.acceptanceCriteria.length > 0" class="ac-list">
-          <div v-for="(a, i) in ticket.acceptanceCriteria" :key="i" class="ac">
-            <span class="check" />
-            <span>{{ a }}</span>
+        <textarea
+          v-if="editing"
+          v-model="editAC"
+          class="edit-input edit-textarea"
+          data-testid="sheet-edit-ac"
+          rows="5"
+          placeholder="1行1項目で入力"
+        />
+        <template v-else>
+          <div v-if="ticket.acceptanceCriteria && ticket.acceptanceCriteria.length > 0" class="ac-list">
+            <div v-for="(a, i) in ticket.acceptanceCriteria" :key="i" class="ac">
+              <span class="check" />
+              <span>{{ a }}</span>
+            </div>
           </div>
-        </div>
-        <div v-else
-             style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
-          受け入れ条件が未定義です。
-        </div>
+          <div v-else
+               style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
+            受け入れ条件が未定義です。
+          </div>
+        </template>
       </div>
 
       <!-- AI Integrity (ルールエンジン findings) -->
