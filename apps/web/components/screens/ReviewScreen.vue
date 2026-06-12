@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Ticket } from '@belvedere/shared';
+import type { Ticket, ValueImpact } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
 
 const props = defineProps<{
@@ -12,7 +12,7 @@ const emit = defineEmits<{
 }>();
 
 const { activeSprint, sprints, velocityHistory } = useSprints();
-const { patchTicket } = useTickets();
+const { patchTicket, createTicket } = useTickets();
 const { members } = useMembers();
 
 // 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = carry-over 候補全件。
@@ -45,15 +45,34 @@ const avgVelocity = computed(() => {
 });
 const hasVelocity = computed(() => avgVelocity.value > 0);
 const velocityPct = computed(() => (hasVelocity.value ? Math.round((doneSP.value / avgVelocity.value) * 100) : 0));
+
+// Demos: done / review チケット (架空サムネなし、正直なカード表示)
 const demos = computed(() =>
   sprintTickets.value.filter((t) => t.status === 'done' || t.status === 'review').slice(0, 4),
 );
 
-function thumbVariant(id: string) { return id.charCodeAt(id.length - 1) % 4; }
-
 // highlights / risks は live チケットから生成 (架空 ID を出さない)
 const highlights = computed(() => done.value.slice(0, 3).map((t) => ({ id: t.id, text: t.title })));
 const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, text: t.title })));
+
+// ステークホルダーフィードバック → バックログ起票
+const feedbackText = ref('');
+const feedbackImpact = ref<ValueImpact>('medium');
+const feedbackSubmitting = ref(false);
+const feedbackConfirm = ref(false);
+
+async function submitFeedback() {
+  const title = feedbackText.value.trim();
+  if (!title) return;
+  feedbackSubmitting.value = true;
+  feedbackConfirm.value = false;
+  await createTicket({ title, status: 'backlog', type: 'story', valueImpact: feedbackImpact.value });
+  feedbackText.value = '';
+  feedbackImpact.value = 'medium';
+  feedbackSubmitting.value = false;
+  feedbackConfirm.value = true;
+  setTimeout(() => { feedbackConfirm.value = false; }, 2500);
+}
 </script>
 
 <template>
@@ -81,56 +100,16 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
       <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 22px">
         <h2 style="margin: 0; font-size: 14px; font-weight: 500">Demos</h2>
         <span class="t-cap">{{ demos.length }} READY</span>
-        <span style="margin-left: auto" />
-        <button class="h-btn"><Icon name="sparkle" /> AI: Generate demo script</button>
       </div>
-      <div v-if="demos.length > 0" class="demo-grid">
-        <div v-for="t in demos" :key="t.id" class="demo-card" @click="emit('select', t.id)">
-          <div class="demo-thumb">
-            <svg viewBox="0 0 280 140" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <pattern :id="'g' + t.id" width="14" height="14" patternUnits="userSpaceOnUse">
-                  <path d="M0 14L14 0" stroke="var(--line-2)" stroke-width="0.5" />
-                </pattern>
-              </defs>
-              <rect x="0" y="0" width="280" height="140" :fill="`url(#g${t.id})`" />
-              <g v-if="thumbVariant(t.id) === 0" stroke="var(--ink-1)" stroke-width="1" fill="none">
-                <rect x="40" y="30" width="200" height="80" />
-                <line x1="40" y1="50" x2="240" y2="50" />
-                <rect x="50" y="60" width="60" height="40" fill="var(--accent)" stroke="none" opacity="0.3" />
-                <rect x="120" y="60" width="60" height="40" />
-                <rect x="190" y="60" width="40" height="40" />
-              </g>
-              <g v-else-if="thumbVariant(t.id) === 1" stroke="var(--accent)" stroke-width="1" fill="none">
-                <circle cx="140" cy="70" r="50" />
-                <circle cx="140" cy="70" r="32" />
-                <circle cx="140" cy="70" r="16" />
-                <circle cx="140" cy="70" r="3" fill="var(--accent)" />
-              </g>
-              <g v-else-if="thumbVariant(t.id) === 2" stroke="var(--ink-1)" stroke-width="1" fill="none">
-                <path d="M30 100 L80 60 L130 80 L180 40 L230 50 L260 30" />
-                <circle cx="180" cy="40" r="3" fill="var(--accent)" />
-                <line x1="30" y1="100" x2="260" y2="100" stroke="var(--line-2)" />
-              </g>
-              <g v-else stroke="var(--ink-1)" stroke-width="1" fill="none">
-                <rect x="60" y="20" width="160" height="100" />
-                <rect x="70" y="32" width="60" height="8" fill="var(--ink-2)" stroke="none" />
-                <rect x="70" y="48" width="140" height="2" fill="var(--line-2)" stroke="none" />
-                <rect x="70" y="58" width="100" height="2" fill="var(--line-2)" stroke="none" />
-                <rect x="70" y="68" width="120" height="2" fill="var(--line-2)" stroke="none" />
-                <rect x="170" y="92" width="40" height="14" fill="var(--accent)" stroke="none" />
-              </g>
-            </svg>
-          </div>
-          <div class="body">
-            <div class="id">{{ t.id }}</div>
-            <div class="ttl">{{ t.title }}</div>
-            <div class="row">
-              <StatusDot :status="t.status" />
-              <Avatar :user="t.assigneeId" />
-              <span style="flex: 1" />
-            </div>
-          </div>
+      <p style="font-family: var(--sans); font-size: 11px; color: var(--ink-3); margin: 4px 0 10px">
+        preview URL は Reviewer Agent (Phase 3-A) が自動生成予定。
+      </p>
+      <div v-if="demos.length > 0" style="border: 1px solid var(--line-1); margin-top: 2px">
+        <div v-for="t in demos" :key="t.id" class="demo-row" @click="emit('select', t.id)">
+          <span class="demo-row-id">{{ t.id }}</span>
+          <span class="demo-row-ttl">{{ t.title }}</span>
+          <StatusDot :status="t.status" />
+          <Avatar :user="t.assigneeId" />
         </div>
       </div>
       <p v-else style="font-family: var(--sans); font-size: 13px; color: var(--ink-2); padding: 12px 0">
@@ -174,6 +153,48 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
           </p>
         </div>
       </div>
+      <!-- ステークホルダーフィードバック → バックログ起票 -->
+      <div style="margin-top: 28px">
+        <h2 style="margin: 0 0 6px; font-size: 14px; font-weight: 500">ステークホルダーフィードバック</h2>
+        <p style="font-family: var(--sans); font-size: 12px; color: var(--ink-2); margin: 0 0 12px">
+          フィードバックをバックログに追加して次スプリントの計画に活かします。
+        </p>
+        <div class="feedback-form">
+          <textarea
+            v-model="feedbackText"
+            class="feedback-input"
+            rows="2"
+            placeholder="例: ダッシュボードのフィルタが分かりにくい"
+            data-testid="review-feedback-input"
+            @keydown.enter.meta.prevent="submitFeedback"
+          />
+          <div class="feedback-controls">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase">VALUE</span>
+              <select
+                v-model="feedbackImpact"
+                class="feedback-select"
+                data-testid="review-feedback-impact"
+              >
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+            <span style="flex: 1" />
+            <span v-if="feedbackConfirm" style="font-family: var(--mono); font-size: 11px; color: var(--ok)">追加しました</span>
+            <button
+              class="h-btn"
+              :disabled="feedbackSubmitting || !feedbackText.trim()"
+              style="background: var(--accent); color: #FBF8F2"
+              data-testid="review-feedback-submit"
+              @click="submitFeedback"
+            >
+              バックログに追加
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <aside class="review-aside">
@@ -205,3 +226,76 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
     </aside>
   </div>
 </template>
+
+<style scoped>
+.demo-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: var(--hairline) solid var(--line-1);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.demo-row:last-child { border-bottom: none; }
+.demo-row:hover { background: var(--bg-2); }
+.demo-row-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.demo-row-ttl {
+  font-size: 13px;
+  color: var(--ink-0);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  background: var(--bg-1);
+}
+.feedback-input {
+  width: 100%;
+  resize: vertical;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 8px 10px;
+  color: var(--ink-0);
+  box-sizing: border-box;
+}
+.feedback-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.feedback-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.feedback-select {
+  padding: 4px 8px;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  background: var(--bg-0);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-1);
+}
+.feedback-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+</style>
