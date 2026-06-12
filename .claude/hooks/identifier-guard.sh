@@ -25,9 +25,11 @@ INPUT=$(cat)
 
 PATTERN_FILE="$HOME/.claude/belvedere-guard-patterns.txt"
 
-# 検査対象テキストを抽出
-TEXT=$(printf '%s' "$INPUT" | python3 -c "
-import sys, json
+# 検査対象テキストを抽出。
+# ガードの目的は「公開 repo への混入防止」なので、repo 外への書き込み
+# (memory / ~/.claude / ステージング等) は対象外 (Edit/Write の file_path で判定)。
+TEXT=$(printf '%s' "$INPUT" | PROJ="${CLAUDE_PROJECT_DIR:-$PWD}" python3 -c "
+import sys, json, os
 try:
     d = json.load(sys.stdin)
 except Exception:
@@ -35,6 +37,11 @@ except Exception:
 tool = d.get('tool_name', '')
 ti = d.get('tool_input', {}) or {}
 out = []
+if tool in ('Edit', 'Write', 'MultiEdit'):
+    proj = os.path.realpath(os.environ.get('PROJ', ''))
+    fp = os.path.realpath(ti.get('file_path', '') or '')
+    if not fp.startswith(proj + os.sep):
+        sys.exit(0)  # repo 外への書き込みは公開されないので対象外
 if tool in ('Edit', 'Write'):
     out.append(ti.get('content', '') or '')
     out.append(ti.get('new_string', '') or '')
