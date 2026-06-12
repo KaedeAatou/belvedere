@@ -48,8 +48,6 @@ const intro = computed(() => screenIntro(props.screen));
     <div class="ai-input">
       <textarea placeholder="Ask integrity AI…  例: スプリントゴールを SMART で評価して" />
       <div class="row">
-        <button class="ibtn"><Icon name="mic" /></button>
-        <button class="ibtn"><Icon name="link" /></button>
         <span class="spacer" />
         <span class="kbd-key">⌘ ↵</span>
         <button class="send">Send</button>
