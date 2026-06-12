@@ -11,6 +11,26 @@ const emit = defineEmits<{ jump: [id: string] }>();
 
 const checks = computed(() => buildChecks(props.screen, props.tickets));
 const intro = computed(() => screenIntro(props.screen));
+
+// エージェントチャット (D-11)
+const { messages, isSending, send } = useAgentChat();
+const inputText = ref('');
+const textareaEl = ref<HTMLTextAreaElement | null>(null);
+
+async function handleSend(): Promise<void> {
+  const prompt = inputText.value.trim();
+  if (!prompt || isSending.value) return;
+  inputText.value = '';
+  await send(props.screen, prompt);
+}
+
+function onTextareaKeydown(e: KeyboardEvent): void {
+  // ⌘Enter / Ctrl+Enter で送信
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    void handleSend();
+  }
+}
 </script>
 
 <template>
@@ -21,6 +41,7 @@ const intro = computed(() => screenIntro(props.screen));
   </div>
 
   <div class="ai-body">
+    <!-- 静的 checks 表示 (buildChecks — 既存。壊さない) -->
     <div class="ai-msg">
       <span class="who">Belvedere</span>
       <span class="body">{{ intro }}</span>
@@ -42,16 +63,72 @@ const intro = computed(() => screenIntro(props.screen));
       <span class="who">Belvedere</span>
       <span class="body">この画面で検出された指摘はありません。</span>
     </div>
+
+    <!-- 会話履歴 (D-11) -->
+    <template v-if="messages.length > 0">
+      <div class="chat-divider" />
+      <div
+        v-for="(m, i) in messages"
+        :key="i"
+        :class="['ai-msg', 'chat-msg']"
+        :data-testid="`ai-message`"
+      >
+        <span class="who">{{ m.role === 'user' ? 'You' : 'Belvedere' }}</span>
+        <span :class="['body', m.role === 'user' && 'user']">{{ m.text }}</span>
+      </div>
+    </template>
+
+    <!-- 実行中スピナー -->
+    <div v-if="isSending" class="ai-msg chat-msg">
+      <span class="who">Belvedere</span>
+      <span class="body sending">実行中…</span>
+    </div>
   </div>
 
   <div class="ai-foot">
     <div class="ai-input">
-      <textarea placeholder="Ask integrity AI…  例: スプリントゴールを SMART で評価して" />
+      <textarea
+        ref="textareaEl"
+        v-model="inputText"
+        data-testid="ai-input"
+        placeholder="Ask integrity AI…  例: スプリントゴールを SMART で評価して"
+        :disabled="isSending"
+        @keydown="onTextareaKeydown"
+      />
       <div class="row">
         <span class="spacer" />
         <span class="kbd-key">⌘ ↵</span>
-        <button class="send">Send</button>
+        <button
+          class="send"
+          data-testid="ai-send"
+          :disabled="isSending || !inputText.trim()"
+          @click="handleSend"
+        >
+          {{ isSending ? '実行中…' : 'Send' }}
+        </button>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.chat-divider {
+  border-top: var(--hairline) solid var(--line-1);
+  margin: 4px 0;
+}
+.chat-msg {
+  background: transparent;
+}
+.body.user {
+  color: var(--ink-0);
+  font-weight: 500;
+}
+.body.sending {
+  color: var(--ink-3);
+  font-style: italic;
+}
+.send:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>
