@@ -103,6 +103,7 @@ const dayTicks = computed(() => {
           <span class="count">{{ colItems(col).length }}</span>
         </div>
         <div class="col-body"
+             :data-testid="`daily-col-${col}`"
              :style="over === col ? { background: 'var(--bg-2)' } : {}"
              @dragover="(e) => onDragOver(e, col)"
              @dragleave="onDragLeave(col)"
@@ -113,6 +114,7 @@ const dayTicks = computed(() => {
                    findingsFor(t.id).length > 0 && 'flagged',
                    drag === t.id && 'dragging',
                  ]"
+                 :data-testid="`daily-card-${t.id}`"
                  draggable="true"
                  @dragstart="onDragStart(t.id)"
                  @dragend="onDragEnd"
