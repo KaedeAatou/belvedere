@@ -13,6 +13,9 @@ export class DetailSheetPage extends BasePage {
   readonly deleteBtn: Locator;
   readonly title: Locator;
 
+  /** 現在開いているシートのチケット ID (`.sheet-head` 内の `.t-mono` テキスト)。 */
+  readonly ticketIdEl: Locator;
+
   constructor(page: Page) {
     super(page);
     this.sheet = page.locator('.sheet');
@@ -22,6 +25,12 @@ export class DetailSheetPage extends BasePage {
     this.saveBtn = page.getByTestId('save-ticket');
     this.deleteBtn = page.getByTestId('delete-ticket');
     this.title = page.locator('.sheet .sheet-body h2');
+    this.ticketIdEl = page.locator('.sheet .sheet-head .t-mono');
+  }
+
+  /** 現在開いているシートのチケット ID 文字列を返す。 */
+  async getTicketId(): Promise<string> {
+    return (await this.ticketIdEl.textContent())?.trim() ?? '';
   }
 
   // ----- 見積もりポーカー (T7) -----
