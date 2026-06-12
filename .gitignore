@@ -46,3 +46,4 @@ venv/
 /.claude/.eraser-sync-pending
 /.claude/.hooks.log
 /.claude/.usage.log
+/.claude/settings.local.json
