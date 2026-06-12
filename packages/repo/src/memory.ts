@@ -16,7 +16,7 @@ import type {
   EstimationSession,
   RetroTry,
 } from '@belvedere/shared';
-import { stripUndefined } from '@belvedere/shared';
+import { stripUndefined, compareTicketOrder } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
 import type {
   WorkspaceRepository,
@@ -66,6 +66,9 @@ class MemTicketRepo implements TicketRepository {
     if (q.ritual) xs = xs.filter((t) => t.ritual === q.ritual);
     // storyId は Ticket.parentTicketId へマップ (User Story → 子 Task の親子関係)。
     if (q.storyId) xs = xs.filter((t) => t.parentTicketId === q.storyId);
+    // 表示順を repo 層で確定する (orderIndex → フォールバック priority/createdAt)。
+    // firestore.ts (FsTicketRepo.list) と同一比較関数を共有し全 consumer が同じ並びを得る。
+    xs.sort(compareTicketOrder);
     return xs;
   }
   async get(id: string): Promise<Ticket | null> { return this.store.get(id) ?? null; }

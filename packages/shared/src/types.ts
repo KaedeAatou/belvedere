@@ -99,6 +99,12 @@ export interface Ticket {
   startedAt?: string;
   /** done に遷移した時刻 (同上) */
   completedAt?: string;
+  /**
+   * バックログ上の手動並び順 (Linear/Jira 型 d&d)。fractional indexing —
+   * 隣接 2 件の中間値を採番し、リバランス頻度を抑える。seed (immutable) は値を持たないため optional。
+   * 未設定チケットは repo 層のフォールバック順 (priority 降順 → createdAt 昇順) で並ぶ。
+   */
+  orderIndex?: number;
   createdAt: string;
   updatedAt: string;
   createdBy: AgentSource;

@@ -56,6 +56,8 @@ export const TicketCreateBodySchema = z.object({
   projectId: z.string().optional(),
   type: TicketTypeSchema.optional(),
   timeboxHours: z.number().min(0).optional(),
+  // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
+  orderIndex: z.number().optional(),
 });
 
 // PATCH /api/tickets/:id body — 全フィールドオプション (部分更新)、id / workspaceId / createdBy / createdAt は変更不可
@@ -97,6 +99,7 @@ export async function createTicket(
     ...(parsed.data.projectId !== undefined && { projectId: parsed.data.projectId }),
     ...(parsed.data.type !== undefined && { type: parsed.data.type }),
     ...(parsed.data.timeboxHours !== undefined && { timeboxHours: parsed.data.timeboxHours }),
+    ...(parsed.data.orderIndex !== undefined && { orderIndex: parsed.data.orderIndex }),
     createdAt: now,
     updatedAt: now,
     createdBy: 'human',

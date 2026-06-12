@@ -219,6 +219,55 @@ describe('memory backend - tickets where filters', () => {
   });
 });
 
+describe('memory backend - tickets list() フォールバックソート (orderIndex / priority / createdAt)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  // 既存 seed には orderIndex が無いため、list() のデフォルト並びは priority 降順 → createdAt 昇順。
+  it('orderIndex 未設定の seed は priority 降順 → createdAt 昇順で並ぶ', async () => {
+    const xs = await repo.tickets.list({ workspaceId: WS });
+    const rank: Record<string, number> = { urgent: 3, high: 2, medium: 1, low: 0 };
+    for (let i = 1; i < xs.length; i++) {
+      const prev = xs[i - 1]!;
+      const cur = xs[i]!;
+      // priority は降順 (rank が単調非増加)
+      expect(rank[prev.priority]!).toBeGreaterThanOrEqual(rank[cur.priority]!);
+      // 同 priority 内は createdAt 昇順
+      if (prev.priority === cur.priority) {
+        expect(prev.createdAt.localeCompare(cur.createdAt)).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
+  it('orderIndex を持つチケットは orderIndex 昇順で、未設定のものより前に並ぶ', async () => {
+    // orderIndex を 3 件に付与 (意図的に登録順とは逆順の値)
+    const seedList = await repo.tickets.list({ workspaceId: WS });
+    const [a, b, c] = [seedList[0]!, seedList[1]!, seedList[2]!];
+    await repo.tickets.upsert({ ...a, orderIndex: 3000 });
+    await repo.tickets.upsert({ ...b, orderIndex: 1000 });
+    await repo.tickets.upsert({ ...c, orderIndex: 2000 });
+
+    const xs = await repo.tickets.list({ workspaceId: WS });
+    // 先頭 3 件は orderIndex 昇順 (b=1000, c=2000, a=3000)
+    expect(xs[0]!.id).toBe(b.id);
+    expect(xs[1]!.id).toBe(c.id);
+    expect(xs[2]!.id).toBe(a.id);
+    // orderIndex 付与した 3 件は orderIndex 無しの残りより前
+    const firstWithoutOrder = xs.findIndex((t) => t.orderIndex === undefined);
+    expect(firstWithoutOrder).toBe(3);
+  });
+
+  it('fractional な中間値 orderIndex でも昇順を保つ', async () => {
+    const seedList = await repo.tickets.list({ workspaceId: WS });
+    const [a, b] = [seedList[0]!, seedList[1]!];
+    await repo.tickets.upsert({ ...a, orderIndex: 1000 });
+    await repo.tickets.upsert({ ...b, orderIndex: 1000.5 }); // a と次の間に挿入した想定
+    const xs = await repo.tickets.list({ workspaceId: WS });
+    expect(xs[0]!.id).toBe(a.id);
+    expect(xs[1]!.id).toBe(b.id);
+  });
+});
+
 describe('memory backend - get / upsert / delete', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });

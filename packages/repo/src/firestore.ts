@@ -41,6 +41,7 @@ import {
   EstimationSessionSchema,
   RetroTrySchema,
 } from '@belvedere/shared';
+import { compareTicketOrder } from '@belvedere/shared';
 import { z } from 'zod';
 import type {
   WorkspaceRepository,
@@ -172,7 +173,11 @@ class FsTicketRepo implements TicketRepository {
     if (q.ritual) query = query.where('ritual', '==', q.ritual);
     if (q.storyId) query = query.where('parentTicketId', '==', q.storyId);
     const snap = await query.get();
-    return parseList<Ticket>(COL.tickets, snap.docs, TicketSchema);
+    const xs = parseList<Ticket>(COL.tickets, snap.docs, TicketSchema);
+    // ソートはクライアント側 (orderBy 由来の composite index 要求を回避)。
+    // memory.ts (MemTicketRepo.list) と同一比較関数を共有: orderIndex → priority/createdAt フォールバック。
+    xs.sort(compareTicketOrder);
+    return xs;
   }
   async get(id: string): Promise<Ticket | null> {
     const doc = await db().collection(COL.tickets).doc(id).get();
