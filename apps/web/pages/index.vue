@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Status } from '@belvedere/shared';
+import type { Status, Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 
 // 実 API データ源 (R3: demo data 廃止)。useState 共有なので各画面は composable から直接読む。
@@ -14,6 +14,41 @@ const railTab = ref<'backlog' | 'events'>('backlog');
 const selected = ref<string | null>(null);
 // Refinement の「ポーカー開始」→ DetailSheet を開き、見積もりパネル (T7) が auto-start する合図
 const pokerAutostart = useState<string | null>('poker-autostart', () => null);
+
+// ⌘K 検索オーバーレイ
+const { isOpen: searchOpen, query: searchQuery, close: closeSearch, filter: filterTickets } = useSearch();
+const searchResults = computed<Ticket[]>(() => filterTickets(tickets.value));
+const searchCursor = ref(0);
+
+watch(searchQuery, () => { searchCursor.value = 0; });
+watch(searchOpen, (v) => { if (!v) searchCursor.value = 0; });
+
+function onSearchSelect(id: string): void {
+  closeSearch();
+  selected.value = id;
+  // backlog 画面でなければ遷移
+  if (screen.value !== 'backlog') {
+    screen.value = 'backlog';
+    railTab.value = 'backlog';
+  }
+}
+
+function onSearchKeydown(e: KeyboardEvent): void {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    searchCursor.value = Math.min(searchCursor.value + 1, searchResults.value.length - 1);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    searchCursor.value = Math.max(searchCursor.value - 1, 0);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    const t = searchResults.value[searchCursor.value];
+    if (t) onSearchSelect(t.id);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    closeSearch();
+  }
+}
 
 onMounted(() => {
   fetchTickets();
@@ -78,4 +113,123 @@ const ticket = computed(() =>
       <AIPanel :screen="screen" :tickets="tickets" @jump="onJump" />
     </template>
   </Shell>
+
+  <!-- ⌘K 検索オーバーレイ (T-1) -->
+  <div v-if="searchOpen" class="search-overlay" data-testid="search-overlay" @click.self="closeSearch">
+    <div class="search-box">
+      <div class="search-head">
+        <Icon name="search" :size="16" />
+        <input
+          ref="searchInputEl"
+          v-model="searchQuery"
+          data-testid="search-input"
+          type="text"
+          class="search-input"
+          placeholder="チケット ID またはタイトルで検索..."
+          autofocus
+          @keydown="onSearchKeydown"
+        />
+        <span class="kbd-key">ESC</span>
+      </div>
+      <div v-if="searchQuery.trim()" class="search-results">
+        <div v-if="searchResults.length === 0" class="search-empty">
+          一致するチケットがありません
+        </div>
+        <button
+          v-for="(t, i) in searchResults"
+          :key="t.id"
+          :class="['search-result', i === searchCursor && 'active']"
+          :data-testid="`search-result-${t.id}`"
+          @click="onSearchSelect(t.id)"
+          @mousemove="searchCursor = i"
+        >
+          <span class="result-id">{{ t.id }}</span>
+          <span class="result-title">{{ t.title }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+/* ⌘K 検索オーバーレイ */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 8, 8, 0.35);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 120px;
+  z-index: 300;
+}
+.search-box {
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-1);
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 40px rgba(8, 8, 8, 0.15);
+  overflow: hidden;
+}
+.search-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: var(--hairline) solid var(--line-1);
+}
+.search-input {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 15px;
+  color: var(--ink-0);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+.search-input::placeholder { color: var(--ink-3); }
+.search-results {
+  max-height: 360px;
+  overflow-y: auto;
+}
+.search-empty {
+  padding: 20px 16px;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: center;
+}
+.search-result {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 16px;
+  text-align: left;
+  border-bottom: var(--hairline) solid var(--line-1);
+  transition: background 0.1s ease;
+  cursor: pointer;
+}
+.search-result:last-child { border-bottom: none; }
+.search-result:hover,
+.search-result.active {
+  background: var(--bg-2);
+}
+.result-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+.result-title {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink-0);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+</style>
