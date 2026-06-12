@@ -21,7 +21,7 @@ BOLD='\033[1m'
 printf "${BOLD}=== Belvedere .claude/ status ===${X}\n\n"
 
 # ===== Hooks =====
-printf "${BOLD}Hooks (settings.local.json で配線)${X}\n"
+printf "${BOLD}Hooks (settings.json で配線)${X}\n"
 printf "  ${R}🛡️  seed-guard${X}                  PreToolUse Edit/Write/MultiEdit  → packages/seed/src/* を block\n"
 printf "  ${B}🔍 ts-typecheck${X}                 PostToolUse Edit/Write/MultiEdit → .ts/.tsx 編集後 pnpm typecheck\n"
 printf "  ${M}📐 eraser-arch-watcher${X}          PostToolUse Edit/Write/MultiEdit → アーキ md → marker\n"
