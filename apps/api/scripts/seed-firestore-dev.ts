@@ -18,7 +18,7 @@
 
 import { createRepoContainer } from '@belvedere/repo';
 import { seedTickets, seedSprints, seedMembers, seedEpics } from '@belvedere/seed';
-import type { RetroTry } from '@belvedere/shared';
+import type { RetroTry, RetroNote } from '@belvedere/shared';
 
 const TARGET_PROJECT = 'belvedere-dev-atrium';
 const WORKSPACE = 'ws-belvedere';
@@ -46,6 +46,25 @@ const seedRetroTries: RetroTry[] = [
   },
 ];
 
+// Retro KPT ボードのノート初期 fixture (Sprint 13 のレトロ)。レトロを実データで開催できる状態にする。
+// 旧 RetroScreen にハードコードされていた demo テキストを流用 (各列 2-3 件)。votes は実 member userId。
+const RETRO_SPRINT = 13;
+const seedRetroNotes: RetroNote[] = [
+  // Keep
+  { id: 'note-k1', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'keep', text: '新機能リリース後、社内利用が +60% 増えた。導線として効いている。', authorId: 'kaede', votes: ['kaede', 'okubo', 'uehara', 'hirai', 'hayashi'], createdAt: '2026-05-18T10:00:00+09:00', createdBy: 'kaede' },
+  { id: 'note-k2', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'keep', text: 'AI形骸化チェックがプランニングで2件のスコープ漏れを事前に拾った。', authorId: 'uehara', votes: ['kaede', 'okubo', 'uehara', 'hirai'], createdAt: '2026-05-18T10:01:00+09:00', createdBy: 'uehara' },
+  { id: 'note-k3', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'keep', text: 'ペアレビューを REVIEW 列で実施したのは良かった。', authorId: 'okubo', votes: ['okubo', 'hayashi'], createdAt: '2026-05-18T10:02:00+09:00', createdBy: 'okubo' },
+  // Problem
+  { id: 'note-p1', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'problem', text: 'Spike が長期 DOING に留まった。タイムボックスが弱い。', authorId: 'hirai', votes: ['kaede', 'okubo', 'uehara', 'hirai', 'hayashi'], createdAt: '2026-05-18T10:03:00+09:00', createdBy: 'hirai' },
+  { id: 'note-p2', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'problem', text: 'BLOCKED チケットの理由が空のまま2日経過していた。', authorId: 'uehara', votes: ['uehara', 'hirai', 'hayashi'], createdAt: '2026-05-18T10:04:00+09:00', createdBy: 'uehara' },
+  { id: 'note-p3', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'problem', text: 'ゴールのMが弱く、レビュー時に判定が割れた。', authorId: 'kaede', votes: ['kaede', 'okubo', 'uehara'], createdAt: '2026-05-18T10:05:00+09:00', createdBy: 'kaede' },
+  { id: 'note-p4', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'problem', text: '週後半の更新頻度が落ちた（金曜の更新 0件）。', authorId: 'hayashi', votes: ['hayashi'], createdAt: '2026-05-18T10:06:00+09:00', createdBy: 'hayashi' },
+  // Try (この列のノートは積み上げへ昇格できる)
+  { id: 'note-t1', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'try', text: 'Spikeに 1.5日のハードタイムボックス、超過時は自動でレトロ議題に。', authorId: 'okubo', votes: ['kaede', 'okubo', 'uehara', 'hirai', 'hayashi'], createdAt: '2026-05-18T10:07:00+09:00', createdBy: 'okubo' },
+  { id: 'note-t2', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'try', text: 'BLOCKED に遷移したら理由必須にする（Belvedere AIで強制）。', authorId: 'uehara', votes: ['kaede', 'uehara', 'hirai', 'hayashi'], createdAt: '2026-05-18T10:08:00+09:00', createdBy: 'uehara' },
+  { id: 'note-t3', workspaceId: WORKSPACE, sprintNumber: RETRO_SPRINT, column: 'try', text: '金曜午前に "micro-daily" を実施し更新を促す。', authorId: 'hayashi', votes: ['okubo', 'hayashi'], createdAt: '2026-05-18T10:09:00+09:00', createdBy: 'hayashi' },
+];
+
 function assertGuards(): void {
   if (process.env.REPO_BACKEND !== 'firestore') {
     throw new Error('REPO_BACKEND=firestore を指定してください (memory に書いても意味がありません)');
@@ -66,8 +85,19 @@ async function main(): Promise<void> {
 
   console.log(`▶ seeding Firestore (project=${TARGET_PROJECT}, workspace=${WORKSPACE})`);
 
-  for (const s of seedSprints) await repo.sprints.upsert(s);
-  console.log(`  ✓ sprints: ${seedSprints.length}`);
+  // seed の sprint 日付は 2026-04〜05 固定で、今(数週間後)では active スプリントが終了済に
+  // 見え Daily の Burndown / 滞留日数が壊れる。active スプリントが「今」を含むよう全 sprint と
+  // ticket.startedAt を一律 shift する (active の開始を 5 日前に置く = day5/14 の現実的な途中)。
+  // Date.now() は tsx Node スクリプトなので使用可。再実行で常に再センタリングされる。
+  const DAY = 86_400_000;
+  const active = seedSprints.find((s) => s.status === 'active');
+  const offset = active ? Date.now() - 5 * DAY - Date.parse(active.startsAt) : 0;
+  const shiftIso = (iso: string) => new Date(Date.parse(iso) + offset).toISOString();
+  const shiftedSprints = seedSprints.map((s) => ({ ...s, startsAt: shiftIso(s.startsAt), endsAt: shiftIso(s.endsAt) }));
+  const shiftedTickets = seedTickets.map((t) => (t.startedAt !== undefined ? { ...t, startedAt: shiftIso(t.startedAt) } : t));
+
+  for (const s of shiftedSprints) await repo.sprints.upsert(s);
+  console.log(`  ✓ sprints: ${shiftedSprints.length} (active を今基準に shift)`);
 
   for (const m of seedMembers) await repo.members.upsert(m);
   console.log(`  ✓ members: ${seedMembers.length}`);
@@ -75,11 +105,14 @@ async function main(): Promise<void> {
   for (const e of seedEpics) await repo.epics.upsert(e);
   console.log(`  ✓ epics:   ${seedEpics.length}`);
 
-  for (const t of seedTickets) await repo.tickets.upsert(t);
-  console.log(`  ✓ tickets: ${seedTickets.length}`);
+  for (const t of shiftedTickets) await repo.tickets.upsert(t);
+  console.log(`  ✓ tickets: ${shiftedTickets.length}`);
 
   for (const r of seedRetroTries) await repo.retroTries.upsert(r);
   console.log(`  ✓ retroTries: ${seedRetroTries.length}`);
+
+  for (const n of seedRetroNotes) await repo.retroNotes.upsert(n);
+  console.log(`  ✓ retroNotes: ${seedRetroNotes.length}`);
 
   if (clean) {
     const all = await repo.tickets.list({ workspaceId: WORKSPACE });
