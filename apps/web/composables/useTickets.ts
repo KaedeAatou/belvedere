@@ -31,7 +31,8 @@ export interface PatchTicketInput {
   status?: Status;
   priority?: Priority;
   valueImpact?: ValueImpact;
-  sprintId?: string;
+  /** null/空文字で sprintId を解除 (3 区画ビューの BACKLOG へ戻す d&d)。undefined は「変更なし」。 */
+  sprintId?: string | null;
   assigneeId?: string;
   estimatePt?: number;
   acceptanceCriteria?: string[];
