@@ -135,8 +135,8 @@ const dayTicks = computed(() => {
             </div>
           </template>
           <div v-if="colItems(col).length === 0"
-               style="padding: 24px 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.16em; text-transform: uppercase">
-            empty
+               style="padding: 24px 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.06em">
+            チケットなし
           </div>
         </div>
       </div>

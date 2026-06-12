@@ -176,6 +176,19 @@ async function submitPull(): Promise<void> {
     pullBusy.value = false;
   }
 }
+
+// U-2: ESC でダイアログを閉じる
+onMounted(() => {
+  const onKeydown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (showPullDialog.value) { e.stopPropagation(); showPullDialog.value = false; return; }
+    if (showSprintDialog.value) { e.stopPropagation(); showSprintDialog.value = false; }
+  };
+  document.addEventListener('keydown', onKeydown);
+  onUnmounted(() => document.removeEventListener('keydown', onKeydown));
+});
 </script>
 
 <template>

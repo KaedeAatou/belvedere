@@ -55,6 +55,15 @@ async function saveEdit(): Promise<void> {
   }
 }
 
+// ===== チケット ID コピー (T-6) =====
+const idCopied = ref(false);
+function copyId(): void {
+  void navigator.clipboard.writeText(props.ticket.id).then(() => {
+    idCopied.value = true;
+    setTimeout(() => { idCopied.value = false; }, 1500);
+  });
+}
+
 // ===== 2 段階削除 (T10-2) =====
 const deleteArmed = ref(false);
 let deleteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -83,7 +92,10 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
   <div class="sheet" @click.stop>
     <div class="sheet-head">
       <TypeMark :type="ticket.type" />
-      <span class="t-mono" style="font-size: 11px; color: var(--ink-2)">{{ ticket.id }}</span>
+      <button class="id-copy-btn" :title="idCopied ? 'コピーしました' : 'クリックでコピー'" @click="copyId">
+        <span class="t-mono" style="font-size: 11px; color: var(--ink-2)">{{ ticket.id }}</span>
+        <span v-if="idCopied" class="id-copied">コピーしました</span>
+      </button>
       <StatusDot :status="ticket.status" />
       <StoryPoints :value="ticket.estimatePt ?? null" :critical="ticket.estimatePt == null" />
       <span style="flex: 1" />
@@ -213,6 +225,15 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 </template>
 
 <style scoped>
+.id-copy-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: none; cursor: pointer; padding: 0;
+}
+.id-copy-btn:hover .t-mono { color: var(--accent) !important; }
+.id-copied {
+  font-family: var(--mono); font-size: 10px;
+  color: var(--ok); letter-spacing: 0.04em;
+}
 .ibtn-text {
   padding: 4px 10px;
   background: transparent;

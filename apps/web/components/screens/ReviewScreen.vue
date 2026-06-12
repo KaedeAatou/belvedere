@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import type { Ticket } from '@belvedere/shared';
 
-const props = defineProps<{ tickets: Ticket[] }>();
-const emit = defineEmits<{ select: [id: string] }>();
+const props = defineProps<{
+  tickets: Ticket[];
+  selectedId: string | null;
+}>();
+const emit = defineEmits<{
+  select: [id: string];
+  goRetro: [];
+}>();
 
 const { activeSprint, velocityHistory } = useSprints();
 
@@ -118,7 +124,7 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
       <div style="margin-top: 24px">
         <h2 style="margin: 0 0 8px; font-size: 14px; font-weight: 500">Carry-over candidates</h2>
         <div style="border: 1px solid var(--line-1)">
-          <TicketRow v-for="t in carry" :key="t.id" :t="t" @click="emit('select', t.id)">
+          <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id" @click="emit('select', t.id)">
             <template #extra>
               <StatusDot :status="t.status" />
             </template>
@@ -152,7 +158,7 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
       <div style="margin-top: 24px; padding: 12px; border: 1px solid var(--line-2)">
         <div class="t-cap" style="margin-bottom: 6px">NEXT STEP</div>
         <div style="font-size: 12px; margin-bottom: 10px; color: var(--ink-1)">レトロスペクティブへ進む</div>
-        <button class="h-btn" style="background: var(--accent); color: #FBF8F2; font-family: var(--mono); letter-spacing: 0.08em">
+        <button class="h-btn" style="background: var(--accent); color: #FBF8F2; font-family: var(--mono); letter-spacing: 0.08em" @click="emit('goRetro')">
           GO TO RETRO →
         </button>
       </div>
