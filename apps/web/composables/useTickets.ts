@@ -115,16 +115,21 @@ export const useTickets = () => {
     }
   }
 
-  /** ステータス遷移 (専用 endpoint。サーバが startedAt/completedAt を自動スタンプ)。 */
+  /** ステータス遷移 (専用 endpoint。サーバが startedAt/completedAt を自動スタンプ)。
+   *  API は { from, to, ticket } を返すため res.ticket で置換する。
+   */
   async function changeStatus(id: string, status: Status): Promise<Ticket | null> {
     error.value = null;
     // 楽観更新 (ボード移動を即時反映)
     const prev = tickets.value;
     tickets.value = tickets.value.map((t) => (t.id === id ? { ...t, status } : t));
     try {
-      const updated = await api.patch<Ticket>(`/api/tickets/${id}/status`, { status });
-      tickets.value = tickets.value.map((t) => (t.id === id ? updated : t));
-      return updated;
+      const res = await api.patch<{ from: Status; to: Status; ticket: Ticket }>(
+        `/api/tickets/${id}/status`,
+        { status },
+      );
+      tickets.value = tickets.value.map((t) => (t.id === id ? res.ticket : t));
+      return res.ticket;
     } catch (e) {
       const err = e as { data?: { error?: string }; message?: string };
       error.value = err.data?.error ?? err.message ?? 'unknown error';
