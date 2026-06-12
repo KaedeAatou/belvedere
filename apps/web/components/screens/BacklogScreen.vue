@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Ticket, Priority, TicketType, Status } from '@belvedere/shared';
+import { compareTicketOrder } from '@belvedere/shared';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -56,16 +57,20 @@ function matchesFilter(t: Ticket): boolean {
   return true;
 }
 
-// active sprint のチケット / それ以外 (= プロダクトバックログ) に二分
+// active sprint のチケット / それ以外 (= プロダクトバックログ) に二分。
+// d&d 並び替え結果を即座に反映するため compareTicketOrder (orderIndex 昇順) でソートする。
+// (これが無いと patchTicket でデータは変わるが配列順が再ソートされず画面上で動かない)
 const sprintTicketsRaw = computed(() =>
-  activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
+  activeSprint.value
+    ? [...props.tickets.filter((t) => t.sprintId === activeSprint.value!.id)].sort(compareTicketOrder)
+    : [],
 );
 const backlogTicketsRaw = computed(() => {
   const activeId = activeSprint.value?.id;
   // active sprint が無い (未取得 / 未設定) ときは全チケットを backlog 扱いにする。
   // (filter(sprintId !== undefined) だと sprintId 無しチケットが両区画から漏れるため)
-  if (!activeId) return props.tickets;
-  return props.tickets.filter((t) => t.sprintId !== activeId);
+  const base = !activeId ? props.tickets : props.tickets.filter((t) => t.sprintId !== activeId);
+  return [...base].sort(compareTicketOrder);
 });
 
 // フィルタ適用後
