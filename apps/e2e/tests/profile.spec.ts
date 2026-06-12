@@ -18,7 +18,7 @@ test('/api/me が token 込みで 200 を返す (Backlog 動作と整合性確�
   expect(result.status, `body=${result.body}`).toBe(200);
 });
 
-test('settings/profile で email/role/workspace 表示 + Whoami debug で owner role 確認', async ({ authedPage }) => {
+test('settings/profile で email/role/workspace 表示 + /api/me で owner role 確認', async ({ authedPage, apiBaseUrl }) => {
   const profile = new SettingsProfilePage(authedPage);
   await profile.open();
 
@@ -34,8 +34,16 @@ test('settings/profile で email/role/workspace 表示 + Whoami debug で owner 
   // プロフィール節 (.value.readonly) に絞る。
   await expect(authedPage.locator('.value.readonly', { hasText: 'ws-belvedere' }).first()).toBeVisible();
 
-  await profile.clickWhoami();
-  expect(await profile.whoamiContainsRole('owner')).toBe(true);
+  // /api/me を直接叩いて role を確認 (DEBUG セクション削除に伴い whoami UI から移行)
+  const result = await authedPage.evaluate(async (base: string) => {
+    const fb = (window as unknown as { __belvedereFirebase?: { auth?: { currentUser?: { getIdToken: () => Promise<string> } } } }).__belvedereFirebase;
+    const token = await fb?.auth?.currentUser?.getIdToken();
+    if (!token) return { status: -1, body: 'no token' };
+    const r = await fetch(`${base}/api/me`, { headers: { Authorization: `Bearer ${token}` } });
+    return { status: r.status, body: await r.text() };
+  }, apiBaseUrl);
+  expect(result.status, `body=${result.body}`).toBe(200);
+  expect(result.body).toContain('"owner"');
 });
 
 test('右上 UserMenu ドロップダウンに owner バッジ + email 表示', async ({ authedPage }) => {

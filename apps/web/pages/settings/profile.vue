@@ -3,11 +3,9 @@
 // 表示名のみ編集可。役割 / メール / Workspace / Firebase UID は read-only。
 // 末尾に debug セクション (Whoami 確認、Phase 1-B 動作検証用、後でフラグで隠す)。
 
-const { user } = useAuth();
 const { me, isLoading, error, fetchMe, updateDisplayName } = useMe();
 const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, syncCurrentFromStorage } = useWorkspaces();
 const { members, fetchMembers, isPendingInvite, invite, cancelInvite } = useMembers();
-const api = useApiClient();
 
 const editName = ref('');
 const saveSuccess = ref(false);
@@ -91,22 +89,6 @@ async function save(): Promise<void> {
   }
 }
 
-// Debug: Whoami 確認
-const whoamiResult = ref<string>('');
-const whoamiLoading = ref(false);
-async function callWhoami(): Promise<void> {
-  whoamiLoading.value = true;
-  whoamiResult.value = '';
-  try {
-    const json = await api.get<unknown>('/api/whoami');
-    whoamiResult.value = JSON.stringify(json, null, 2);
-  } catch (e) {
-    const err = e as { data?: unknown; message?: string };
-    whoamiResult.value = JSON.stringify({ error: err.data ?? err.message ?? 'unknown' }, null, 2);
-  } finally {
-    whoamiLoading.value = false;
-  }
-}
 </script>
 
 <template>
@@ -240,18 +222,6 @@ async function callWhoami(): Promise<void> {
       </div>
     </section>
 
-    <section class="card debug">
-      <h2 class="section-title">🐛 Debug — Phase 1-B 動作検証</h2>
-      <p class="debug-hint">本番リリース時に削除予定。/api/whoami を実際に呼んで認証経路が動いていることを確認。</p>
-      <div class="field">
-        <label class="label">Firebase UID</label>
-        <div class="value readonly mono">{{ user?.uid ?? '(未取得)' }}</div>
-      </div>
-      <button class="debug-btn" :disabled="whoamiLoading" @click="callWhoami">
-        {{ whoamiLoading ? '実行中…' : '/api/whoami を呼ぶ' }}
-      </button>
-      <pre v-if="whoamiResult" class="whoami-result">{{ whoamiResult }}</pre>
-    </section>
   </div>
 </template>
 
@@ -415,48 +385,6 @@ async function callWhoami(): Promise<void> {
   color: var(--ink-2);
 }
 
-.card.debug {
-  border-color: var(--line-1);
-  background: var(--bg-0);
-}
-
-.debug-hint {
-  font-family: var(--sans);
-  font-size: 12px;
-  color: var(--ink-3);
-  margin: 0 0 16px;
-  line-height: 1.5;
-}
-
-.debug-btn {
-  padding: 8px 16px;
-  background: var(--bg-2);
-  border: var(--hairline) solid var(--line-2);
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-1);
-  cursor: pointer;
-  margin-top: 8px;
-}
-
-.debug-btn:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.whoami-result {
-  margin-top: 16px;
-  padding: 16px;
-  background: var(--bg-2);
-  border: var(--hairline) solid var(--line-1);
-  border-radius: var(--radius);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-1);
-  overflow-x: auto;
-  white-space: pre-wrap;
-}
 
 /* ===== Workspace / メンバー管理 ===== */
 .muted {
