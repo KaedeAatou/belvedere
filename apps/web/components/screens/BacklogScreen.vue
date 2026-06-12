@@ -73,123 +73,15 @@ const sprintTickets = computed(() => sprintTicketsRaw.value.filter(matchesFilter
 const backlogTickets = computed(() => backlogTicketsRaw.value.filter(matchesFilter));
 const isFiltered = computed(() => filterCount.value > 0 || showFlaggedOnly.value);
 
-// ===== バックログ手動並び替え (fractional orderIndex / Linear 方式) =====
-// 端は ±1000、隣接は中間値。差が極小になったら表示順で 1000 刻みに一括リバランス。
-const ORDER_STEP = 1000;
-const ORDER_MIN_GAP = 1e-6;
-
-/**
- * d&d ドロップ時の新しい orderIndex を算出する pure function。
- *
- * @param sorted   現在の表示順 (backlogTickets と同じ並び) のチケット配列
- * @param draggedId ドラッグ中チケットの id
- * @param targetId  ドロップ対象 (この行の上端 or 下端に落とす) の id
- * @param before    true = target の前 (上) / false = target の後 (下) に挿入
- * @returns 新しい orderIndex。null = リバランスが必要 (隣接 gap が枯渇)。
- *
- * 隣接 2 件の中間値を返す。挿入位置の端 (先頭/末尾) は ±ORDER_STEP オフセット。
- * 既存値が無い (seed 等で orderIndex 未設定) 場合は、その隣接スロットを
- * 表示順インデックス × ORDER_STEP で仮想化して中間を取る。
- */
-function computeOrderIndexBetween(
-  sorted: Ticket[],
-  draggedId: string,
-  targetId: string,
-  before: boolean,
-): number | null {
-  if (draggedId === targetId) return null;
-  const targetIdx = sorted.findIndex((t) => t.id === targetId);
-  if (targetIdx === -1) return null;
-
-  // 挿入位置の「前の行」「後の行」を決める (ドラッグ中の行自身は無視)。
-  const insertAt = before ? targetIdx : targetIdx + 1;
-  const prevRow = sorted.slice(0, insertAt).reverse().find((t) => t.id !== draggedId) ?? null;
-  const nextRow = sorted.slice(insertAt).find((t) => t.id !== draggedId) ?? null;
-
-  // 各行の実効 orderIndex (未設定なら表示順 index ベースで仮想化)。
-  const eff = (t: Ticket | null): number | null => {
-    if (!t) return null;
-    if (t.orderIndex !== undefined) return t.orderIndex;
-    return (sorted.findIndex((x) => x.id === t.id) + 1) * ORDER_STEP;
-  };
-  const prev = eff(prevRow);
-  const next = eff(nextRow);
-
-  if (prev === null && next === null) return ORDER_STEP; // バックログが実質空
-  if (prev === null && next !== null) return next - ORDER_STEP; // 先頭へ
-  if (prev !== null && next === null) return prev + ORDER_STEP; // 末尾へ
-  // 中間値。gap が枯渇したら null を返してリバランスを要求。
-  if (prev !== null && next !== null) {
-    if (Math.abs(next - prev) < ORDER_MIN_GAP) return null;
-    return (prev + next) / 2;
-  }
-  return null;
-}
-
-const draggingId = ref<string | null>(null);
-// ドロップインジケータ: { id, edge } 形式。edge='before' は行上端、'after' は行下端。
-const dropTarget = ref<{ id: string; edge: 'before' | 'after' } | null>(null);
-
-function dropEdgeFor(id: string): 'before' | 'after' | null {
-  if (!dropTarget.value || dropTarget.value.id !== id) return null;
-  return dropTarget.value.edge;
-}
-
-function onReorderStart(id: string): void {
-  draggingId.value = id;
-}
-
-function onReorderOver(id: string, evt: DragEvent): void {
-  if (!draggingId.value || draggingId.value === id) return;
-  // マウス Y 位置が行の上半分なら before、下半分なら after。
-  const el = evt.currentTarget as HTMLElement | null;
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const edge: 'before' | 'after' = evt.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
-  dropTarget.value = { id, edge };
-}
-
-async function onReorderDrop(targetId: string): Promise<void> {
-  const dragged = draggingId.value;
-  const target = dropTarget.value;
-  draggingId.value = null;
-  dropTarget.value = null;
-  if (!dragged || !target || dragged === targetId) return;
-
-  // 並び替えは未フィルタの全バックログを基準にする (フィルタ中でも一貫した orderIndex に)
-  const sorted = backlogTicketsRaw.value;
-  const newIndex = computeOrderIndexBetween(sorted, dragged, targetId, target.edge === 'before');
-  if (newIndex === null) {
-    // gap 枯渇 or 算出不能 → 表示順で 1000 刻みに一括リバランスしてから再配置。
-    await rebalanceBacklog(dragged, targetId, target.edge === 'before');
-    return;
-  }
-  await patchTicket(dragged, { orderIndex: newIndex });
-}
-
-function onReorderEnd(): void {
-  draggingId.value = null;
-  dropTarget.value = null;
-}
-
-/**
- * orderIndex の gap が枯渇したときの一括リバランス。
- * 現在の表示順にドラッグ行を希望位置へ差し込んだ並びを作り、ORDER_STEP 刻みで
- * 全件 PATCH する (件数は数十なので連発で許容)。
- */
-async function rebalanceBacklog(draggedId: string, targetId: string, before: boolean): Promise<void> {
-  const current = backlogTicketsRaw.value.filter((t) => t.id !== draggedId);
-  const dragged = backlogTicketsRaw.value.find((t) => t.id === draggedId);
-  if (!dragged) return;
-  const targetIdx = current.findIndex((t) => t.id === targetId);
-  const insertAt = targetIdx === -1 ? current.length : before ? targetIdx : targetIdx + 1;
-  const reordered = [...current.slice(0, insertAt), dragged, ...current.slice(insertAt)];
-  for (let i = 0; i < reordered.length; i++) {
-    const t = reordered[i];
-    if (!t) continue;
-    await patchTicket(t.id, { orderIndex: (i + 1) * ORDER_STEP });
-  }
-}
+// ===== バックログ手動並び替え =====
+// computeOrderIndexBetween / rebalance は useTicketReorder に移管。
+// 並び替えは未フィルタの全バックログを基準にする (フィルタ中でも一貫した orderIndex に)。
+const { dropEdgeFor, onReorderStart, onReorderOver, onReorderDrop, onReorderEnd } =
+  useTicketReorder({
+    sorted: backlogTickets,
+    patch: (id, body) => patchTicket(id, body),
+    sortedRaw: backlogTicketsRaw,
+  });
 
 // ルールエンジン findings 集計 (T5-3)
 function flagCount(t: Ticket): number { return findingsFor(t.id).length; }

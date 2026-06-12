@@ -6,9 +6,10 @@ const props = defineProps<{
   selected?: boolean;
   dragHandle?: boolean;
   /**
-   * 手動並び替え (バックログ d&d) を有効化する。デフォルト false。
-   * 既存呼び出し (Planning / Review / Refinement) は未指定 = 無効のままで挙動不変。
-   * BacklogScreen のみ true を渡し、drag* イベントを購読する。
+   * 手動並び替えを有効化する。デフォルト false。
+   * BacklogScreen / PlanningScreen / RefinementScreen で true を渡し、drag* イベントを購読する。
+   * true にすると draggable=true が DOM に付き、handle (dragHandle prop) 以外の
+   * dragstart は onDragStart 内でキャンセルされる。
    */
   reorderable?: boolean;
   /** ドロップ位置インジケータ: 'before' = 行上端ライン / 'after' = 行下端ライン / null = 非表示。 */
@@ -29,17 +30,26 @@ const shown = computed(() => findings.value.slice(0, 2));
 const overflow = computed(() => Math.max(0, findings.value.length - 2));
 const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.message).join('\n'));
 
-// handle 限定ドラッグ: handle の mousedown でのみ行の draggable を有効化し、
-// dragend / mouseup で解除する。これにより行本体のクリック (= 選択) は draggable に奪われない。
-const dragArmed = ref(false);
+// handle 限定ドラッグ (定番パターン: 行は常に draggable=true、handle 以外での
+// dragstart をキャンセルする)。
+// ref ではなくプレーンな変数にする — 描画に使わないため reactive にする必要がない。
+// dragArmed を ref にすると「mousedown → Vue 次 tick で draggable 反映 → ブラウザ判定」の
+// タイミングズレが発生し、ハンドルを掴んでも drag が始まらないバグが再現する。
+let fromHandle = false;
 function armDrag(): void {
-  if (props.reorderable) dragArmed.value = true;
+  if (props.reorderable) fromHandle = true;
 }
 function disarmDrag(): void {
-  dragArmed.value = false;
+  fromHandle = false;
 }
-function onDragStart(): void {
+function onDragStart(e: DragEvent): void {
   if (!props.reorderable) return;
+  if (!fromHandle) {
+    // handle 以外 (行本体・テキスト等) を掴んだときはドラッグをキャンセル。
+    // クリック選択は dragstart ではなく click で処理されるため影響しない。
+    e.preventDefault();
+    return;
+  }
   emit('reorderStart');
 }
 function onDragOver(e: DragEvent): void {
@@ -53,7 +63,7 @@ function onDrop(e: DragEvent): void {
   emit('reorderDrop', e);
 }
 function onDragEnd(): void {
-  dragArmed.value = false;
+  fromHandle = false;
   if (props.reorderable) emit('reorderEnd');
 }
 </script>
@@ -61,7 +71,7 @@ function onDragEnd(): void {
 <template>
   <div
     :class="['trow', selected && 'selected', dropEdge === 'before' && 'drop-before', dropEdge === 'after' && 'drop-after']"
-    :draggable="reorderable && dragArmed ? true : undefined"
+    :draggable="reorderable || undefined"
     @click="$emit('click')"
     @dragstart="onDragStart"
     @dragover="onDragOver"
