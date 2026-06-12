@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Ticket } from '@belvedere/shared';
+import { compareTicketOrder } from '@belvedere/shared';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -10,9 +11,20 @@ const emit = defineEmits<{ select: [id: string] }>();
 const { activeSprint, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
 const { patchTicket } = useTickets();
 
-const sprintTickets = computed(() =>
-  activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
-);
+const sprintTicketsSorted = computed(() => {
+  const raw = activeSprint.value
+    ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id)
+    : [];
+  return [...raw].sort(compareTicketOrder);
+});
+// 後方互換: totalSP 等が参照する配列 (並び順は totalSP に影響しない)
+const sprintTickets = sprintTicketsSorted;
+
+const { dropEdgeFor: planDropEdgeFor, onReorderStart: planReorderStart, onReorderOver: planReorderOver, onReorderDrop: planReorderDrop, onReorderEnd: planReorderEnd } =
+  useTicketReorder({
+    sorted: sprintTicketsSorted,
+    patch: (id, body) => patchTicket(id, body),
+  });
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 // 相対見積もり (SP) の積み上げを過去スプリントの velocity 実績と比較する。
 // 時間稼働ベースの capacity は使わない (SP ベースの velocity 駆動プランニング)。
@@ -249,9 +261,14 @@ onMounted(() => {
       </button>
     </div>
     <div class="col-body">
-      <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t"
-                 :selected="selectedId === t.id" drag-handle
-                 @click="emit('select', t.id)" />
+      <TicketRow v-for="t in sprintTicketsSorted" :key="t.id" :t="t"
+                 :selected="selectedId === t.id" drag-handle reorderable
+                 :drop-edge="planDropEdgeFor(t.id)"
+                 @click="emit('select', t.id)"
+                 @reorder-start="planReorderStart(t.id)"
+                 @reorder-over="(e) => planReorderOver(t.id, e)"
+                 @reorder-drop="planReorderDrop(t.id)"
+                 @reorder-end="planReorderEnd" />
       <p v-if="sprintTickets.length === 0" style="padding: 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
         アクティブスプリントにチケットがありません。
       </p>
