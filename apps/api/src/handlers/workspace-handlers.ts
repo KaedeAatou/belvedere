@@ -134,11 +134,16 @@ export async function listMyWorkspaces(
   const docs = await repo.workspaces.listByIds(ids);
   const byId = new Map(docs.map((w) => [w.id, w]));
 
-  const result: MyWorkspace[] = memberships.map((m) => ({
-    id: m.workspaceId,
-    name: byId.get(m.workspaceId)?.name ?? m.workspaceId,
-    role: m.role,
-  }));
+  // workspaceId 昇順で決定的に並べる。web (useWorkspaces) は先頭を既定 currentId に
+  // するため、listByUserId の非決定的順だと既定 Workspace がブレる (workspaceMiddleware の
+  // 既定選択と同じ規則に揃える)。
+  const result: MyWorkspace[] = memberships
+    .map((m) => ({
+      id: m.workspaceId,
+      name: byId.get(m.workspaceId)?.name ?? m.workspaceId,
+      role: m.role,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
   return { ok: true, status: 200, body: result };
 }
 
