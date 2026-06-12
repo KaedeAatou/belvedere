@@ -107,11 +107,16 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
       );
     }
 
-    // X-Workspace-Id ヘッダで指定があればそれを、無ければ 1 件目を current に
+    // X-Workspace-Id ヘッダで指定があればそれを、無ければ既定の Workspace を current に。
+    // 既定は workspaceId 昇順で安定ソートした先頭にする (= 決定的)。
+    // listByUserId の返り順は Firestore のクエリ順で非決定的なため、複数 Workspace 所属時に
+    // リクエストごと / 環境ごとに既定がブレる潜在バグがあった (実害: 所属 2 件化で既定が
+    // 別 ws に飛び e2e が落ちた)。ユーザーの実際の選択は web の localStorage →
+    // X-Workspace-Id で送られるので、ここはコールドスタートの安定既定として機能すれば良い。
     const requestedWorkspaceId = c.req.header('X-Workspace-Id');
     const selected = requestedWorkspaceId
       ? memberships.find((m) => m.workspaceId === requestedWorkspaceId)
-      : memberships[0];
+      : [...memberships].sort((a, b) => a.workspaceId.localeCompare(b.workspaceId))[0];
 
     if (!selected) {
       // X-Workspace-Id が指定されたが、その workspace に未所属
