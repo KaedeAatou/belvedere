@@ -20,6 +20,15 @@
 }
 .trow-drag { color: var(--ink-4); display: inline-flex; }
 .trow:hover .trow-drag { color: var(--ink-2); }
+.trow-drag-grab { cursor: grab; }
+.trow-drag-grab:active { cursor: grabbing; }
+/* ドロップ位置インジケータ (行 上端 / 下端 に 2px の accent ライン) */
+.trow.drop-before::after,
+.trow.drop-after::after {
+  content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 1;
+}
+.trow.drop-before::after { top: -1px; }
+.trow.drop-after::after { bottom: -1px; }
 .trow-id { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-3); letter-spacing: 0.08em; }
 .trow-title {
   font-size: 14px; color: var(--ink-0); letter-spacing: 0.03em;
