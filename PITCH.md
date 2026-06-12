@@ -7,6 +7,7 @@
 > 2026-05-05 改訂: **Refinement Agent に第 6 観点「戦略整合性」追加** (Epic.rationale 欠落検出)。§2 課題に「戦略の不在 (開発者が Why を見失う)」を追加、デモ #4 で「BLV-110 ミスマッチ + EP-3 rationale 欠落」を見せる。
 > 2026-05-05 (夜) 改訂: **MCP server 追加** — Claude Code / Cursor から Belvedere の Agent を直接呼べる。§5 差別化表に「MCP で AI Agent エコシステムに統合」軸追加、§6 stack に MCP server (stdio + HTTP)、デモ #7 を「Claude Code から Belvedere を呼んで Belvedere を開発している」シーンに差し替え可能。
 > 2026-06-11 改訂: **Reviewer Multimodal (録画動画→指摘抽出) を縮退** (ROADMAP 縮退 2026-06-10)。キラーシーンを **Orchestrator マルチエージェント + チケット種別ルールエンジン (17 観点) + 見積もりポーカー** に置換。「なぜ Gemini か」を **ADK で Orchestrator + 5 Agent を宣言的に編成** に統一。録画関連の記述を全削除。
+> 2026-06-13 改訂: **儀式モデル確定**。チケットフローを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike 分割で CURRENT 確定)** に整理。Backlog / Refinement / Planning は **CURRENT / NEXT / BACKLOG の 3 区画ビュー** に統一 (画面差は起票種別と目的のみ)。デモ #4 を「Refinement で 1 つの大きな Story を最小価値ストーリーに分割しつつ、行内 finding ピルで 6観点の指摘が見える」流れに調整。「ルール別ワークキュー」表現は削除。
 
 ---
 
@@ -71,7 +72,7 @@
    - 🟡 DoD 候補3件 / 関連 Story 紐付け候補 / SP=5 (過去類似から)
    - 「Apply」ボタン3クリック → **Quality 100% 緑バッジ**
 3. **(12秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」
-4. **(14秒)** Refinement 画面 → AI が次スプリント候補を **6観点で診断**: 「WC-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「WC-106 は SP=13 で過大、3つに分割候補」「⭐ EP-3 (デリバリー信頼化) に rationale 未設定 → 配下 3 チケットが Why を見失う形骸化サイン」 — クリックで Epic.rationale 編集画面へジャンプ
+4. **(14秒)** Refinement 画面 (CURRENT / NEXT / BACKLOG の 3 区画) → AI が BACKLOG の候補を **6観点で診断**し、各行に finding ピルで表示: 「WC-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「WC-106 は SP=13 で過大 → 最小価値ストーリー 3 つに分割候補 (parentTicketId で親 US に紐付け)」「⭐ EP-3 (デリバリー信頼化) に rationale 未設定 → 配下 3 チケットが Why を見失う形骸化サイン」 — 分割した子 Story を d&d で NEXT 区画へ移動、EP-3 はクリックで Epic.rationale 編集画面へジャンプ
 5. **(20秒) ★Orchestrator マルチエージェント キラーシーン★** AI Integrity Panel が一気に埋まる →
    **Orchestrator** が月曜朝の時刻を見て **Planner + Daily を並列起動**、各 Agent が **種別ルールエンジン (17 観点)** で査読した結果が 1 画面に集約:
    - 🔴 WC-103「デモ環境を Cloud Run に統一」は **task なのに親 Story なし** → 何の価値のための作業か追えない
