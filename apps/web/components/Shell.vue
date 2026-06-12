@@ -17,6 +17,20 @@ const cur = computed(() => SCREENS.find((s) => s.id === props.screen));
 
 function setScreen(s: ScreenId) { emit('update:screen', s); }
 function setRailTab(t: 'backlog' | 'events') { emit('update:railTab', t); }
+
+// ⌘K 検索オーバーレイ
+const { toggle: toggleSearch } = useSearch();
+
+onMounted(() => {
+  const onKeydown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      toggleSearch();
+    }
+  };
+  document.addEventListener('keydown', onKeydown);
+  onUnmounted(() => document.removeEventListener('keydown', onKeydown));
+});
 </script>
 
 <template>
@@ -38,6 +52,9 @@ function setRailTab(t: 'backlog' | 'events') { emit('update:railTab', t); }
         <span class="now">{{ cur?.label }}</span>
       </div>
       <div class="header-actions">
+        <button class="h-btn" data-testid="search-btn" @click="toggleSearch">
+          <Icon name="search" /> <span>Search</span> <span class="kbd">⌘K</span>
+        </button>
         <button class="h-btn" @click="emit('update:aiOpen', !aiOpen)">
           <Icon name="sparkle" /> <span>{{ aiOpen ? 'Hide AI' : 'Show AI' }}</span>
         </button>
