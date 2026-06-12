@@ -181,20 +181,6 @@ a { color: inherit; text-decoration: none; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.rail-foot {
-  margin-top: auto;
-  padding: 12px 14px 0;
-  border-top: var(--hairline) solid var(--line-1);
-  display: flex;
-  gap: 6px;
-}
-.rail-fbtn {
-  width: 28px; height: 28px;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--ink-3);
-  border-radius: 14px;
-}
-.rail-fbtn:hover { background: var(--bg-2); color: var(--ink-1); }
 .shell-side {
   grid-row: 2;
   border-right: var(--hairline) solid var(--line-1);
@@ -300,23 +286,6 @@ a { color: inherit; text-decoration: none; }
 .h-btn.icon { padding: 0; width: 28px; justify-content: center; border-radius: 50%; }
 .h-btn .kbd { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
 
-/* ----- rail artifacts ----- */
-.rail-artifacts {
-  margin-top: 16px;
-  padding: 12px 10px 0;
-  border-top: var(--hairline) solid var(--line-1);
-}
-.rail-art-item {
-  display: flex; align-items: center; gap: 10px;
-  height: 30px; padding: 0 6px;
-  border-radius: 14px;
-  font-size: 12px;
-  letter-spacing: 0.02em;
-  color: var(--ink-1);
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.rail-art-item:hover { background: var(--bg-2); }
 .rail-tabs {
   display: flex;
   gap: 4px;
