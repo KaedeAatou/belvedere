@@ -15,6 +15,7 @@ import type {
   Ritual,
   EstimationSession,
   RetroTry,
+  RetroNote,
 } from '@belvedere/shared';
 import { stripUndefined, compareTicketOrder } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
@@ -31,6 +32,7 @@ import type {
   CeremonyHealthRepository,
   EstimationRepository,
   RetroTryRepository,
+  RetroNoteRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -212,6 +214,19 @@ class MemRetroTryRepo implements RetroTryRepository {
   async delete(id: string): Promise<void> { this.store.delete(id); }
 }
 
+class MemRetroNoteRepo implements RetroNoteRepository {
+  private store = new Map<string, RetroNote>();
+  async list(opts: { workspaceId: string }): Promise<RetroNote[]> {
+    // createdAt 昇順 (firestore.ts と契約一致: 古いノートから順に並ぶ)
+    return [...this.store.values()]
+      .filter((n) => n.workspaceId === opts.workspaceId)
+      .sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  }
+  async get(id: string): Promise<RetroNote | null> { return this.store.get(id) ?? null; }
+  async upsert(n: RetroNote): Promise<void> { this.store.set(n.id, stripUndefined({ ...n })); }
+  async delete(id: string): Promise<void> { this.store.delete(id); }
+}
+
 export function createMemoryRepoContainer(): RepoContainer {
   return {
     workspaces: new MemWorkspaceRepo(),
@@ -226,5 +241,6 @@ export function createMemoryRepoContainer(): RepoContainer {
     ceremonyHealth: new MemCeremonyHealthRepo(),
     estimations: new MemEstimationRepo(),
     retroTries: new MemRetroTryRepo(),
+    retroNotes: new MemRetroNoteRepo(),
   };
 }

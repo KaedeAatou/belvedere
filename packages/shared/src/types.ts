@@ -160,6 +160,31 @@ export interface RetroTry {
   createdBy: string;
 }
 
+// === RetroNote (KPT ボードのノート / 2026-06-13) ===
+/**
+ * Retrospective の KPT ボード (Keep / Problem / Try) に貼る 1 枚のノート。
+ * レトロを実際に開催するための実データ — メンバーが各列にノートを追加し、投票で
+ * 関心の高さを可視化する。Try 列のノートは d&d で RetroTry (carry-forward 積み上げ)
+ * へ昇格でき、そこからスプリント横断の継続改善アクションになる。
+ */
+export interface RetroNote {
+  id: string;
+  workspaceId: string;
+  /** 由来スプリントの番号 (どのレトロで出たノートか。表示・スコープ用) */
+  sprintNumber: number;
+  /** KPT のどの列か */
+  column: 'keep' | 'problem' | 'try';
+  /** ノート本文 */
+  text: string;
+  /** ノートを書いた人 (Avatar / displayName 表示用) */
+  authorId: string;
+  /** 投票した userId 配列 (toggle 式)。関心の高さを votes.length で表す */
+  votes: string[];
+  createdAt: string; // ISO8601
+  /** ノートを作成した人 (ctx.user.userId)。authorId と同一だが audit のため別フィールド */
+  createdBy: string;
+}
+
 // === Ceremony ===
 export interface AgendaItem {
   topic: string;

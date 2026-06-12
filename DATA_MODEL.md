@@ -22,6 +22,7 @@
 | `CeremonyHealthScore` | 儀式ごとの健全性スコア時系列 | `/workspaces/{wsId}/ceremonyHealth/{scoreId}` |
 | `EstimationSession` | 見積もりポーカーのセッション (隠蔽投票 → 開示 → 採用) | `/workspaces/{wsId}/estimationSessions/{sessionId}` |
 | `RetroTry` | レトロの carry-forward 積み上げ (スプリント横断で蓄積する継続改善アクション) | `/workspaces/{wsId}/retroTries/{tryId}` |
+| `RetroNote` | レトロの KPT ボード (Keep/Problem/Try) のノート 1 枚 (投票でホット度を可視化) | `/workspaces/{wsId}/retroNotes/{noteId}` |
 | `AgentRun` | エージェント実行ログ | `/workspaces/{wsId}/agentRuns/{runId}` |
 | `Member` | チームメンバ | `/workspaces/{wsId}/members/{userId}` |
 
@@ -178,6 +179,22 @@ export interface RetroTry {
   createdBy: string;       // userId
 }
 
+// === RetroNote (KPT ボードのノート / 2026-06-13 追加) ===
+// Retrospective の KPT ボード (Keep / Problem / Try) に貼る 1 枚。レトロを実際に
+// 開催するための実データ。投票 (votes: userId 配列の toggle) でホット度を可視化する。
+// Try 列のノートは UI 側で d&d により RetroTry (carry-forward 積み上げ) へ昇格できる。
+export interface RetroNote {
+  id: string;
+  workspaceId: string;
+  sprintNumber: number;             // 由来スプリントの番号 (どのレトロのノートか)
+  column: 'keep' | 'problem' | 'try';
+  text: string;
+  authorId: string;                 // ノートを書いた人 (userId)
+  votes: string[];                  // 投票した userId 配列 (toggle 式、votes.length がホット度)
+  createdAt: string;
+  createdBy: string;                // userId (authorId と同一 / audit 用)
+}
+
 // === Ceremony ===
 export interface Ceremony {
   id: string;
@@ -235,6 +252,7 @@ export interface CeremonyHealthScore {
 | チケットの見積もりセッション | `/estimationSessions` where `ticketId == X and status in ['voting','revealed']` | `(ticketId, status)` |
 | 種別別チケット (ルールエンジン入力) | `/tickets` where `workspaceId == X` (全件取得しクライアント側で type 判定) | `workspaceId` |
 | RetroTry 積み上げ一覧 | `/retroTries` where `workspaceId == X` orderBy `createdAt desc` | `(workspaceId, createdAt)` |
+| RetroNote ボード一覧 | `/retroNotes` where `workspaceId == X` (ソート/列分けはクライアント側) | `workspaceId` |
 | 招待 bind 用メンバー検索 | `members.listByEmail` (全 ws 横断で email 一致のセンチネル doc を検索) | `email` |
 
 ---

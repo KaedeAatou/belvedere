@@ -54,6 +54,13 @@ import {
   patchRetroTry,
   deleteRetroTry,
 } from './handlers/retro-try-handlers';
+import {
+  listRetroNotes,
+  createRetroNote,
+  patchRetroNote,
+  voteRetroNote,
+  deleteRetroNote,
+} from './handlers/retro-note-handlers';
 
 const app = new Hono<{
   Variables: {
@@ -304,6 +311,24 @@ app.patch('/api/retro-tries/:id', async (c) => {
 });
 app.delete('/api/retro-tries/:id', async (c) => {
   return respond(c, await deleteRetroTry(repo, buildCtx(c), c.req.param('id')));
+});
+
+// ------- Retro KPT ボードのノート (Keep / Problem / Try) -------
+// レトロは全メンバー参加なので role ゲートなし。Try 列のノートは UI で積み上げへ昇格できる。
+app.get('/api/retro-notes', async (c) => respond(c, await listRetroNotes(repo, buildCtx(c))));
+app.post('/api/retro-notes', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await createRetroNote(repo, buildCtx(c), body));
+});
+app.patch('/api/retro-notes/:id', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await patchRetroNote(repo, buildCtx(c), c.req.param('id'), body));
+});
+app.post('/api/retro-notes/:id/vote', async (c) =>
+  respond(c, await voteRetroNote(repo, buildCtx(c), c.req.param('id'))),
+);
+app.delete('/api/retro-notes/:id', async (c) => {
+  return respond(c, await deleteRetroNote(repo, buildCtx(c), c.req.param('id')));
 });
 
 // ------- /api/agents/:name (エージェント実行) -------
