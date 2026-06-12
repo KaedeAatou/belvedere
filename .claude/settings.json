@@ -1,5 +1,45 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh run:*)",
+      "Bash(gh workflow run:*)",
+      "Bash(gh pr view:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm install)",
+      "Bash(pnpm --filter @belvedere/:*)"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git add -A)",
+      "Bash(git add .)",
+      "Bash(gcloud iam:*)",
+      "Bash(gcloud secrets:*)",
+      "Bash(gcloud billing:*)",
+      "Bash(gcloud auth:*)",
+      "Bash(gcloud projects delete:*)",
+      "Bash(gh repo delete:*)",
+      "Bash(gh secret:*)",
+      "Bash(firebase deploy:*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/*service-account*.json)",
+      "Read(**/*sa-key*.json)",
+      "Read(~/.config/gcloud/**)"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
       {
@@ -8,11 +48,24 @@
           {
             "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/seed-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/identifier-guard.sh"
           }
         ]
       },
       {
-        "matcher": "Task|Skill",
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/identifier-guard.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task|Skill",
         "hooks": [
           {
             "type": "command",
@@ -77,13 +130,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(chmod +x /Users/kaede/Projects/ai-agent-hackathon/.claude/hooks/hackathon-check-reminder.sh)",
-      "Bash(/Users/kaede/Projects/ai-agent-hackathon/.claude/hooks/hackathon-check-reminder.sh)",
-      "Bash(echo \"exit=$?\")"
     ]
   }
 }
