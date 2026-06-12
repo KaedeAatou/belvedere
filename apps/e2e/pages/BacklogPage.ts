@@ -96,53 +96,69 @@ export class BacklogPage extends BasePage {
 
   /**
    * ハンドル限定 d&d でバックログ行を並び替える。
-   * TicketRow の `reorderable` フラグは mousedown で dragArmed = true になるため、
-   * まず handle に mousedown を送り、dragTo で row target の上端にドロップする。
-   * dragTo が失敗する場合は dispatchEvent フォールバックを使う。
+   *
+   * Playwright の mouse.down → move → up では HTML5 の dragstart/dragover/drop イベントが
+   * 発火しない (ブラウザ制約)。BacklogScreen は dragover/drop を `.trow` 要素で受け、
+   * evt.clientY で before/after を判定するため、dispatchEvent で直接 DragEvent を送る。
+   *
+   * 手順:
+   *   1. handle に mouse.down — TicketRow の armDrag() を呼んで dragArmed = true にする
+   *   2. ドラッグ行 (.trow) に dragstart を dispatch — reorderStart emit
+   *   3. ターゲット行 (.trow) に dragover を dispatch (clientY = target 上端 + 2px → before 判定)
+   *   4. ターゲット行 (.trow) に drop を dispatch (同じ clientY)
+   *   5. ドラッグ行 (.trow) に dragend を dispatch — reorderEnd emit
+   *   6. mouse.up でポインタ解放
    */
   async reorderDragBefore(dragTitle: string, targetTitle: string): Promise<void> {
     const dragRow = this.backlogRowByTitle(dragTitle);
     const targetRow = this.backlogRowByTitle(targetTitle);
     const handle = dragRow.locator('.trow-drag-grab');
 
-    // handle mousedown で dragArmed = true にする
+    // 1. handle に mouse.down で dragArmed = true (armDrag)
     await handle.hover();
     await this.page.mouse.down();
 
-    try {
-      // target 行の上端 (before) にドロップ
-      const targetBox = await targetRow.boundingBox();
-      if (!targetBox) throw new Error('reorderDragBefore: target bounding box が取得できません');
-      await this.page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + 2, { steps: 10 });
+    // bounding box を取得 (mouse.down 後でも安全に取得可能)
+    const handleBox = await handle.boundingBox();
+    const targetBox = await targetRow.boundingBox();
+    if (!handleBox || !targetBox) {
       await this.page.mouse.up();
-    } catch {
-      // フォールバック: dispatchEvent で HTML5 d&d
-      await this.page.mouse.up(); // mousedown を解放
-      const handleBox = await handle.boundingBox();
-      const targetBox = await targetRow.boundingBox();
-      if (!handleBox || !targetBox) {
-        throw new Error('reorderDragBefore: bounding box が取得できません');
-      }
-      const fromX = handleBox.x + handleBox.width / 2;
-      const fromY = handleBox.y + handleBox.height / 2;
-      const toX = targetBox.x + targetBox.width / 2;
-      const toY = targetBox.y + 2; // 上端
-
-      await this.page.evaluate(
-        ({ fromX, fromY, toX, toY }) => {
-          const el = document.elementFromPoint(fromX, fromY) as HTMLElement | null;
-          const target = document.elementFromPoint(toX, toY) as HTMLElement | null;
-          if (!el || !target) return;
-          const dt = new DataTransfer();
-          // mousedown で armDrag → dragstart が有効になるよう mousedown を送る
-          el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-          el.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-          target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-          target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-          el.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        },
-        { fromX, fromY, toX, toY },
-      );
+      throw new Error('reorderDragBefore: bounding box が取得できません');
     }
+
+    // ターゲット行の上端 + 2px → BacklogScreen の onReorderOver が 'before' と判定する
+    const toClientY = targetBox.y + 2;
+
+    // 2–5. dispatchEvent で HTML5 DragEvent シーケンスを .trow 要素に送る
+    // .trow は data-testid="live-ticket" と同一要素。
+    // dragstart/dragover/drop のリスナは BacklogScreen → TicketRow の @dragstart/@dragover/@drop に付く。
+    // dragover の clientY が行の getBoundingClientRect().top から上半分かどうかで before/after 判定。
+    await this.page.evaluate(
+      ({ handleX, handleY, toClientY }) => {
+        // handle 上の任意の点から最も近い .trow 祖先を取る
+        const handleEl = document.elementFromPoint(handleX, handleY) as HTMLElement | null;
+        const dragRowEl = handleEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
+        if (!dragRowEl) return;
+
+        // target 行: toClientY の座標にある live-ticket 要素
+        const targetEl = document.elementFromPoint(handleX, toClientY) as HTMLElement | null;
+        const targetRowEl = targetEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
+        if (!targetRowEl || targetRowEl === dragRowEl) return;
+
+        const dt = new DataTransfer();
+        dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        targetRowEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: toClientY, dataTransfer: dt }));
+        targetRowEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientY: toClientY, dataTransfer: dt }));
+        dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      },
+      {
+        handleX: handleBox.x + handleBox.width / 2,
+        handleY: handleBox.y + handleBox.height / 2,
+        toClientY,
+      },
+    );
+
+    // 6. ポインタ解放
+    await this.page.mouse.up();
   }
 }
