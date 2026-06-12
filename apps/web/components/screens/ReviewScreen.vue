@@ -11,8 +11,12 @@ const emit = defineEmits<{
   goRetro: [];
 }>();
 
-const { activeSprint, velocityHistory } = useSprints();
+const { activeSprint, sprints, velocityHistory } = useSprints();
 const { patchTicket } = useTickets();
+const { members } = useMembers();
+
+// 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = carry-over 候補全件。
+const sel = useTicketSelection();
 
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
@@ -136,10 +140,27 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
       <div style="margin-top: 24px">
         <h2 style="margin: 0 0 8px; font-size: 14px; font-weight: 500">Carry-over candidates</h2>
         <div style="border: 1px solid var(--line-1)">
+          <BulkActionBar
+            v-if="sel.count.value > 0"
+            :count="sel.count.value"
+            :members="members"
+            :sprints="sprints"
+            :busy="sel.isBusy.value"
+            @set-status="(s) => sel.applyToSelected({ status: s })"
+            @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
+            @set-priority="(p) => sel.applyToSelected({ priority: p })"
+            @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
+            @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
+            @remove="sel.removeSelected"
+            @clear="sel.clear"
+            @select-all="() => sel.selectMany(carry.map((t) => t.id))"
+          />
           <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id"
                      drag-handle reorderable
+                     selectable :bulk-selected="sel.isSelected(t.id)"
                      :drop-edge="carryDropEdgeFor(t.id)"
                      @click="emit('select', t.id)"
+                     @toggle-select="sel.toggle(t.id)"
                      @reorder-start="carryReorderStart(t.id)"
                      @reorder-over="(e) => carryReorderOver(t.id, e)"
                      @reorder-drop="carryReorderDrop(t.id)"

@@ -13,6 +13,22 @@
   position: relative;
   transition: background 0.15s ease;
 }
+/* 一括選択 (複数選択 → 一括変更/削除) を有効化した行。先頭にチェックボックス列を足す。
+   既存 .trow の grid は不変 — selectable のときだけ 22px 列を先頭に増やす。 */
+.trow.selectable {
+  grid-template-columns: 22px 18px 14px 80px 1fr auto auto auto auto;
+}
+.trow-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.trow-check input[type='checkbox'] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
 .trow:hover { background: var(--bg-2); }
 .trow.selected { background: var(--bg-3); }
 .trow.selected::before {

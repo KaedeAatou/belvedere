@@ -8,10 +8,14 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { activeSprint } = useSprints();
+const { activeSprint, sprints } = useSprints();
 const { createTicket, patchTicket, isLoading: createLoading, error: liveError } = useTickets();
 const { findingsFor, findingsByTicket, refresh: refreshFindings } = useFindings();
 const { members } = useMembers();
+
+// 複数選択 → 一括変更/削除 (画面ローカルな選択セット。区画跨ぎ選択可)。
+const sel = useTicketSelection();
+// 全選択 = 現在表示中 (フィルタ後) の sprint + backlog 両区画の id。
 
 // ===== フィルタ状態 =====
 const showFilterPopover = ref(false);
@@ -77,6 +81,12 @@ const backlogTicketsRaw = computed(() => {
 const sprintTickets = computed(() => sprintTicketsRaw.value.filter(matchesFilter));
 const backlogTickets = computed(() => backlogTicketsRaw.value.filter(matchesFilter));
 const isFiltered = computed(() => filterCount.value > 0 || showFlaggedOnly.value);
+
+// 一括操作の全選択対象 = 表示中 (フィルタ後) の両区画の id。
+const allVisibleIds = computed(() => [
+  ...sprintTickets.value.map((t) => t.id),
+  ...backlogTickets.value.map((t) => t.id),
+]);
 
 // ===== バックログ手動並び替え =====
 // computeOrderIndexBetween / rebalance は useTicketReorder に移管。
@@ -256,6 +266,21 @@ async function submitCreate(): Promise<void> {
   <div v-if="showFilterPopover" class="filter-backdrop" @click="showFilterPopover = false" />
 
   <div class="screen-body" data-testid="live-section">
+    <BulkActionBar
+      v-if="sel.count.value > 0"
+      :count="sel.count.value"
+      :members="members"
+      :sprints="sprints"
+      :busy="sel.isBusy.value"
+      @set-status="(s) => sel.applyToSelected({ status: s })"
+      @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
+      @set-priority="(p) => sel.applyToSelected({ priority: p })"
+      @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
+      @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
+      @remove="sel.removeSelected"
+      @clear="sel.clear"
+      @select-all="() => sel.selectMany(allVisibleIds)"
+    />
     <p v-if="createLoading && tickets.length === 0" class="live-msg">読み込み中…</p>
     <p v-else-if="liveError && tickets.length === 0" class="live-msg live-error">取得失敗: {{ liveError }}</p>
 
@@ -273,8 +298,10 @@ async function submitCreate(): Promise<void> {
       </div>
       <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle reorderable
+                 selectable :bulk-selected="sel.isSelected(t.id)"
                  :drop-edge="sprintDropEdgeFor(t.id)"
                  @click="emit('select', t.id)"
+                 @toggle-select="sel.toggle(t.id)"
                  @reorder-start="sprintReorderStart(t.id)"
                  @reorder-over="(e) => sprintReorderOver(t.id, e)"
                  @reorder-drop="sprintReorderDrop(t.id)"
@@ -301,8 +328,10 @@ async function submitCreate(): Promise<void> {
       </div>
       <TicketRow v-for="t in backlogTickets" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle reorderable
+                 selectable :bulk-selected="sel.isSelected(t.id)"
                  :drop-edge="dropEdgeFor(t.id)"
                  @click="emit('select', t.id)"
+                 @toggle-select="sel.toggle(t.id)"
                  @reorder-start="onReorderStart(t.id)"
                  @reorder-over="(e) => onReorderOver(t.id, e)"
                  @reorder-drop="onReorderDrop(t.id)"
