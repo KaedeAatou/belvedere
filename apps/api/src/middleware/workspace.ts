@@ -73,7 +73,9 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
         const plan = planInviteBind(user.userId, user.email, [sentinel]);
         if (!plan) continue;
         await repo.members.upsert(plan.bound);
-        await repo.members.delete(plan.sentinel.userId);
+        // 旧センチネル doc を複合キー (workspaceId, sentinel userId) で削除。
+        // bound は同 workspaceId + 実 uid なので別 doc になり、衝突しない。
+        await repo.members.delete(plan.sentinel.workspaceId, plan.sentinel.userId);
         bound.push(plan.bound);
         console.log(
           `[workspace] invite bound: ${user.email} → ${plan.bound.workspaceId} (${plan.bound.role})`,

@@ -246,19 +246,29 @@ class FsUserStoryRepo implements UserStoryRepository {
   }
 }
 
+/**
+ * Member の doc id は複合キー `${workspaceId}:${userId}` (1 user が複数 Workspace に所属可能)。
+ * 単独 userId を doc id にすると、別 Workspace のメンバーを upsert した時に前の所属を
+ * 上書きしてマルチテナントが壊れる。memory.ts (MemMemberRepo) と完全一致の挙動。
+ */
+function memberDocId(workspaceId: string, userId: string): string {
+  return `${workspaceId}:${userId}`;
+}
+
 class FsMemberRepo implements MemberRepository {
-  // doc id は userId (memory.ts と揃える)
   async list(opts: { workspaceId: string }): Promise<Member[]> {
     const snap = await db().collection(COL.members).where('workspaceId', '==', opts.workspaceId).get();
     return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
-  async get(userId: string): Promise<Member | null> {
-    const doc = await db().collection(COL.members).doc(userId).get();
-    return doc.exists ? parseOne<Member>(COL.members, userId, doc.data(), MemberSchema) : null;
+  async get(workspaceId: string, userId: string): Promise<Member | null> {
+    const id = memberDocId(workspaceId, userId);
+    const doc = await db().collection(COL.members).doc(id).get();
+    return doc.exists ? parseOne<Member>(COL.members, id, doc.data(), MemberSchema) : null;
   }
   /**
    * userId で全 Workspace 横断検索 (workspace 解決ミドルウェア用)。
    * 個人ユーザーが複数 Workspace 所属しているケースで使う。
+   * doc id 非依存 (userId field の where) なので複合キー化の影響を受けない。
    */
   async listByUserId(userId: string): Promise<Member[]> {
     const snap = await db().collection(COL.members).where('userId', '==', userId).get();
@@ -266,17 +276,17 @@ class FsMemberRepo implements MemberRepository {
   }
   /**
    * email で全 Workspace 横断検索 (招待 bind 用)。招待センチネルは正規化済 email を
-   * 格納しているので equality where で引ける。
+   * 格納しているので equality where で引ける。doc id 非依存 (email field の where)。
    */
   async listByEmail(email: string): Promise<Member[]> {
     const snap = await db().collection(COL.members).where('email', '==', email.toLowerCase()).get();
     return parseList<Member>(COL.members, snap.docs, MemberSchema);
   }
   async upsert(m: Member): Promise<void> {
-    await db().collection(COL.members).doc(m.userId).set(m);
+    await db().collection(COL.members).doc(memberDocId(m.workspaceId, m.userId)).set(m);
   }
-  async delete(userId: string): Promise<void> {
-    await db().collection(COL.members).doc(userId).delete();
+  async delete(workspaceId: string, userId: string): Promise<void> {
+    await db().collection(COL.members).doc(memberDocId(workspaceId, userId)).delete();
   }
 }
 

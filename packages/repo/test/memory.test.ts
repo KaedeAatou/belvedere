@@ -121,6 +121,50 @@ describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)
     expect((await repo.members.listByUserId('firebase-uid-test-3')).length).toBe(1);
     expect((await repo.members.listByUserId('firebase-uid-test-3-other')).length).toBe(1);
   });
+
+  // 回帰テスト (マルチテナント破壊バグ): doc id が userId 単独だった頃は、同じ userId で
+  // 別 workspace の Member を upsert すると前の所属を上書きして消していた。
+  // 複合キー `${workspaceId}:${userId}` 化でこれが壊れないことを固定する。
+  it('同一 userId × 別 workspaceId を 2 件 upsert すると listByUserId が 2 件返す (複数 Workspace 所属)', async () => {
+    const base = {
+      userId: 'firebase-uid-multi',
+      email: 'multi@example.com',
+      displayName: 'Multi',
+      role: 'dev' as const,
+    };
+    await repo.members.upsert({ ...base, workspaceId: WS, role: 'owner' });
+    await repo.members.upsert({ ...base, workspaceId: 'ws-second' });
+
+    // 同じ userId で 2 つの Workspace に所属できる (= 後の upsert が前を上書きしない)。
+    const all = await repo.members.listByUserId('firebase-uid-multi');
+    expect(all.length).toBe(2);
+    expect(new Set(all.map((m) => m.workspaceId))).toEqual(new Set([WS, 'ws-second']));
+
+    // 複合キー get は workspace ごとに別 doc を返す (role も独立)。
+    expect((await repo.members.get(WS, 'firebase-uid-multi'))?.role).toBe('owner');
+    expect((await repo.members.get('ws-second', 'firebase-uid-multi'))?.role).toBe('dev');
+
+    // list({ workspaceId }) は当該 ws の 1 件だけにスコープされる。
+    expect((await repo.members.list({ workspaceId: WS })).filter((m) => m.userId === 'firebase-uid-multi').length).toBe(1);
+    expect((await repo.members.list({ workspaceId: 'ws-second' })).length).toBe(1);
+  });
+
+  it('複合キー delete は 1 Workspace 分だけを消す (他 ws の所属は残る)', async () => {
+    const base = {
+      userId: 'firebase-uid-del',
+      email: 'del@example.com',
+      displayName: 'Del',
+      role: 'dev' as const,
+    };
+    await repo.members.upsert({ ...base, workspaceId: WS });
+    await repo.members.upsert({ ...base, workspaceId: 'ws-second' });
+
+    await repo.members.delete(WS, 'firebase-uid-del');
+    expect(await repo.members.get(WS, 'firebase-uid-del')).toBeNull();
+    // 別 ws の所属は無傷
+    expect((await repo.members.get('ws-second', 'firebase-uid-del'))?.workspaceId).toBe('ws-second');
+    expect((await repo.members.listByUserId('firebase-uid-del')).length).toBe(1);
+  });
 });
 
 describe('memory backend - tickets where filters', () => {
