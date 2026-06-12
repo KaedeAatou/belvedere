@@ -10,8 +10,6 @@ export class SettingsProfilePage extends BasePage {
   readonly roleBadge: Locator;
   readonly displayNameInput: Locator;
   readonly saveButton: Locator;
-  readonly whoamiButton: Locator;
-  readonly whoamiResult: Locator;
   readonly successMsg: Locator;
   readonly errorMsg: Locator;
 
@@ -21,8 +19,6 @@ export class SettingsProfilePage extends BasePage {
     this.roleBadge = page.locator('.role-badge');
     this.displayNameInput = page.locator('#displayName');
     this.saveButton = page.getByRole('button', { name: /保存/ });
-    this.whoamiButton = page.getByRole('button', { name: /whoami/i });
-    this.whoamiResult = page.locator('.whoami-result');
     this.successMsg = page.locator('.msg.success');
     this.errorMsg = page.locator('.msg.error');
   }
@@ -47,13 +43,4 @@ export class SettingsProfilePage extends BasePage {
     await expect(this.successMsg).toBeVisible({ timeout: 10_000 });
   }
 
-  async clickWhoami(): Promise<void> {
-    await this.whoamiButton.click();
-    await expect(this.whoamiResult).toBeVisible({ timeout: 10_000 });
-  }
-
-  async whoamiContainsRole(expectedRole: string): Promise<boolean> {
-    const text = (await this.whoamiResult.textContent()) ?? '';
-    return text.includes(`"role"`) && text.includes(`"${expectedRole}"`);
-  }
 }
