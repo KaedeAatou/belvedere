@@ -26,6 +26,7 @@ import type {
   Ritual,
   EstimationSession,
   RetroTry,
+  RetroNote,
 } from '@belvedere/shared';
 import {
   WorkspaceSchema,
@@ -40,6 +41,7 @@ import {
   CeremonyHealthScoreSchema,
   EstimationSessionSchema,
   RetroTrySchema,
+  RetroNoteSchema,
 } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
 import { z } from 'zod';
@@ -56,6 +58,7 @@ import type {
   CeremonyHealthRepository,
   EstimationRepository,
   RetroTryRepository,
+  RetroNoteRepository,
   TicketQuery,
   RepoContainer,
 } from './types';
@@ -138,6 +141,7 @@ const COL = {
   ceremonyHealth: 'ceremonyHealth',
   estimationSessions: 'estimationSessions',
   retroTries: 'retroTries',
+  retroNotes: 'retroNotes',
 } as const;
 
 class FsWorkspaceRepo implements WorkspaceRepository {
@@ -387,6 +391,26 @@ class FsRetroTryRepo implements RetroTryRepository {
   }
 }
 
+class FsRetroNoteRepo implements RetroNoteRepository {
+  async list(opts: { workspaceId: string }): Promise<RetroNote[]> {
+    const snap = await db().collection(COL.retroNotes).where('workspaceId', '==', opts.workspaceId).get();
+    const xs = parseList<RetroNote>(COL.retroNotes, snap.docs, RetroNoteSchema);
+    // ソートはクライアント側 (orderBy 由来の composite index 要求を回避)。createdAt 昇順。
+    xs.sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+    return xs;
+  }
+  async get(id: string): Promise<RetroNote | null> {
+    const doc = await db().collection(COL.retroNotes).doc(id).get();
+    return doc.exists ? parseOne<RetroNote>(COL.retroNotes, id, doc.data(), RetroNoteSchema) : null;
+  }
+  async upsert(n: RetroNote): Promise<void> {
+    await db().collection(COL.retroNotes).doc(n.id).set(n);
+  }
+  async delete(id: string): Promise<void> {
+    await db().collection(COL.retroNotes).doc(id).delete();
+  }
+}
+
 export function createFirestoreRepoContainer(): RepoContainer {
   return {
     workspaces: new FsWorkspaceRepo(),
@@ -401,5 +425,6 @@ export function createFirestoreRepoContainer(): RepoContainer {
     ceremonyHealth: new FsCeremonyHealthRepo(),
     estimations: new FsEstimationRepo(),
     retroTries: new FsRetroTryRepo(),
+    retroNotes: new FsRetroNoteRepo(),
   };
 }

@@ -28,6 +28,7 @@ import type {
   CeremonyHealthScore,
   EstimationSession,
   RetroTry,
+  RetroNote,
 } from './types';
 
 // === enum: domain literal unions ===
@@ -290,6 +291,19 @@ export const RetroTrySchema = z.object({
   createdBy: z.string(),
 });
 
+// === RetroNote (KPT ボードのノート) ===
+export const RetroNoteSchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  sprintNumber: z.number(),
+  column: z.enum(['keep', 'problem', 'try']),
+  text: z.string(),
+  authorId: z.string(),
+  votes: z.array(z.string()),
+  createdAt: z.string(),
+  createdBy: z.string(),
+});
+
 // === Compile-time drift detection ===
 // 各 schema の output と TypeScript interface が双方向に互換であることを compile 時に保証する。
 // drift したら下の `_check_*` の代入で typecheck エラーが起き CI が落ちる。
@@ -308,6 +322,7 @@ const _check_AgentRun: Equal<z.infer<typeof AgentRunSchema>, AgentRun> = true;
 const _check_CeremonyHealth: Equal<z.infer<typeof CeremonyHealthScoreSchema>, CeremonyHealthScore> = true;
 const _check_EstimationSession: Equal<z.infer<typeof EstimationSessionSchema>, EstimationSession> = true;
 const _check_RetroTry: Equal<z.infer<typeof RetroTrySchema>, RetroTry> = true;
+const _check_RetroNote: Equal<z.infer<typeof RetroNoteSchema>, RetroNote> = true;
 
 // 未使用変数の typecheck warning を抑止 (本来の使い道は compile-time の側面)
 void _check_Workspace;

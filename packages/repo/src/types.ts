@@ -20,6 +20,7 @@ import type {
   Ritual,
   EstimationSession,
   RetroTry,
+  RetroNote,
 } from '@belvedere/shared';
 
 export interface WorkspaceRepository {
@@ -141,6 +142,13 @@ export interface RetroTryRepository {
   delete(id: string): Promise<void>;
 }
 
+export interface RetroNoteRepository {
+  list(opts: { workspaceId: string }): Promise<RetroNote[]>;
+  get(id: string): Promise<RetroNote | null>;
+  upsert(n: RetroNote): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 /**
  * 全リポジトリを束ねたコンテナ。
  * ServiceLocator的に使う — 実装差し替えポイント。
@@ -158,4 +166,5 @@ export interface RepoContainer {
   ceremonyHealth: CeremonyHealthRepository;
   estimations: EstimationRepository;
   retroTries: RetroTryRepository;
+  retroNotes: RetroNoteRepository;
 }
