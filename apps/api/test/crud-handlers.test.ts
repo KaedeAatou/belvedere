@@ -79,6 +79,23 @@ describe('createTicket', () => {
     expect(res.status).toBe(400);
   });
 
+  it('正常系: orderIndex を保存する (手動並び替え d&d の前提)', async () => {
+    const res = await createTicket(repo, CTX, { title: 'ordered', orderIndex: 1500 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.orderIndex).toBe(1500);
+    // 永続化されているか get でも確認
+    const got = await repo.tickets.get(res.body.id);
+    expect(got?.orderIndex).toBe(1500);
+  });
+
+  it('正常系: orderIndex 省略時はキーを持たない (conditional spread)', async () => {
+    const res = await createTicket(repo, CTX, { title: 'no order' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect('orderIndex' in res.body).toBe(false);
+  });
+
   it('異常系: title が空文字 → 400 invalid_body', async () => {
     const res = await createTicket(repo, CTX, { title: '' });
     expect(res.ok).toBe(false);
@@ -162,6 +179,18 @@ describe('patchTicket', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(404);
+  });
+
+  it('正常系: orderIndex を patch で永続化する (fractional な中間値も含む)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'reorder me' });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    const res = await patchTicket(repo, CTX, id, { orderIndex: 1250.5 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.orderIndex).toBe(1250.5);
+    const got = await repo.tickets.get(id);
+    expect(got?.orderIndex).toBe(1250.5);
   });
 });
 

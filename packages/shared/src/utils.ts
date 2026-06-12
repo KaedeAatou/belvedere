@@ -2,7 +2,36 @@
 // repo backend と api handler に重複していた stripUndefined、
 // および 3 箇所に散っていた ID 採番ロジックをここに集約する。
 
-import type { Status, Ticket } from './types';
+import type { Priority, Status, Ticket } from './types';
+
+/** priority 降順用の重み (urgent が最も先頭)。フォールバックソートで使う。 */
+const PRIORITY_RANK: Record<Priority, number> = { urgent: 3, high: 2, medium: 1, low: 0 };
+
+/**
+ * バックログ表示順の比較関数 (memory / firestore 両 backend で共有 / 2026-06-12)。
+ *
+ * 規則:
+ * 1. orderIndex を持つチケット同士は orderIndex 昇順 (手動 d&d で決めた順)。
+ * 2. orderIndex を持つものは持たないものより前。
+ * 3. orderIndex を持たないチケット同士は priority 降順 (urgent>high>medium>low) → createdAt 昇順。
+ *
+ * 同一規則を両 backend の tickets.list() の末尾で適用し、全 consumer が同じ並びを得る。
+ */
+export function compareTicketOrder(a: Ticket, b: Ticket): number {
+  const ao = a.orderIndex;
+  const bo = b.orderIndex;
+  if (ao !== undefined && bo !== undefined) {
+    if (ao !== bo) return ao - bo;
+  } else if (ao !== undefined) {
+    return -1; // orderIndex あり が先
+  } else if (bo !== undefined) {
+    return 1;
+  }
+  // フォールバック: priority 降順 → createdAt 昇順
+  const pr = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
+  if (pr !== 0) return pr;
+  return (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
+}
 
 /**
  * status 遷移に伴う startedAt / completedAt の自動記録 (T2 / 2026-06-10)。
