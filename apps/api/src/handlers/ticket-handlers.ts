@@ -60,8 +60,12 @@ export const TicketCreateBodySchema = z.object({
   orderIndex: z.number().optional(),
 });
 
-// PATCH /api/tickets/:id body — 全フィールドオプション (部分更新)、id / workspaceId / createdBy / createdAt は変更不可
-export const TicketPatchBodySchema = TicketCreateBodySchema.partial();
+// PATCH /api/tickets/:id body — 全フィールドオプション (部分更新)、id / workspaceId / createdBy / createdAt は変更不可。
+// sprintId のみ null/空文字を許可する: 3 区画ビューの d&d で BACKLOG (未割当) へ戻す経路で
+// 「sprintId フィールドを削除」を表現する (undefined は「変更なし」、null/'' は「解除」)。
+export const TicketPatchBodySchema = TicketCreateBodySchema.partial().extend({
+  sprintId: z.string().nullable().optional(),
+});
 
 export const TicketStatusChangeBodySchema = z.object({
   status: StatusSchema,
@@ -124,15 +128,24 @@ export async function patchTicket(
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
   const now = new Date().toISOString();
+  // sprintId は null/空文字で「解除」(フィールド削除) を意味する。3 区画ビューの d&d で
+  // BACKLOG (未割当) へ戻す経路で使う。merge から外して別途 delete する
+  // (Ticket.sprintId は optional の string なので null を残すと exactOptionalPropertyTypes 違反)。
+  const { sprintId: patchSprintId, ...restPatch } = parsed.data;
+  const clearSprint = patchSprintId === null || patchSprintId === '';
   let updated: Ticket = {
     ...existing,
-    ...stripUndefinedPartial(parsed.data),
+    ...stripUndefinedPartial(restPatch),
+    ...(typeof patchSprintId === 'string' && patchSprintId !== '' && { sprintId: patchSprintId }),
     id: existing.id,                       // 変更不可
     workspaceId: existing.workspaceId,     // 変更不可
     createdAt: existing.createdAt,         // 変更不可
     createdBy: existing.createdBy,         // 変更不可
     updatedAt: now,
   };
+  if (clearSprint) {
+    delete updated.sprintId;
+  }
   // patch に status 変更が含まれる場合は startedAt / completedAt も自動記録 (changeTicketStatus と同じ経路)
   if (parsed.data.status !== undefined && parsed.data.status !== existing.status) {
     updated = applyStatusTransition(updated, parsed.data.status, now);
