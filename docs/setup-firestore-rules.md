@@ -63,7 +63,12 @@ firebase use belvedere-dev-atrium
 
 ## STEP 3: Rules を deploy (1 分)
 
+⚠ **必ず `infra/` ディレクトリで実行する** (`firebase.json` がここにあるため)。
+リポジトリのルートで叩くと `Not in a Firebase app directory (could not locate firebase.json)` で失敗する。
+`infra/.firebaserc` で default project = `belvedere-dev-atrium` を pin 済みなので STEP 2 の `firebase use` は省略可。
+
 ```bash
+cd /Users/kaede/Projects/ai-agent-hackathon/infra
 firebase deploy --only firestore:rules
 ```
 
