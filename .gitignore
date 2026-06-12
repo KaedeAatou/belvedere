@@ -47,3 +47,4 @@ venv/
 /.claude/.hooks.log
 /.claude/.usage.log
 /.claude/settings.local.json
+/.claude/.ci-ack
