@@ -80,8 +80,10 @@ jobs:
           path: apps/e2e/test-results
           retention-days: 14
 
-      - name: Auto-create Belvedere ticket on failure
-        if: steps.tests.outcome == 'failure'
+      # 失敗時の Belvedere 自動起票は 2026-06-13 ユーザー指示で停止中
+      # (手動テスト期間中の起票ノイズ防止)。再開するときは if の `false &&` を外す。
+      - name: Auto-create Belvedere ticket on failure (停止中)
+        if: ${{ false && steps.tests.outcome == 'failure' }}
         env:
           API_BASE_URL: ${{ env.API_BASE_URL }}
           FIREBASE_SA_KEY: ${{ secrets.FIREBASE_SA_KEY }}
@@ -89,6 +91,6 @@ jobs:
           GH_RUN_URL: ${{ format('https://github.com/{0}/actions/runs/{1}', github.repository, github.run_id) }}
         run: pnpm --filter @belvedere/e2e exec tsx utils/post-failure-tickets.ts
 
-      - name: Fail job if tests failed (after ticket creation)
+      - name: Fail job if tests failed
         if: steps.tests.outcome == 'failure'
         run: exit 1
