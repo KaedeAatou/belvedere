@@ -183,6 +183,48 @@ describe('patchTicket', () => {
     expect(res.status).toBe(404);
   });
 
+  it('正常系: sprintId を null で解除できる (3 区画ビューの BACKLOG へ戻す d&d)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'sprinted', sprintId: 'sprint-13' });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    expect(created.body.sprintId).toBe('sprint-13');
+    // null で解除 → フィールドが消える
+    const res = await patchTicket(repo, CTX, id, { sprintId: null } as unknown);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect('sprintId' in res.body).toBe(false);
+    const got = await repo.tickets.get(id);
+    expect(got).not.toBeNull();
+    expect(got?.sprintId).toBeUndefined();
+  });
+
+  it('正常系: sprintId を空文字で解除できる (null と同等)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'sprinted', sprintId: 'sprint-13' });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await patchTicket(repo, CTX, created.body.id, { sprintId: '' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect('sprintId' in res.body).toBe(false);
+  });
+
+  it('正常系: sprintId を別の値に付け替えできる (CURRENT/NEXT 間移動)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'move me' });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await patchTicket(repo, CTX, created.body.id, { sprintId: 'sprint-14' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.sprintId).toBe('sprint-14');
+  });
+
+  it('正常系: sprintId 省略 (undefined) は既存 sprintId を保持する (解除ではない)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'keep', sprintId: 'sprint-13' });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await patchTicket(repo, CTX, created.body.id, { title: 'renamed' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.sprintId).toBe('sprint-13');
+  });
+
   it('正常系: orderIndex を patch で永続化する (fractional な中間値も含む)', async () => {
     const created = await createTicket(repo, CTX, { title: 'reorder me' });
     if (!created.ok) throw new Error('setup failed');
