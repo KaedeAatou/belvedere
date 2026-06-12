@@ -372,7 +372,37 @@
   text-transform: uppercase;
   text-align: center;
 }
+.retro-add { cursor: pointer; }
 .retro-add:hover { border-color: var(--accent-dim); color: var(--accent); }
+/* vote は button 化したのでネイティブ装飾をリセット (位置・枠は既存 .vote ルールを継承) */
+.retro-note .vote {
+  background: none; cursor: pointer; color: inherit;
+  font: inherit; line-height: 1;
+}
+.retro-note .vote:hover { border-color: var(--accent-dim); }
+/* 自分のノート削除ボタン */
+.retro-note .note-rm {
+  margin-left: 4px; background: none; border: none; cursor: pointer;
+  color: var(--ink-3); display: inline-flex; align-items: center; padding: 0;
+}
+.retro-note .note-rm:hover { color: var(--err); }
+/* インラインのノート追加フォーム */
+.retro-add-form {
+  margin: 12px;
+  border: 1px dashed var(--accent-dim);
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.retro-add-input {
+  width: 100%; box-sizing: border-box;
+  border: var(--hairline) solid var(--line-2);
+  background: var(--bg-0);
+  padding: 8px 10px;
+  font-family: var(--sans); font-size: 12.5px; line-height: 1.5;
+  color: var(--ink-0); resize: vertical;
+}
+.retro-add-input:focus { outline: none; border-color: var(--accent-dim); }
+.retro-add-actions { display: flex; gap: 8px; justify-content: flex-end; }
 /* アクション積み上げ (下段の Try ドロップゾーン) */
 .retro-stack {
   flex: 0 0 auto;
