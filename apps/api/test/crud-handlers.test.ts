@@ -143,7 +143,9 @@ describe('patchTicket', () => {
     expect(res.body.title).toBe('updated');
     expect(res.body.priority).toBe('urgent');
     expect(res.body.id).toBe(id); // id は変更されない
-    expect(res.body.updatedAt).not.toBe(res.body.createdAt);
+    // updatedAt は createdAt 以降 (同一ミリ秒で等しくなることがあるため >= で判定。
+    // .not.toBe だと create と patch が同 ms に走ると偽陽性で落ちる = flaky だった)
+    expect(Date.parse(res.body.updatedAt)).toBeGreaterThanOrEqual(Date.parse(res.body.createdAt));
   });
 
   it('IDOR: 別 workspace の ticket は 404 (情報漏えい防止)', async () => {
