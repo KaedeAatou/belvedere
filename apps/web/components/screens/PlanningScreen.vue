@@ -8,16 +8,20 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { activeSprint, sprints, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
+const { sprints, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
 const { patchTicket } = useTickets();
 const { members } = useMembers();
 
 // 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = sprint items 全件。
 const sel = useTicketSelection();
 
+// planSprint: Planning 画面の主役は nextPlanned (planned スプリント) のみ。
+// active スプリントは Daily / Review が担当するため Planning には出さない。
+const planSprint = nextPlanned;
+
 const sprintTicketsSorted = computed(() => {
-  const raw = activeSprint.value
-    ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id)
+  const raw = planSprint.value
+    ? props.tickets.filter((t) => t.sprintId === planSprint.value!.id)
     : [];
   return [...raw].sort(compareTicketOrder);
 });
@@ -39,7 +43,7 @@ const avgVelocity = computed(() => {
 });
 const hasVelocity = computed(() => avgVelocity.value > 0);
 const overBy = computed(() => totalSP.value - avgVelocity.value);
-const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
+const goal = computed(() => planSprint.value?.goal ?? 'スプリントゴール未設定');
 
 // 1 セグメント = 1 SP。velocity を超えた分が over (accent) になる。
 const barTotal = computed(() => Math.max(totalSP.value, avgVelocity.value, 1));
@@ -154,10 +158,10 @@ const pullBusy = ref(false);
 const pullError = ref<string | null>(null);
 
 const backlogTickets = computed(() => {
-  const activeId = activeSprint.value?.id;
+  const planId = planSprint.value?.id;
   return props.tickets.filter((t) => {
-    const notInActiveSprint = !activeId || t.sprintId !== activeId;
-    return notInActiveSprint && t.status === 'backlog';
+    const notInPlanSprint = !planId || t.sprintId !== planId;
+    return notInPlanSprint && t.status === 'backlog';
   });
 });
 
@@ -174,7 +178,7 @@ function togglePullRow(id: string): void {
 }
 
 async function submitPull(): Promise<void> {
-  const sprint = activeSprint.value;
+  const sprint = planSprint.value;
   if (!sprint) return;
   const ids = [...pullSelected.value];
   if (ids.length === 0) return;
@@ -211,11 +215,18 @@ onMounted(() => {
   <div class="planning">
     <div class="goal-block">
       <div style="display: flex; align-items: center; margin-bottom: 8px">
-        <div class="t-cap">SPRINT GOAL</div>
-        <button v-if="nextPlanned" class="h-btn" style="margin-left: auto"
-                data-testid="plan-next-sprint" @click="openSprintDialog">
-          <Icon name="plus" /> 次スプリント (S{{ nextPlanned.number }}) を計画
-        </button>
+        <div class="t-cap">
+          <template v-if="planSprint">Sprint {{ planSprint.number }} を計画</template>
+          <template v-else>SPRINT GOAL</template>
+        </div>
+        <div v-if="planSprint" style="margin-left: auto; display: flex; gap: 8px">
+          <button class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog">
+            <Icon name="edit" /> ゴール・期間を編集
+          </button>
+          <button class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog">
+            スプリントを開始 →
+          </button>
+        </div>
         <button v-else class="h-btn" style="margin-left: auto"
                 data-testid="create-sprint" @click="openCreateDialog">
           <Icon name="plus" /> 新規スプリントを計画
@@ -259,7 +270,7 @@ onMounted(() => {
       <span class="t-cap">{{ sprintTickets.length }} planned</span>
       <span style="margin-left: auto" />
       <button class="h-btn" data-testid="pull-from-backlog"
-              :disabled="!activeSprint"
+              :disabled="!planSprint"
               @click="openPullDialog">
         <Icon name="plus" /> Pull from backlog
       </button>
@@ -290,9 +301,20 @@ onMounted(() => {
                  @reorder-over="(e) => planReorderOver(t.id, e)"
                  @reorder-drop="planReorderDrop(t.id)"
                  @reorder-end="planReorderEnd" />
-      <p v-if="sprintTickets.length === 0" style="padding: 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
-        アクティブスプリントにチケットがありません。
-      </p>
+      <div v-if="sprintTickets.length === 0" style="padding: 32px 16px; text-align: center; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
+        <template v-if="planSprint">
+          <p style="margin: 0 0 12px">計画中のスプリントにチケットがありません。</p>
+          <button class="h-btn" data-testid="pull-from-backlog-empty" @click="openPullDialog">
+            <Icon name="plus" /> Pull from backlog
+          </button>
+        </template>
+        <template v-else>
+          <p style="margin: 0 0 12px">計画中のスプリントがありません。</p>
+          <button class="h-btn" data-testid="create-sprint-empty" @click="openCreateDialog">
+            <Icon name="plus" /> 新規スプリントを計画
+          </button>
+        </template>
+      </div>
     </div>
   </div>
 
@@ -305,7 +327,7 @@ onMounted(() => {
       </div>
       <div class="dialog-body" style="padding-bottom: 8px">
         <p style="font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6">
-          アクティブスプリント (S{{ activeSprint?.number }}) に追加するチケットを選択してください。
+          Sprint {{ planSprint?.number }} (計画中) に追加するチケットを選択してください。
         </p>
         <div class="pull-list">
           <p v-if="backlogTickets.length === 0"
@@ -456,6 +478,14 @@ onMounted(() => {
 }
 .btn-primary:hover:not(:disabled) { background: var(--accent-dim); }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Sprint header CTA — accent 塗り h-btn (ダイアログ外のインライン用) */
+.h-btn--primary {
+  background: var(--accent); color: #FBF8F2;
+  border-color: transparent;
+  font-weight: 500;
+}
+.h-btn--primary:hover { background: var(--accent-dim, #b84600); border-color: transparent; }
 
 /* Pull from backlog ダイアログ — リスト */
 .pull-dialog { max-width: 560px; }
