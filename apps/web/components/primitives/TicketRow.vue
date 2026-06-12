@@ -14,6 +14,14 @@ const props = defineProps<{
   reorderable?: boolean;
   /** ドロップ位置インジケータ: 'before' = 行上端ライン / 'after' = 行下端ライン / null = 非表示。 */
   dropEdge?: 'before' | 'after' | null;
+  /**
+   * 複数選択 (一括変更/削除) を有効化する。デフォルト false。
+   * true のとき一番左にチェックボックス列を追加し、bulkSelected で選択状態を反映する。
+   * 行クリック (詳細を開く) とは独立 — チェックボックスは @click.stop で競合させない。
+   */
+  selectable?: boolean;
+  /** 一括選択チェックボックスの ON/OFF (selectable 時のみ意味を持つ)。 */
+  bulkSelected?: boolean;
 }>();
 const emit = defineEmits<{
   click: [];
@@ -21,6 +29,7 @@ const emit = defineEmits<{
   reorderOver: [evt: DragEvent];
   reorderDrop: [evt: DragEvent];
   reorderEnd: [];
+  toggleSelect: [];
 }>();
 
 // ルールエンジン findings (T5-3 / C 案)。severity 悪い順。行内は最大 2 個 + 超過は +n に丸める。
@@ -70,7 +79,7 @@ function onDragEnd(): void {
 
 <template>
   <div
-    :class="['trow', selected && 'selected', dropEdge === 'before' && 'drop-before', dropEdge === 'after' && 'drop-after']"
+    :class="['trow', selectable && 'selectable', selected && 'selected', dropEdge === 'before' && 'drop-before', dropEdge === 'after' && 'drop-after']"
     :draggable="reorderable || undefined"
     @click="$emit('click')"
     @dragstart="onDragStart"
@@ -78,6 +87,15 @@ function onDragEnd(): void {
     @drop="onDrop"
     @dragend="onDragEnd"
   >
+    <span v-if="selectable" class="trow-check">
+      <input
+        type="checkbox"
+        :checked="bulkSelected"
+        data-testid="trow-check"
+        @click.stop="$emit('toggleSelect')"
+        @change.stop
+      />
+    </span>
     <span
       v-if="dragHandle"
       class="trow-drag"

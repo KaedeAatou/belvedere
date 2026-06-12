@@ -8,8 +8,12 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { activeSprint, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
+const { activeSprint, sprints, velocityHistory, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
 const { patchTicket } = useTickets();
+const { members } = useMembers();
+
+// 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = sprint items 全件。
+const sel = useTicketSelection();
 
 const sprintTicketsSorted = computed(() => {
   const raw = activeSprint.value
@@ -261,10 +265,27 @@ onMounted(() => {
       </button>
     </div>
     <div class="col-body">
+      <BulkActionBar
+        v-if="sel.count.value > 0"
+        :count="sel.count.value"
+        :members="members"
+        :sprints="sprints"
+        :busy="sel.isBusy.value"
+        @set-status="(s) => sel.applyToSelected({ status: s })"
+        @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
+        @set-priority="(p) => sel.applyToSelected({ priority: p })"
+        @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
+        @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
+        @remove="sel.removeSelected"
+        @clear="sel.clear"
+        @select-all="() => sel.selectMany(sprintTicketsSorted.map((t) => t.id))"
+      />
       <TicketRow v-for="t in sprintTicketsSorted" :key="t.id" :t="t"
                  :selected="selectedId === t.id" drag-handle reorderable
+                 selectable :bulk-selected="sel.isSelected(t.id)"
                  :drop-edge="planDropEdgeFor(t.id)"
                  @click="emit('select', t.id)"
+                 @toggle-select="sel.toggle(t.id)"
                  @reorder-start="planReorderStart(t.id)"
                  @reorder-over="(e) => planReorderOver(t.id, e)"
                  @reorder-drop="planReorderDrop(t.id)"

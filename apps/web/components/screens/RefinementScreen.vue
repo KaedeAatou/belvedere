@@ -17,7 +17,12 @@ const emit = defineEmits<{
 
 const { patchTicket } = useTickets();
 const { findingsByTicket, fetchFindings, isLoading } = useFindings();
+const { members } = useMembers();
+const { sprints } = useSprints();
 onMounted(() => { fetchFindings('refinement'); });
+
+// 複数選択 → 一括変更/削除 (画面ローカル。グループ跨ぎ選択可)。
+const sel = useTicketSelection();
 
 function ticketById(id: string): Ticket | undefined {
   return props.tickets.find((t) => t.id === id);
@@ -58,6 +63,16 @@ const groups = computed<Group[]>(() => {
     });
   }
   return result;
+});
+
+// 一括操作の全選択対象 = 全グループの表示中チケット id (重複は除去 — 同一チケットが
+// 複数ルールでヒットし複数グループに現れるため)。
+const allVisibleIds = computed(() => {
+  const seen = new Set<string>();
+  for (const g of groups.value) {
+    for (const f of g.findings) seen.add(f.ticketId);
+  }
+  return [...seen];
 });
 
 // ===== グループ内並び替え =====
@@ -114,6 +129,21 @@ const sevClass: Record<FindingSeverity, string> = { error: 'sev-err', warn: 'sev
 
 <template>
   <div class="screen-body" data-testid="refinement-body">
+    <BulkActionBar
+      v-if="sel.count.value > 0"
+      :count="sel.count.value"
+      :members="members"
+      :sprints="sprints"
+      :busy="sel.isBusy.value"
+      @set-status="(s) => sel.applyToSelected({ status: s })"
+      @set-assignee="(a) => sel.applyToSelected({ assigneeId: a })"
+      @set-priority="(p) => sel.applyToSelected({ priority: p })"
+      @set-value-impact="(v) => sel.applyToSelected({ valueImpact: v })"
+      @set-sprint="(sp) => sel.applyToSelected({ sprintId: sp })"
+      @remove="sel.removeSelected"
+      @clear="sel.clear"
+      @select-all="() => sel.selectMany(allVisibleIds)"
+    />
     <p v-if="isLoading && groups.length === 0" class="refine-msg">読み込み中…</p>
     <p v-else-if="groups.length === 0" class="refine-msg" data-testid="refine-empty">
       指摘はありません — バックログは健全です。
@@ -128,8 +158,10 @@ const sevClass: Record<FindingSeverity, string> = { error: 'sev-err', warn: 'sev
                  :t="ticketById(f.ticketId)!"
                  :selected="selectedId === f.ticketId"
                  drag-handle reorderable
+                 selectable :bulk-selected="sel.isSelected(f.ticketId)"
                  :drop-edge="dropEdgeFor(f.ticketId)"
                  @click="emit('select', f.ticketId)"
+                 @toggle-select="sel.toggle(f.ticketId)"
                  @reorder-start="onReorderStart(f.ticketId, g.ruleId)"
                  @reorder-over="(e) => onGroupReorderOver(f.ticketId, g.ruleId, e)"
                  @reorder-drop="onGroupReorderDrop(f.ticketId, g.ruleId)"
