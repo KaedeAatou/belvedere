@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Ticket } from '@belvedere/shared';
+import { compareTicketOrder } from '@belvedere/shared';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -11,12 +12,23 @@ const emit = defineEmits<{
 }>();
 
 const { activeSprint, velocityHistory } = useSprints();
+const { patchTicket } = useTickets();
 
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
 );
 const done = computed(() => sprintTickets.value.filter((t) => t.status === 'done'));
-const carry = computed(() => sprintTickets.value.filter((t) => t.status !== 'done'));
+// Carry-over は「次スプリントへの持ち越し優先度」を d&d で決められるよう orderIndex 順に。
+const carry = computed(() =>
+  [...sprintTickets.value.filter((t) => t.status !== 'done')].sort(compareTicketOrder),
+);
+
+// 持ち越し候補の並び替え (全チケット画面で同じ操作感にする横展開)。
+const { dropEdgeFor: carryDropEdgeFor, onReorderStart: carryReorderStart, onReorderOver: carryReorderOver, onReorderDrop: carryReorderDrop, onReorderEnd: carryReorderEnd } =
+  useTicketReorder({
+    sorted: carry,
+    patch: (id, body) => patchTicket(id, body),
+  });
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
@@ -124,7 +136,14 @@ const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, tex
       <div style="margin-top: 24px">
         <h2 style="margin: 0 0 8px; font-size: 14px; font-weight: 500">Carry-over candidates</h2>
         <div style="border: 1px solid var(--line-1)">
-          <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id" @click="emit('select', t.id)">
+          <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id"
+                     drag-handle reorderable
+                     :drop-edge="carryDropEdgeFor(t.id)"
+                     @click="emit('select', t.id)"
+                     @reorder-start="carryReorderStart(t.id)"
+                     @reorder-over="(e) => carryReorderOver(t.id, e)"
+                     @reorder-drop="carryReorderDrop(t.id)"
+                     @reorder-end="carryReorderEnd">
             <template #extra>
               <StatusDot :status="t.status" />
             </template>

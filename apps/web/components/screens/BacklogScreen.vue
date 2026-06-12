@@ -88,6 +88,16 @@ const { dropEdgeFor, onReorderStart, onReorderOver, onReorderDrop, onReorderEnd 
     sortedRaw: backlogTicketsRaw,
   });
 
+// CURRENT SPRINT セクションも同様に並び替え可能にする (区画ごとに独立インスタンス)。
+// これが無いと「スプリントにチケットがある WS では掴めず、無い WS では掴める」という
+// 区画依存の挙動差になる (全チケット画面で同じ操作感にする方針)。
+const { dropEdgeFor: sprintDropEdgeFor, onReorderStart: sprintReorderStart, onReorderOver: sprintReorderOver, onReorderDrop: sprintReorderDrop, onReorderEnd: sprintReorderEnd } =
+  useTicketReorder({
+    sorted: sprintTickets,
+    patch: (id, body) => patchTicket(id, body),
+    sortedRaw: sprintTicketsRaw,
+  });
+
 // ルールエンジン findings 集計 (T5-3)
 function flagCount(t: Ticket): number { return findingsFor(t.id).length; }
 const noSP = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING')).length);
@@ -262,8 +272,13 @@ async function submitCreate(): Promise<void> {
         </div>
       </div>
       <TicketRow v-for="t in sprintTickets" :key="t.id" :t="t" data-testid="live-ticket"
-                 :selected="selectedId === t.id" drag-handle
-                 @click="emit('select', t.id)">
+                 :selected="selectedId === t.id" drag-handle reorderable
+                 :drop-edge="sprintDropEdgeFor(t.id)"
+                 @click="emit('select', t.id)"
+                 @reorder-start="sprintReorderStart(t.id)"
+                 @reorder-over="(e) => sprintReorderOver(t.id, e)"
+                 @reorder-drop="sprintReorderDrop(t.id)"
+                 @reorder-end="sprintReorderEnd">
         <template #extra>
           <StatusDot :status="t.status" />
         </template>
