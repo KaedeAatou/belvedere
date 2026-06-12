@@ -65,6 +65,25 @@ function openCreate(): void {
   showCreateDialog.value = true;
 }
 
+// D-13 + U-2: kbd C で作成ダイアログを開く / ESC で閉じる
+onMounted(() => {
+  const onKeydown = (e: KeyboardEvent) => {
+    const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+    const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+    if (e.key === 'Escape') {
+      if (isInput) return;
+      if (showCreateDialog.value) { e.stopPropagation(); showCreateDialog.value = false; }
+      return;
+    }
+    if (e.key === 'c' && !isInput && !e.metaKey && !e.ctrlKey && !e.altKey && !showCreateDialog.value) {
+      e.preventDefault();
+      openCreate();
+    }
+  };
+  document.addEventListener('keydown', onKeydown);
+  onUnmounted(() => document.removeEventListener('keydown', onKeydown));
+});
+
 async function submitCreate(): Promise<void> {
   createError.value = null;
   if (!newTitle.value.trim()) {

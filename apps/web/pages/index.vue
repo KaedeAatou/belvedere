@@ -20,6 +20,20 @@ onMounted(() => {
   fetchMembers();
   fetchSprints();
   fetchFindings('refinement'); // 全画面共通: チケット品質の指摘 (T5-3 ピル / T9 ワークキュー)
+
+  // U-2: ESC で DetailSheet を閉じる。
+  // 入力フィールドにフォーカスがある場合はブラウザのデフォルト (blur) に任せ、sheet には触れない。
+  const onKeydown = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape') return;
+    const tag = (e.target as HTMLElement | null)?.tagName ?? '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (selected.value !== null) {
+      e.preventDefault();
+      selected.value = null;
+    }
+  };
+  document.addEventListener('keydown', onKeydown);
+  onUnmounted(() => document.removeEventListener('keydown', onKeydown));
 });
 
 watch(screen, (s) => {
@@ -53,8 +67,8 @@ const ticket = computed(() =>
                         :tickets="tickets" :selected-id="selected"
                         @select="onSelect" @start-poker="onStartPoker" />
       <ReviewScreen v-else-if="screen === 'review'"
-                    :tickets="tickets"
-                    @select="onSelect" />
+                    :tickets="tickets" :selected-id="selected"
+                    @select="onSelect" @go-retro="screen = 'retro'" />
       <RetroScreen v-else-if="screen === 'retro'" />
 
       <DetailSheet v-if="ticket" :ticket="ticket" @close="onClose" />
