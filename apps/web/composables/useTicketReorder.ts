@@ -92,13 +92,28 @@ export function useTicketReorder(opts: UseTicketReorderOptions) {
     draggingId.value = id;
   }
 
+  /** ドラッグ中を除いた実質的な最終行の id (末尾判定用)。 */
+  function lastTargetId(): string | null {
+    const list = opts.sorted.value;
+    for (let i = list.length - 1; i >= 0; i--) {
+      const t = list[i];
+      if (t && t.id !== draggingId.value) return t.id;
+    }
+    return null;
+  }
+
   function onReorderOver(id: string, evt: DragEvent): void {
     if (!draggingId.value || draggingId.value === id) return;
-    // マウス Y 位置が行の上半分なら before、下半分なら after。
     const el = evt.currentTarget as HTMLElement | null;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const edge: 'before' | 'after' = evt.clientY - rect.top < rect.height / 2 ? 'before' : 'after';
+    const ratio = (evt.clientY - rect.top) / rect.height;
+    // 通常は上半分=before / 下半分=after。ただし最終行だけは threshold を下げて
+    // after を出しやすくする。これで「一番下に落とす」が下半分を正確に狙わなくても
+    // 末尾になり、行を越えて空白に落としても直前に通過した after が残るため
+    // 「下から2番目に入る」現象を防ぐ。
+    const isLast = lastTargetId() === id;
+    const edge: 'before' | 'after' = ratio < (isLast ? 0.3 : 0.5) ? 'before' : 'after';
     dropTarget.value = { id, edge };
   }
 
