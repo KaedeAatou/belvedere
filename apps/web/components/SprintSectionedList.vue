@@ -62,6 +62,40 @@ const allVisibleIds = computed(() => [
 
 // ===== ドラッグ中の発生区画を記録 (within vs across 判別) =====
 const dragSection = ref<SectionKey | null>(null);
+// クロス区画ドラッグ中にホバーしている区画 (ドロップ先のハイライト用)。
+const hoverSection = ref<SectionKey | null>(null);
+
+// ===== ドラッグ中のオートスクロール (2026-06-13) =====
+// BACKLOG 区画は画面下・CURRENT は画面上にあり、リストが長いとドラッグ中に
+// スクロールしないとドロップ先まで物理的に届かない。ブラウザ標準の自動スクロールは
+// ネストした overflow コンテナで効かないことがあるため、dragover で自前スクロールする。
+const rootEl = ref<HTMLElement | null>(null);
+const SCROLL_EDGE = 72; // 上下端からこの距離 (px) 以内で発動
+const SCROLL_MAX = 24; // 1 イベントあたりの最大スクロール量 (px)
+
+function findScrollParent(el: HTMLElement | null): HTMLElement | null {
+  let cur: HTMLElement | null = el;
+  while (cur) {
+    const { overflowY } = getComputedStyle(cur);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && cur.scrollHeight > cur.clientHeight) return cur;
+    cur = cur.parentElement;
+  }
+  return null;
+}
+
+function autoScrollOnDrag(e: DragEvent): void {
+  if (!dragSection.value) return; // このリスト発のドラッグ中のみ
+  const scroller = findScrollParent(rootEl.value);
+  if (!scroller) return;
+  const rect = scroller.getBoundingClientRect();
+  const fromTop = e.clientY - rect.top;
+  const fromBottom = rect.bottom - e.clientY;
+  if (fromTop < SCROLL_EDGE) {
+    scroller.scrollTop -= Math.ceil(((SCROLL_EDGE - fromTop) / SCROLL_EDGE) * SCROLL_MAX);
+  } else if (fromBottom < SCROLL_EDGE) {
+    scroller.scrollTop += Math.ceil(((SCROLL_EDGE - fromBottom) / SCROLL_EDGE) * SCROLL_MAX);
+  }
+}
 
 // ===== 各区画の独立した並び替えインスタンス =====
 const currentSorted = computed(() => props.current);
@@ -100,17 +134,20 @@ function onReorderDrop(section: SectionKey, id: string): void {
     if (draggedId) emit('moveToSection', draggedId, section);
   }
   dragSection.value = null;
+  hoverSection.value = null;
 }
 
 function onReorderEnd(section: SectionKey): void {
   reorderFor(section).onReorderEnd();
   dragSection.value = null;
+  hoverSection.value = null;
 }
 
 // セクションのボディ/ヘッダにドロップ (空区画や行間以外へ落とした場合の区画跨ぎ移動)。
 function onSectionDrop(section: SectionKey, e: DragEvent): void {
   e.preventDefault();
   const from = dragSection.value;
+  hoverSection.value = null;
   if (!from || from === section) {
     // 同区画 or 不明なら何もしない (行の drop ハンドラに委ねる)。
     dragSection.value = null;
@@ -123,8 +160,16 @@ function onSectionDrop(section: SectionKey, e: DragEvent): void {
 }
 
 function onSectionDragOver(section: SectionKey, e: DragEvent): void {
-  // 区画跨ぎドロップを受け付けるため dragover で preventDefault。
-  if (dragSection.value && dragSection.value !== section) e.preventDefault();
+  // 区画跨ぎドロップを受け付けるため dragover で preventDefault + ドロップ先をハイライト。
+  if (dragSection.value && dragSection.value !== section) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+    hoverSection.value = section;
+  } else if (dragSection.value) {
+    // 発生区画に戻ってきたら他区画のハイライトを消す。
+    hoverSection.value = null;
+  }
+  autoScrollOnDrag(e);
 }
 
 // ===== セクション統計 =====
@@ -318,7 +363,7 @@ async function submitSplit(): Promise<void> {
 </script>
 
 <template>
-  <div class="screen-body" data-testid="live-section">
+  <div ref="rootEl" class="screen-body" data-testid="live-section">
     <BulkActionBar
       v-if="sel.count.value > 0"
       :count="sel.count.value"
@@ -336,7 +381,7 @@ async function submitSplit(): Promise<void> {
     />
 
     <!-- CURRENT SPRINT -->
-    <div class="backlog-section" data-testid="section-current"
+    <div :class="['backlog-section', hoverSection === 'current' && 'drop-target']" data-testid="section-current"
          @dragover="(e) => onSectionDragOver('current', e)"
          @drop="(e) => onSectionDrop('current', e)">
       <div class="backlog-section-head">
@@ -371,7 +416,7 @@ async function submitSplit(): Promise<void> {
     </div>
 
     <!-- NEXT SPRINT -->
-    <div class="backlog-section" data-testid="section-next"
+    <div :class="['backlog-section', hoverSection === 'next' && 'drop-target']" data-testid="section-next"
          @dragover="(e) => onSectionDragOver('next', e)"
          @drop="(e) => onSectionDrop('next', e)">
       <div class="backlog-section-head">
@@ -406,7 +451,7 @@ async function submitSplit(): Promise<void> {
     </div>
 
     <!-- BACKLOG (未スケジュール) -->
-    <div class="backlog-section" data-testid="section-backlog"
+    <div :class="['backlog-section', hoverSection === 'backlog' && 'drop-target']" data-testid="section-backlog"
          @dragover="(e) => onSectionDragOver('backlog', e)"
          @drop="(e) => onSectionDrop('backlog', e)">
       <div class="backlog-section-head">
@@ -610,6 +655,13 @@ async function submitSplit(): Promise<void> {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink-2);
+}
+
+/* クロス区画ドラッグ中のドロップ先ハイライト (どこに落ちるかの可視フィードバック) */
+.backlog-section.drop-target {
+  background: var(--accent-bg, #fff3ee);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  border-radius: var(--radius);
 }
 
 /* 行内「分割」ボタン (story のみ。poker-btn と同系だが outline 調で区別) */
