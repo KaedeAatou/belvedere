@@ -29,22 +29,15 @@ const STATUSES: Status[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 const VALUE_IMPACTS: ValueImpact[] = ['low', 'medium', 'high'];
 
-// kebab メニューの開閉と、サブメニュー (どの属性を開いているか)。
+// kebab メニューの開閉。サブメニュー (値リスト) は CSS :hover で右横にフライアウト
+// 表示するため、どの属性を開いているかを保持する state は不要 (openSub/sub を廃止)。
 const menuOpen = ref(false);
-type SubMenu = 'status' | 'assignee' | 'priority' | 'valueImpact' | 'sprint' | null;
-const sub = ref<SubMenu>(null);
 
 function toggleMenu(): void {
   menuOpen.value = !menuOpen.value;
-  if (!menuOpen.value) sub.value = null;
 }
 function closeMenu(): void {
   menuOpen.value = false;
-  sub.value = null;
-}
-function openSub(s: SubMenu): void {
-  // 同じものを再クリックで畳む (アコーディオン式)。
-  sub.value = sub.value === s ? null : s;
 }
 
 // 各属性の確定 (選択 → 一括適用 → メニューを閉じる)。
@@ -87,58 +80,68 @@ function confirmRemove(): void {
       </button>
 
       <div v-if="menuOpen" class="bulk-menu" data-testid="bulk-menu" @click.stop>
-        <!-- ステータス変更 -->
-        <button class="bulk-item" data-testid="bulk-set-status" @click="openSub('status')">
-          <span>ステータス変更</span><Icon name="caretRight" :size="12" />
-        </button>
-        <div v-if="sub === 'status'" class="bulk-sub">
-          <button v-for="s in STATUSES" :key="s" class="bulk-subitem"
-                  :data-testid="`bulk-status-${s}`" @click="pickStatus(s)">{{ s }}</button>
+        <!-- ステータス変更 (親項目を hover で値リストを左横にフライアウト) -->
+        <div class="bulk-item-wrap">
+          <button class="bulk-item" data-testid="bulk-set-status">
+            <span>ステータス変更</span><Icon name="caretRight" :size="12" />
+          </button>
+          <div class="bulk-flyout">
+            <button v-for="s in STATUSES" :key="s" class="bulk-subitem"
+                    :data-testid="`bulk-status-${s}`" @click="pickStatus(s)">{{ s }}</button>
+          </div>
         </div>
 
         <!-- 担当者変更 -->
-        <button class="bulk-item" data-testid="bulk-set-assignee" @click="openSub('assignee')">
-          <span>担当者変更</span><Icon name="caretRight" :size="12" />
-        </button>
-        <div v-if="sub === 'assignee'" class="bulk-sub">
-          <button v-for="m in members" :key="m.userId" class="bulk-subitem"
-                  :data-testid="`bulk-assignee-${m.userId}`" @click="pickAssignee(m.userId)">
-            {{ m.displayName }}
+        <div class="bulk-item-wrap">
+          <button class="bulk-item" data-testid="bulk-set-assignee">
+            <span>担当者変更</span><Icon name="caretRight" :size="12" />
           </button>
-          <p v-if="members.length === 0" class="bulk-empty">メンバーなし</p>
+          <div class="bulk-flyout">
+            <button v-for="m in members" :key="m.userId" class="bulk-subitem"
+                    :data-testid="`bulk-assignee-${m.userId}`" @click="pickAssignee(m.userId)">
+              {{ m.displayName }}
+            </button>
+            <p v-if="members.length === 0" class="bulk-empty">メンバーなし</p>
+          </div>
         </div>
 
         <!-- 優先度変更 -->
-        <button class="bulk-item" data-testid="bulk-set-priority" @click="openSub('priority')">
-          <span>優先度変更</span><Icon name="caretRight" :size="12" />
-        </button>
-        <div v-if="sub === 'priority'" class="bulk-sub">
-          <button v-for="p in PRIORITIES" :key="p" class="bulk-subitem"
-                  :data-testid="`bulk-priority-${p}`" @click="pickPriority(p)">{{ p }}</button>
+        <div class="bulk-item-wrap">
+          <button class="bulk-item" data-testid="bulk-set-priority">
+            <span>優先度変更</span><Icon name="caretRight" :size="12" />
+          </button>
+          <div class="bulk-flyout">
+            <button v-for="p in PRIORITIES" :key="p" class="bulk-subitem"
+                    :data-testid="`bulk-priority-${p}`" @click="pickPriority(p)">{{ p }}</button>
+          </div>
         </div>
 
         <!-- valueImpact 変更 -->
-        <button class="bulk-item" data-testid="bulk-set-value-impact" @click="openSub('valueImpact')">
-          <span>valueImpact 変更</span><Icon name="caretRight" :size="12" />
-        </button>
-        <div v-if="sub === 'valueImpact'" class="bulk-sub">
-          <button v-for="v in VALUE_IMPACTS" :key="v" class="bulk-subitem"
-                  :data-testid="`bulk-value-impact-${v}`" @click="pickValueImpact(v)">{{ v }}</button>
+        <div class="bulk-item-wrap">
+          <button class="bulk-item" data-testid="bulk-set-value-impact">
+            <span>valueImpact 変更</span><Icon name="caretRight" :size="12" />
+          </button>
+          <div class="bulk-flyout">
+            <button v-for="v in VALUE_IMPACTS" :key="v" class="bulk-subitem"
+                    :data-testid="`bulk-value-impact-${v}`" @click="pickValueImpact(v)">{{ v }}</button>
+          </div>
         </div>
 
         <!-- スプリント移動 (解除は API 非対応 → 既存スプリントへ set のみ) -->
-        <button class="bulk-item" data-testid="bulk-set-sprint" @click="openSub('sprint')">
-          <span>スプリント移動</span><Icon name="caretRight" :size="12" />
-        </button>
-        <div v-if="sub === 'sprint'" class="bulk-sub">
-          <button v-for="sp in sprints" :key="sp.id" class="bulk-subitem"
-                  :data-testid="`bulk-sprint-${sp.id}`" @click="pickSprint(sp.id)">S{{ sp.number }}</button>
-          <p v-if="sprints.length === 0" class="bulk-empty">スプリントなし</p>
+        <div class="bulk-item-wrap">
+          <button class="bulk-item" data-testid="bulk-set-sprint">
+            <span>スプリント移動</span><Icon name="caretRight" :size="12" />
+          </button>
+          <div class="bulk-flyout">
+            <button v-for="sp in sprints" :key="sp.id" class="bulk-subitem"
+                    :data-testid="`bulk-sprint-${sp.id}`" @click="pickSprint(sp.id)">S{{ sp.number }}</button>
+            <p v-if="sprints.length === 0" class="bulk-empty">スプリントなし</p>
+          </div>
         </div>
 
         <div class="bulk-divider" />
 
-        <!-- 削除 (確認ダイアログ経由) -->
+        <!-- 削除 (確認ダイアログ経由 / サブメニュー無しの単独アクション) -->
         <button class="bulk-item bulk-item--danger" data-testid="bulk-delete" @click="confirmRemove">
           {{ count }} 件を削除
         </button>
@@ -238,12 +241,37 @@ function confirmRemove(): void {
   background: var(--line-1);
   margin: 4px 6px;
 }
-.bulk-sub {
-  display: flex;
+/* 親項目 + フライアウトを 1 つの relative ラッパで囲む。ラッパ全体を hover
+   判定領域にすることで、マウスが親→flyout へ移動する間に消えないようにする。 */
+.bulk-item-wrap {
+  position: relative;
+}
+/* 値リストは親メニュー (right:0 で右寄せ) からはみ出さないよう左横に出す。
+   親と flyout の隙間 (4px) は透明な右パディングで橋渡しし、マウスが移動する
+   間も hover ターゲットが途切れないようにする (連続領域を保つ)。 */
+.bulk-flyout {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  z-index: 60;
+  display: none;
   flex-direction: column;
-  padding: 2px 0 4px 12px;
-  margin-bottom: 2px;
-  border-left: 2px solid var(--accent-dim, var(--line-2));
+  min-width: 140px;
+  padding: 4px;
+  padding-right: 8px;
+  background: var(--bg-1);
+  background-clip: padding-box;
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(8, 8, 8, 0.14);
+}
+.bulk-item-wrap:hover > .bulk-flyout,
+.bulk-flyout:hover {
+  display: flex;
+}
+/* hover 中の親項目を視覚的にハイライト (flyout 表示中の現在地を示す)。 */
+.bulk-item-wrap:hover > .bulk-item {
+  background: var(--bg-2);
 }
 .bulk-subitem {
   width: 100%;
