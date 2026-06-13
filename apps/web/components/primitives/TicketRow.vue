@@ -113,7 +113,10 @@ function onDragEnd(): void {
         <span v-if="overflow > 0" class="finding-badge sev-more" :title="overflowTitle">+{{ overflow }}</span>
       </span>
     </span>
-    <slot name="extra" />
+    <!-- #extra は要素数が画面ごとに変わる (分割/ポーカー/StatusDot 等) ため、
+         単一の grid アイテムに包む。裸で置くと .trow の 9 列 grid を溢れて
+         Avatar が 2 行目に折り返し、行の下に円がはみ出す (2026-06-13 修正)。 -->
+    <span class="trow-extra"><slot name="extra" /></span>
     <span class="trow-labels">
       <span v-for="l in (t.labels ?? []).slice(0, 2)" :key="l" class="t-cap-tight" style="margin-right: 8px">
         {{ l }}

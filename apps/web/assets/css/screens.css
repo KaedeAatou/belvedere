@@ -52,6 +52,11 @@
   display: flex; align-items: center; gap: 10px;
 }
 .trow-flags { display: inline-flex; gap: 4px; align-items: center; }
+/* #extra スロットのラッパ (TicketRow)。中身が何個でも grid 1 列に収める。
+   裸で置くと 9 列 grid を溢れて Avatar が 2 行目に折り返し、行下に円がはみ出す。
+   空 (slot 未使用 / v-if 全 false = コメントノードのみ) なら列ごと消す。 */
+.trow-extra { display: inline-flex; align-items: center; gap: 8px; }
+.trow-extra:empty { display: none; }
 .trow-labels { display: flex; gap: 4px; }
 
 /* ===== finding ピル (T5-3 / C 案: ラベル付き severity ピル) ===== */
