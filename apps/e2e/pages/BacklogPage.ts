@@ -45,6 +45,13 @@ export class BacklogPage extends BasePage {
   /**
    * 新規作成ダイアログを開く → 入力 → 「作成」押下。
    * 成功時はダイアログが閉じ、Live セクションに新規行が追加される。
+   *
+   * 3 区画モデル (2026-06-13) で Backlog の起票種別は story / incident / bug に限定された
+   * (task/spike は Planning の分割でのみ生成)。種別により入力欄が変わる:
+   *   - story: 「誰が / 何をしたい / なぜ」の 3 欄 (title は asA+iWant から自動生成)。
+   *            opts.title は iWant に入れるので、生成 title に部分一致で含まれる。
+   *   - それ以外 (incident / bug): 従来どおり単一 title。
+   * 種別で描画が切り替わるため、title 入力より先に種別を選択する。既定は bug (直接 title 入力可)。
    */
   async createTicket(opts: {
     title: string;
@@ -53,9 +60,14 @@ export class BacklogPage extends BasePage {
   }): Promise<void> {
     await this.newTicketBtn.click();
     await expect(this.createDialog).toBeVisible();
-    await this.newTicketTitle.fill(opts.title);
-    if (opts.type) {
-      await this.newTicketType.selectOption(opts.type);
+    const type = opts.type ?? 'bug';
+    await this.newTicketType.selectOption(type);
+    if (type === 'story') {
+      await this.page.getByTestId('us-asa').fill('E2E 運営担当者');
+      await this.page.getByTestId('us-iwant').fill(opts.title);
+      await this.page.getByTestId('us-sothat').fill('E2E 検証で品質チェックを通すため');
+    } else {
+      await this.newTicketTitle.fill(opts.title);
     }
     if (opts.priority) {
       await this.newTicketPriority.selectOption(opts.priority);

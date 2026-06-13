@@ -32,7 +32,7 @@ test.describe('Daily ボード', () => {
 
     // === step 1: Backlog でチケット作成 (UI) ===
     await backlog.open();
-    await backlog.createTicket({ title, type: 'task' });
+    await backlog.createTicket({ title, type: 'bug' });
     await expect
       .poll(() => backlog.hasTicketWithTitle(title), { timeout: 10_000 })
       .toBe(true);
