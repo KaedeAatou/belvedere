@@ -24,6 +24,14 @@ const props = defineProps<{
   nextLabel?: string;
   /** 作成ダイアログの種別セレクタに出す候補。incident/bug は全画面、story は Backlog のみ。 */
   allowedTypes: TicketType[];
+  /**
+   * 行内「分割」アクションのモード。
+   * - 'child-story': Refinement — story を最小価値の子 Story に分割 (子 type=story)。
+   * - 'task-spike': Planning — CURRENT の story を Task/Spike に分割 (子 type=task|spike)。
+   * - 未指定: 分割ボタンを出さない (Backlog)。
+   * いずれも story 種別の行にのみボタンを出し、子は parentTicketId で親に紐付ける。
+   */
+  splitMode?: 'child-story' | 'task-spike';
   /** 各行 #extra スロット用に finding ピル等を行が描く前提なので追加 props は不要。 */
 }>();
 
@@ -42,6 +50,7 @@ defineSlots<{
 
 const { createTicket, patchTicket, isLoading: createLoading, error: liveError } = useTickets();
 const { findingsFor, refresh: refreshFindings } = useFindings();
+const { checkStory, checking: storyChecking } = useStoryCheck();
 
 // 複数選択 (全区画跨ぎ選択可)。BulkActionBar は上部に 1 つ。
 const sel = useTicketSelection();
@@ -144,6 +153,35 @@ const suggestSpike = computed(
 );
 function applySpike(): void { newType.value = 'spike'; }
 
+// ===== User Story 3 欄フォーム + AI 品質チェック (newType==='story' のとき) =====
+// 「誰が / 何をしたい / なぜ」で description を構成し、起票前に AI で形骸化 + ゴール適合を診断する。
+const usAsA = ref('');
+const usIWant = ref('');
+const usSoThat = ref('');
+const storyVerdict = ref<StoryQualityVerdict | null>(null);
+
+const isStory = computed(() => newType.value === 'story');
+// US の title は 3 欄から自動生成 (空欄時)。手入力 title があればそれを優先。
+const composedStoryTitle = computed(() =>
+  usAsA.value.trim() && usIWant.value.trim() ? `${usAsA.value.trim()}として${usIWant.value.trim()}` : '',
+);
+function composeStoryDescription(): string {
+  return [
+    `**誰が:** ${usAsA.value.trim() || '—'}`,
+    `**何をしたい:** ${usIWant.value.trim() || '—'}`,
+    `**なぜ:** ${usSoThat.value.trim() || '—'}`,
+  ].join('\n');
+}
+
+async function runStoryCheck(): Promise<void> {
+  storyVerdict.value = await checkStory({
+    asA: usAsA.value,
+    iWant: usIWant.value,
+    soThat: usSoThat.value,
+    title: newTitle.value,
+  });
+}
+
 function openCreate(): void {
   newTitle.value = '';
   newType.value = props.allowedTypes[0] ?? 'task';
@@ -151,8 +189,15 @@ function openCreate(): void {
   newEstimatePt.value = null;
   newTimebox.value = null;
   createError.value = null;
+  usAsA.value = '';
+  usIWant.value = '';
+  usSoThat.value = '';
+  storyVerdict.value = null;
   showCreateDialog.value = true;
 }
+
+// 入力が変わったら前回の AI 診断結果は古くなるので破棄する。
+watch([usAsA, usIWant, usSoThat, newType], () => { storyVerdict.value = null; });
 
 defineExpose({ openCreate });
 
@@ -162,6 +207,7 @@ onMounted(() => {
     if (e.key !== 'Escape') return;
     const tag = (e.target as HTMLElement | null)?.tagName ?? '';
     if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+    if (showSplitDialog.value) { e.stopPropagation(); showSplitDialog.value = false; return; }
     if (showCreateDialog.value) { e.stopPropagation(); showCreateDialog.value = false; }
   };
   document.addEventListener('keydown', onKeydown);
@@ -170,16 +216,23 @@ onMounted(() => {
 
 async function submitCreate(): Promise<void> {
   createError.value = null;
-  if (!newTitle.value.trim()) {
-    createError.value = 'タイトルは必須です';
+  // US は title を手入力 or 3 欄から自動生成。それ以外は title 必須。
+  const effectiveTitle = isStory.value ? (newTitle.value.trim() || composedStoryTitle.value) : newTitle.value.trim();
+  if (!effectiveTitle) {
+    createError.value = isStory.value ? '「誰が」と「何をしたい」を入力してください' : 'タイトルは必須です';
     return;
   }
-  const input: { title: string; priority: Priority; type: TicketType; estimatePt?: number; timeboxHours?: number } = {
-    title: newTitle.value.trim(),
+  const input: {
+    title: string; priority: Priority; type: TicketType;
+    estimatePt?: number; timeboxHours?: number; description?: string;
+  } = {
+    title: effectiveTitle,
     priority: newPriority.value,
     type: newType.value,
   };
-  if (newType.value === 'spike') {
+  if (isStory.value) {
+    input.description = composeStoryDescription();
+  } else if (newType.value === 'spike') {
     if (newTimebox.value !== null) input.timeboxHours = newTimebox.value;
   } else if (newType.value !== 'task') {
     if (newEstimatePt.value !== null) input.estimatePt = newEstimatePt.value;
@@ -191,6 +244,75 @@ async function submitCreate(): Promise<void> {
     emit('created');
   } else {
     createError.value = liveError.value ?? 'API 呼出失敗';
+  }
+}
+
+// ===== 分割アクション (story → 子チケット) =====
+const showSplitDialog = ref(false);
+const splitParent = ref<Ticket | null>(null);
+const splitRows = ref<{ title: string; type: TicketType }[]>([]);
+const splitBusy = ref(false);
+const splitError = ref<string | null>(null);
+
+// task-spike モードの子種別候補。child-story モードは常に story。
+const splitChildTypes: TicketType[] = ['task', 'spike'];
+const splitChildLabel = computed(() => (props.splitMode === 'task-spike' ? 'Task / Spike に分割' : '子 Story に分割'));
+
+function defaultChildType(): TicketType {
+  return props.splitMode === 'task-spike' ? 'task' : 'story';
+}
+
+function openSplit(t: Ticket): void {
+  splitParent.value = t;
+  splitRows.value = [
+    { title: '', type: defaultChildType() },
+    { title: '', type: defaultChildType() },
+  ];
+  splitError.value = null;
+  showSplitDialog.value = true;
+}
+
+function addSplitRow(): void {
+  splitRows.value = [...splitRows.value, { title: '', type: defaultChildType() }];
+}
+function removeSplitRow(i: number): void {
+  splitRows.value = splitRows.value.filter((_, idx) => idx !== i);
+}
+
+async function submitSplit(): Promise<void> {
+  const parent = splitParent.value;
+  if (!parent) return;
+  const rows = splitRows.value.filter((r) => r.title.trim());
+  if (rows.length === 0) {
+    splitError.value = '子チケットのタイトルを 1 件以上入力してください';
+    return;
+  }
+  splitBusy.value = true;
+  splitError.value = null;
+  try {
+    for (const r of rows) {
+      const input: {
+        title: string; type: TicketType; priority: Priority; parentTicketId: string;
+        sprintId?: string; status?: 'backlog' | 'todo';
+      } = {
+        title: r.title.trim(),
+        type: props.splitMode === 'task-spike' ? r.type : 'story',
+        priority: parent.priority,
+        parentTicketId: parent.id,
+        // 子は親のスプリントを継承 (CURRENT story → Task は CURRENT、Backlog US → 子 Story は未割当)。
+        ...(parent.sprintId !== undefined && { sprintId: parent.sprintId }),
+        status: parent.sprintId ? 'todo' : 'backlog',
+      };
+      const created = await createTicket(input);
+      if (!created) throw new Error(liveError.value ?? `「${r.title}」の作成に失敗しました`);
+    }
+    showSplitDialog.value = false;
+    void refreshFindings();
+    emit('created');
+  } catch (e) {
+    splitError.value = e instanceof Error ? e.message : '分割に失敗しました';
+  } finally {
+    splitBusy.value = false;
   }
 }
 </script>
@@ -238,6 +360,9 @@ async function submitCreate(): Promise<void> {
                  @reorder-drop="onReorderDrop('current', t.id)"
                  @reorder-end="onReorderEnd('current')">
         <template #extra>
+          <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                  @click.stop="openSplit(t)">分割</button>
           <slot name="row-extra" :ticket="t" />
           <StatusDot :status="t.status" />
         </template>
@@ -270,6 +395,9 @@ async function submitCreate(): Promise<void> {
                  @reorder-drop="onReorderDrop('next', t.id)"
                  @reorder-end="onReorderEnd('next')">
         <template #extra>
+          <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                  @click.stop="openSplit(t)">分割</button>
           <slot name="row-extra" :ticket="t" />
           <StatusDot :status="t.status" />
         </template>
@@ -304,6 +432,9 @@ async function submitCreate(): Promise<void> {
                  @reorder-drop="onReorderDrop('backlog', t.id)"
                  @reorder-end="onReorderEnd('backlog')">
         <template #extra>
+          <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                  @click.stop="openSplit(t)">分割</button>
           <slot name="row-extra" :ticket="t" />
           <StatusDot :status="t.status" />
         </template>
@@ -320,7 +451,60 @@ async function submitCreate(): Promise<void> {
         <button class="close-btn" @click="showCreateDialog = false">×</button>
       </div>
       <div class="dialog-body">
+        <!-- 種別セレクタ (story を選ぶと 3 欄フォームに切り替わる) -->
         <div class="field">
+          <label class="label" for="ssl-new-type">種別</label>
+          <select id="ssl-new-type" v-model="newType" data-testid="new-ticket-type" class="select-input">
+            <option v-for="tp in allowedTypes" :key="tp" :value="tp">{{ tp }}</option>
+          </select>
+        </div>
+
+        <!-- User Story: 誰が / 何をしたい / なぜ の 3 欄 + AI 品質チェック -->
+        <template v-if="isStory">
+          <div class="field">
+            <label class="label" for="ssl-us-asa">誰が <span class="req">*</span></label>
+            <input id="ssl-us-asa" v-model="usAsA" data-testid="us-asa" type="text" class="text-input"
+                   maxlength="80" placeholder="例: 初めて使う運営担当者" />
+          </div>
+          <div class="field">
+            <label class="label" for="ssl-us-iwant">何をしたい <span class="req">*</span></label>
+            <input id="ssl-us-iwant" v-model="usIWant" data-testid="us-iwant" type="text" class="text-input"
+                   maxlength="120" placeholder="例: スプリント開始時にゴール候補を AI に提案してほしい" />
+          </div>
+          <div class="field">
+            <label class="label" for="ssl-us-sothat">なぜ <span class="req">*</span></label>
+            <input id="ssl-us-sothat" v-model="usSoThat" data-testid="us-sothat" type="text" class="text-input"
+                   maxlength="160" placeholder="例: 測定可能なゴールを定義でき、レビュー時の判定が割れない" />
+          </div>
+          <p v-if="composedStoryTitle" class="us-preview">
+            プレビュー: <b>{{ newTitle.trim() || composedStoryTitle }}</b>
+          </p>
+
+          <!-- AI 品質チェック -->
+          <div class="us-check">
+            <button type="button" class="us-check-btn" data-testid="us-ai-check"
+                    :disabled="storyChecking || (!usSoThat.trim() && !usIWant.trim())"
+                    @click="runStoryCheck">
+              <Icon name="sparkle" /> {{ storyChecking ? 'AI 診断中…' : 'AI で品質チェック' }}
+            </button>
+            <div v-if="storyVerdict" class="us-verdict" data-testid="us-verdict">
+              <p v-if="storyVerdict.ok" class="us-verdict-ok" data-testid="us-verdict-ok">
+                ✓ AI: 形骸化なし・ゴール整合。起票できます。
+              </p>
+              <ul v-else class="us-verdict-issues">
+                <li v-for="(iss, i) in storyVerdict.issues" :key="i"
+                    :class="['us-issue', iss.severity]" :data-testid="`us-issue-${iss.kind}`">
+                  <span class="us-issue-kind">{{ iss.kind === 'boilerplate' ? '形骸化' : 'ゴール適合' }}</span>
+                  {{ iss.message }}
+                </li>
+              </ul>
+              <p v-if="storyVerdict.suggestion" class="us-suggestion">{{ storyVerdict.suggestion }}</p>
+            </div>
+          </div>
+        </template>
+
+        <!-- 非 US (incident/bug/task/spike): タイトル直接入力 -->
+        <div v-else class="field">
           <label class="label" for="ssl-new-title">タイトル <span class="req">*</span></label>
           <input
             id="ssl-new-title"
@@ -332,26 +516,18 @@ async function submitCreate(): Promise<void> {
             placeholder="例: ログイン画面の入力 validation を追加"
           />
         </div>
-        <div v-if="suggestSpike" class="spike-hint">
+        <div v-if="!isStory && suggestSpike" class="spike-hint">
           <span>💡 調査系のタイトルです。Spike にしますか?</span>
           <button type="button" class="spike-btn" data-testid="suggest-spike" @click="applySpike">Spike にする</button>
         </div>
-        <div class="field-row">
-          <div class="field">
-            <label class="label" for="ssl-new-type">種別</label>
-            <select id="ssl-new-type" v-model="newType" data-testid="new-ticket-type" class="select-input">
-              <option v-for="tp in allowedTypes" :key="tp" :value="tp">{{ tp }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label class="label" for="ssl-new-priority">優先度</label>
-            <select id="ssl-new-priority" v-model="newPriority" data-testid="new-ticket-priority" class="select-input">
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-              <option value="urgent">urgent</option>
-            </select>
-          </div>
+        <div class="field">
+          <label class="label" for="ssl-new-priority">優先度</label>
+          <select id="ssl-new-priority" v-model="newPriority" data-testid="new-ticket-priority" class="select-input">
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+            <option value="urgent">urgent</option>
+          </select>
         </div>
         <div class="field-row">
           <div v-if="newType === 'spike'" class="field">
@@ -367,7 +543,7 @@ async function submitCreate(): Promise<void> {
               placeholder="4"
             />
           </div>
-          <div v-else-if="newType !== 'task'" class="field">
+          <div v-else-if="!isStory && newType !== 'task'" class="field">
             <label class="label" for="ssl-new-sp">Story Point (任意)</label>
             <input
               id="ssl-new-sp"
@@ -389,6 +565,43 @@ async function submitCreate(): Promise<void> {
       </div>
     </div>
   </div>
+
+  <!-- 分割ダイアログ (story → 子チケット。子は parentTicketId で親に紐付く) -->
+  <div v-if="showSplitDialog" class="dialog-overlay" data-testid="split-dialog" @click.self="showSplitDialog = false">
+    <div class="dialog split-dialog">
+      <div class="dialog-head">
+        <h2 class="dialog-title">{{ splitChildLabel }}</h2>
+        <button class="close-btn" @click="showSplitDialog = false">×</button>
+      </div>
+      <div class="dialog-body">
+        <p v-if="splitParent" class="split-parent">
+          親: <span class="t-mono">{{ splitParent.id }}</span> {{ splitParent.title }}
+        </p>
+        <div class="split-rows">
+          <div v-for="(row, i) in splitRows" :key="i" class="split-row">
+            <input v-model="row.title" :data-testid="`split-row-${i}`" type="text" class="text-input"
+                   maxlength="160" :placeholder="splitMode === 'task-spike' ? '例: API エンドポイントを実装' : '例: 最小のゴール提案 1 案を返す'" />
+            <select v-if="splitMode === 'task-spike'" v-model="row.type"
+                    :data-testid="`split-type-${i}`" class="select-input split-type">
+              <option v-for="ct in splitChildTypes" :key="ct" :value="ct">{{ ct }}</option>
+            </select>
+            <button type="button" class="split-row-del" :disabled="splitRows.length <= 1"
+                    title="この行を削除" @click="removeSplitRow(i)">×</button>
+          </div>
+        </div>
+        <button type="button" class="split-add" data-testid="split-add-row" @click="addSplitRow">
+          <Icon name="plus" /> 行を追加
+        </button>
+        <p v-if="splitError" class="msg-error" data-testid="split-error">{{ splitError }}</p>
+      </div>
+      <div class="dialog-foot">
+        <button class="btn-cancel" :disabled="splitBusy" @click="showSplitDialog = false">キャンセル</button>
+        <button class="btn-primary" data-testid="split-submit" :disabled="splitBusy" @click="submitSplit">
+          {{ splitBusy ? '分割中…' : '分割して作成' }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -398,6 +611,87 @@ async function submitCreate(): Promise<void> {
   font-size: 13px;
   color: var(--ink-2);
 }
+
+/* 行内「分割」ボタン (story のみ。poker-btn と同系だが outline 調で区別) */
+.split-btn {
+  padding: 4px 10px;
+  background: transparent;
+  color: var(--accent);
+  border: var(--hairline) solid var(--accent-dim, var(--line-2));
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.split-btn:hover { background: var(--accent-bg, #fff3ee); }
+
+/* User Story 3 欄フォーム — プレビュー + AI 品質チェック */
+.us-preview {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+  font-family: var(--sans);
+}
+.us-preview b { color: var(--ink-0); }
+.us-check { display: flex; flex-direction: column; gap: 10px; }
+.us-check-btn {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 14px;
+  background: var(--accent-bg, #fff3ee);
+  color: var(--accent);
+  border: var(--hairline) solid var(--accent-dim, var(--line-2));
+  border-radius: var(--radius);
+  font-family: var(--sans); font-size: 12.5px; font-weight: 500; cursor: pointer;
+}
+.us-check-btn:hover:not(:disabled) { background: var(--accent); color: #FBF8F2; }
+.us-check-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.us-verdict {
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  background: var(--bg-0);
+}
+.us-verdict-ok { margin: 0; font-size: 12.5px; color: var(--ok); font-family: var(--sans); }
+.us-verdict-issues { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.us-issue { font-size: 12.5px; line-height: 1.5; color: var(--ink-1); font-family: var(--sans); }
+.us-issue.warn { color: var(--ink-0); }
+.us-issue-kind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.04em;
+  background: var(--accent); color: #FBF8F2;
+}
+.us-issue.info .us-issue-kind { background: var(--ink-3); }
+.us-suggestion { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
+
+/* 分割ダイアログ */
+.split-dialog { max-width: 560px; }
+.split-parent { margin: 0; font-size: 12.5px; color: var(--ink-1); font-family: var(--sans); }
+.split-parent .t-mono { color: var(--ink-3); margin-right: 6px; }
+.split-rows { display: flex; flex-direction: column; gap: 8px; }
+.split-row { display: flex; gap: 8px; align-items: center; }
+.split-row .text-input { flex: 1; }
+.split-type { flex: 0 0 96px; }
+.split-row-del {
+  flex: 0 0 28px; height: 32px;
+  background: transparent; border: var(--hairline) solid var(--line-2); border-radius: var(--radius);
+  color: var(--ink-2); font-size: 16px; cursor: pointer;
+}
+.split-row-del:hover:not(:disabled) { background: var(--bg-2); color: var(--err); }
+.split-row-del:disabled { opacity: 0.4; cursor: not-allowed; }
+.split-add {
+  align-self: flex-start;
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 6px 12px; background: transparent;
+  border: var(--hairline) dashed var(--line-2); border-radius: var(--radius);
+  font-family: var(--sans); font-size: 12px; color: var(--ink-2); cursor: pointer;
+}
+.split-add:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ダイアログ (BacklogScreen と同系。scoped で持つ) */
 .dialog-overlay {

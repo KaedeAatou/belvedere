@@ -277,6 +277,7 @@ onMounted(() => {
         :members="members" :sprints="sprints"
         :current-label="currentLabel" :next-label="nextLabel"
         :allowed-types="['incident', 'bug']"
+        split-mode="task-spike"
         @select="(id) => emit('select', id)"
         @move-to-section="onMoveToSection"
       />

@@ -53,6 +53,7 @@ async function onMoveToSection(ticketId: string, section: 'current' | 'next' | '
       :members="members" :sprints="sprints"
       :current-label="currentLabel" :next-label="nextLabel"
       :allowed-types="['incident', 'bug']"
+      split-mode="child-story"
       @select="(id) => emit('select', id)"
       @move-to-section="onMoveToSection"
     >
