@@ -173,4 +173,59 @@ export class BacklogPage extends BasePage {
     // 6. ポインタ解放
     await this.page.mouse.up();
   }
+
+  /**
+   * クロス区画 d&d: 指定タイトルの行を別区画 (section-current / section-next / section-backlog)
+   * へドラッグして落とす。SprintSectionedList の onSectionDragOver / onSectionDrop 経路を検証する。
+   *
+   * reorderDragBefore と同じ dispatchEvent 方式 (Playwright の mouse 移動では HTML5
+   * DragEvent が発火しないため)。ドロップは区画 div 本体に対して行う — 行に落とす経路
+   * (onReorderDrop の across 分岐) と異なり、区画が空でも成立する。
+   */
+  async dragRowToSection(dragTitle: string, sectionTestId: 'section-current' | 'section-next' | 'section-backlog'): Promise<void> {
+    const dragRow = this.backlogRowByTitle(dragTitle);
+    const handle = dragRow.locator('.trow-drag-grab');
+
+    // handle に mouse.down で fromHandle = true (armDrag)
+    await handle.hover();
+    await this.page.mouse.down();
+
+    const handleBox = await handle.boundingBox();
+    if (!handleBox) {
+      await this.page.mouse.up();
+      throw new Error('dragRowToSection: handle の bounding box が取得できません');
+    }
+
+    await this.page.evaluate(
+      ({ handleX, handleY, sectionTestId }) => {
+        const handleEl = document.elementFromPoint(handleX, handleY) as HTMLElement | null;
+        const dragRowEl = handleEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
+        const sectionEl = document.querySelector(`[data-testid="${sectionTestId}"]`) as HTMLElement | null;
+        if (!dragRowEl || !sectionEl) return;
+
+        const rect = sectionEl.getBoundingClientRect();
+        // 区画ヘッダ付近 (上端 + 8px) に落とす — 行の上ではなく区画 div 本体の drop を踏む。
+        const clientX = rect.x + rect.width / 2;
+        const clientY = rect.y + 8;
+
+        const dt = new DataTransfer();
+        dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        sectionEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer: dt }));
+        sectionEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer: dt }));
+        dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      },
+      {
+        handleX: handleBox.x + handleBox.width / 2,
+        handleY: handleBox.y + handleBox.height / 2,
+        sectionTestId,
+      },
+    );
+
+    await this.page.mouse.up();
+  }
+
+  /** 指定区画内に指定タイトルの行が見えるか (クロス区画移動の検証用)。 */
+  sectionRowByTitle(sectionTestId: 'section-current' | 'section-next' | 'section-backlog', title: string): Locator {
+    return this.page.getByTestId(sectionTestId).getByTestId('live-ticket').filter({ hasText: title });
+  }
 }

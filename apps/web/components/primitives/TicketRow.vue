@@ -59,11 +59,19 @@ function onDragStart(e: DragEvent): void {
     e.preventDefault();
     return;
   }
+  // dataTransfer を必ず初期化する (2026-06-13)。Firefox は setData 無しではドラッグ自体が
+  // 始まらず、Chrome/Safari も effectAllowed と dropEffect の不一致でドロップが
+  // キャンセル扱いになることがある。中身はチケット id (drop 側は emit 経由で受けるため未使用)。
+  if (e.dataTransfer) {
+    e.dataTransfer.setData('text/plain', props.t.id);
+    e.dataTransfer.effectAllowed = 'move';
+  }
   emit('reorderStart');
 }
 function onDragOver(e: DragEvent): void {
   if (!props.reorderable) return;
   e.preventDefault(); // drop を許可
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; // effectAllowed='move' と一致させる
   emit('reorderOver', e);
 }
 function onDrop(e: DragEvent): void {
