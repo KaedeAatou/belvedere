@@ -41,6 +41,7 @@ import {
   cancelInvite,
 } from './handlers/workspace-handlers';
 import { getFindings } from './handlers/finding-handlers';
+import { checkStoryQuality } from './handlers/story-quality-handlers';
 import {
   startEstimation,
   getEstimation,
@@ -184,6 +185,13 @@ app.get('/api/members', async (c) => {
 // ルールエンジン findings (UI バッジ / AI Integrity Panel 用、T4)
 app.get('/api/findings', async (c) => {
   return respond(c, await getFindings(repo, buildCtx(c), c.req.query('ceremony')));
+});
+
+// User Story 起票時の AI 品質チェック (boilerplate + active スプリントゴール適合 / 2026-06-13)。
+// 起票はブロックせず判定結果を返すだけ。llm は runAgent と同じ module singleton を渡す。
+app.post('/api/story-quality', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await checkStoryQuality(repo, llm, buildCtx(c), body));
 });
 
 // ------- /api/* CRUD endpoints (Phase 1-C / 2026-06-11) -------

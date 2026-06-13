@@ -19,6 +19,20 @@ export class MockLLMProvider implements LLMProvider {
   private static readonly MAX_CALLCOUNT_ENTRIES = 200;
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
+    // Story Quality 補助 (Backlog 起票時の品質チェック / 2026-06-13)。
+    // responseSchema.title === 'story_quality' なら 6 ロール判定 (detectRole) の前段で
+    // 専用ヘルパに分岐する。これは儀式 agent ではなく handler 直叩きの構造化チェックなので
+    // tools 計画 / detectRole 経路には一切入らない (6 ロールの既存挙動を壊さない)。
+    if (isStoryQualityRequest(req)) {
+      const verdict = composeStoryQuality(req);
+      const text = JSON.stringify(verdict, null, 2);
+      return {
+        text,
+        stop: { type: 'stop' },
+        usage: this.fakeUsage(req, text.length),
+      };
+    }
+
     const sessionKey = req.messages.length.toString();
 
     // 直前が tool result なら最終応答に進む
@@ -376,4 +390,171 @@ function getNaturalOutput(role: AgentRole): string {
         'ヒント: buildSystemPrompt(agentName) で生成された prompt を渡してください。',
       ].join('\n');
   }
+}
+
+// ========== Story Quality 補助 (Backlog 起票時の品質チェック / 2026-06-13) ==========
+//
+// handler (apps/api/src/handlers/story-quality-handlers.ts) が
+// responseSchema.title='story_quality' を付けて llm.generate() を tools 無しで 1 回呼ぶ。
+// mock は決定的ヒューリスティックで契約形 (StoryQualityVerdict) の JSON を返す。
+// 本物の gemini に差し替えても同じ JSON 形を返すので handler 側は無改修。
+
+interface StoryQualityIssue {
+  kind: 'boilerplate' | 'goal_fit';
+  severity: 'warn' | 'info';
+  message: string;
+}
+
+interface StoryQualityVerdict {
+  ok: boolean;
+  issues: StoryQualityIssue[];
+  suggestion?: string;
+  sprintGoal?: string;
+}
+
+interface StoryDraft {
+  asA: string;
+  iWant: string;
+  soThat: string;
+  title: string;
+  goal: string;
+}
+
+/** responseSchema が story_quality 用かどうか (title または name で判定) */
+function isStoryQualityRequest(req: LLMRequest): boolean {
+  const s = req.responseSchema;
+  if (!s) return false;
+  const title = typeof s.title === 'string' ? s.title : '';
+  const name = typeof s.name === 'string' ? s.name : '';
+  return title === 'story_quality' || name === 'story_quality';
+}
+
+// user message に handler が埋め込むラベル付き draft をパースする。
+// 形式 (story-quality-handlers.ts と契約): 各行 `asA: ...` / `iWant: ...` / `soThat: ...` /
+// `title: ...` / `sprintGoal: ...`。欠落フィールドは空文字に倒す。
+function parseStoryDraft(req: LLMRequest): StoryDraft {
+  const userMsg = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  const pick = (label: string): string => {
+    // 行頭の `<label>:` を拾う (大文字小文字無視)。値は同一行の行末まで。
+    // コロンの後は horizontal whitespace のみ許可 ([^\S\n])。`\s*` だと改行も食って
+    // soThat が空のとき次の `title:` 行を誤って値に取り込むため (回帰防止)。
+    const re = new RegExp(`^[^\\S\\n]*${label}[^\\S\\n]*:[^\\S\\n]*(.*)$`, 'im');
+    const m = userMsg.match(re);
+    return (m?.[1] ?? '').trim();
+  };
+  return {
+    asA: pick('asA'),
+    iWant: pick('iWant'),
+    soThat: pick('soThat'),
+    title: pick('title'),
+    goal: pick('sprintGoal'),
+  };
+}
+
+// soThat が「一般論 (価値が読み取れない定型句)」かどうか。
+const BOILERPLATE_SOTHAT_PHRASES = [
+  '価値を提供',
+  '便利になる',
+  '使いやすくなる',
+  '改善する',
+  '良くなる',
+  'よくなる',
+  '快適になる',
+];
+
+// goal と draft 本文の語の重なりを測るための簡易トークン化 (mock 用、決定的)。
+// 日本語は分かち書きしないので whitespace 分割では語の重なりが検出できない
+// (「品質スコア」が空白で区切られない)。そこで文字 bigram (2-gram) を採用する:
+// 区切り文字を除去した連続文字列から 2 文字窓を全て抽出し、英数字は単語単位も足す。
+// これは形態素解析を持ち込まずに「語の重なり」を近似する標準テクニック。
+function tokenize(text: string): Set<string> {
+  const cleaned = text
+    .toLowerCase()
+    .replace(/[、。,.\/:：「」『』()（）\[\]【】<>＜＞!！?？\-—_\s]+/g, ' ')
+    .trim();
+  const tokens = new Set<string>();
+  for (const segment of cleaned.split(' ')) {
+    if (segment.length === 0) continue;
+    // 英数字のみの語は単語単位でも一致を取れるよう丸ごと追加
+    if (/^[a-z0-9]+$/.test(segment) && segment.length >= 2) {
+      tokens.add(segment);
+    }
+    // 文字 bigram (Japanese を含む全 segment)
+    const chars = [...segment];
+    for (let i = 0; i + 1 < chars.length; i += 1) {
+      tokens.add(chars[i]! + chars[i + 1]!);
+    }
+  }
+  return tokens;
+}
+
+function composeStoryQuality(req: LLMRequest): StoryQualityVerdict {
+  const draft = parseStoryDraft(req);
+  const issues: StoryQualityIssue[] = [];
+
+  // --- (a) boilerplate 観点 ---
+  if (draft.asA.length === 0) {
+    issues.push({
+      kind: 'boilerplate',
+      severity: 'warn',
+      message: '「誰が (As a)」が空です。価値を受け取る具体的なユーザー像を書いてください。',
+    });
+  }
+  if (draft.iWant.length < 8) {
+    issues.push({
+      kind: 'boilerplate',
+      severity: 'warn',
+      message: '「何を (I want)」が漠然としています。具体的な振る舞い・操作で書いてください。',
+    });
+  }
+  const soThatTooShort = draft.soThat.length < 12;
+  const soThatGeneric = BOILERPLATE_SOTHAT_PHRASES.some((p) => draft.soThat.includes(p));
+  if (draft.soThat.length === 0 || soThatTooShort || soThatGeneric) {
+    issues.push({
+      kind: 'boilerplate',
+      severity: 'warn',
+      message:
+        '「なぜ (so that)」が一般論で、ユーザー価値が読み取れません。具体的な成果で書き換えてください。',
+    });
+  }
+
+  // --- (b) goal_fit 観点 ---
+  if (draft.goal.length > 0) {
+    const goalTokens = tokenize(draft.goal);
+    const draftTokens = tokenize(`${draft.title} ${draft.asA} ${draft.iWant} ${draft.soThat}`);
+    let overlap = 0;
+    for (const t of goalTokens) {
+      if (draftTokens.has(t)) overlap += 1;
+    }
+    // bigram は粒度が細かく偶発一致が起きうるので、わずかな重なりは「乏しい」とみなす。
+    // OVERLAP_FIT_THRESHOLD 件未満なら goal 外 (warn)、以上なら整合 (info)。
+    const OVERLAP_FIT_THRESHOLD = 2;
+    if (overlap < OVERLAP_FIT_THRESHOLD) {
+      issues.push({
+        kind: 'goal_fit',
+        severity: 'warn',
+        message: `現在のスプリントゴール「${draft.goal}」との関連が読み取れません。ゴール外なら次スプリント候補です。`,
+      });
+    } else {
+      issues.push({
+        kind: 'goal_fit',
+        severity: 'info',
+        message: 'スプリントゴールに整合しています。',
+      });
+    }
+  }
+
+  const ok = !issues.some((i) => i.severity === 'warn');
+  const verdict: StoryQualityVerdict = { ok, issues };
+  if (ok) {
+    verdict.suggestion =
+      'As a / I want / so that が具体的で、スプリントゴールにも沿っています。このまま起票して問題ありません。';
+  } else {
+    verdict.suggestion =
+      'who / what / why の各欄を具体化すると、レビュー時に価値が伝わりやすくなります。';
+  }
+  if (draft.goal.length > 0) {
+    verdict.sprintGoal = draft.goal;
+  }
+  return verdict;
 }
