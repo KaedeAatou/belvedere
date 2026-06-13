@@ -212,3 +212,50 @@ export function buildSystemPrompt(name: AgentName): string {
     COMMON_OUTPUT_FORMAT,
   ].join('\n');
 }
+
+// ========== Story Quality 補助 (Backlog 起票時の品質チェック) ==========
+//
+// User Story 起票フォーム (As a / I want / So that) を埋めただけの「形骸化 (boilerplate)」を防ぎ、
+// 現在 active なスプリントゴールとの適合 (goal_fit) を診断する Planner Agent の補助機能。
+// runAgent ループには載せず、handler が llm.generate() を tools 無しで 1 回だけ呼ぶ用途。
+//
+// 注: これは 6 ロール agent の system prompt とは独立。`Your role:` anchor は持たない
+// (detectRole 経由ではなく responseSchema.title='story_quality' で mock が分岐するため)。
+export function buildStoryQualityPrompt(sprintGoal: string | null): string {
+  const goalLine = sprintGoal
+    ? `現在 active なスプリントゴール: 「${sprintGoal}」`
+    : '現在 active なスプリントは無い (goal_fit 判定はスキップしてよい)。';
+  return [
+    'あなたは Planner Agent のチケット品質補助機能です。',
+    'Backlog で起票される User Story の draft (As a / I want / So that の 3 文 + 任意の title) を受け取り、',
+    '形だけ埋めた形骸化チケットを未然に防ぐために 2 観点で診断します。',
+    '',
+    '<diagnosis_axes>',
+    '  <axis kind="boilerplate">',
+    '    フォームを埋めただけで価値が読み取れない形骸化を検出する:',
+    '    - soThat (なぜ): 空 / 一般論 (「価値を提供する」「便利になる」等) → ユーザー価値が読み取れない',
+    '    - asA (誰が): 空 / 曖昧 (「ユーザー」だけ等、対象が特定できない)',
+    '    - iWant (何を): 空 / 漠然 (具体的な振る舞いが書かれていない)',
+    '  </axis>',
+    '  <axis kind="goal_fit">',
+    `    draft の内容が現在 active なスプリントゴールに適合しているかを判定する。`,
+    '    ゴール外なら「次スプリント候補」として info / warn で示す (起票はブロックしない)。',
+    '  </axis>',
+    '</diagnosis_axes>',
+    '',
+    `<sprint_goal>${goalLine}</sprint_goal>`,
+    '',
+    '<output_format>',
+    'responseSchema (story_quality) に従い JSON で返す。',
+    '各 issue は { kind: "boilerplate" | "goal_fit", severity: "warn" | "info", message: string }。',
+    'severity:"warn" が 1 件も無ければ ok:true。改善提案がある場合は suggestion に日本語 1 文で添える。',
+    'message は日本語。具体的な書き換え方向を示す。',
+    '</output_format>',
+    '',
+    '<rules>',
+    '  <rule>出力言語は日本語。スクラム/PM の標準語のみ使用 (造語禁止)</rule>',
+    '  <rule>起票自体はブロックしない。これは判定結果を返すだけの補助</rule>',
+    '  <rule>draft 本文に書かれていない事実を断定しない</rule>',
+    '</rules>',
+  ].join('\n');
+}
