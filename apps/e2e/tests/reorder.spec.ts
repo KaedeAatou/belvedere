@@ -34,12 +34,12 @@ test.describe('Backlog 並び替え', () => {
     await backlog.open();
 
     // === step 1: 仮チケット 2 枚作成 (A, B の順) ===
-    await backlog.createTicket({ title: titleA, type: 'task' });
+    await backlog.createTicket({ title: titleA, type: 'bug' });
     await expect
       .poll(() => backlog.hasTicketWithTitle(titleA), { timeout: 10_000 })
       .toBe(true);
 
-    await backlog.createTicket({ title: titleB, type: 'task' });
+    await backlog.createTicket({ title: titleB, type: 'bug' });
     await expect
       .poll(() => backlog.hasTicketWithTitle(titleB), { timeout: 10_000 })
       .toBe(true);
