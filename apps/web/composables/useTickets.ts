@@ -22,6 +22,8 @@ export interface CreateTicketInput {
   labels?: string[];
   type?: TicketType;
   timeboxHours?: number;
+  /** 分割で生成する子チケットの親 (Refinement: US→子Story / Planning: Story→Task/Spike)。 */
+  parentTicketId?: string;
 }
 
 /** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
@@ -85,6 +87,7 @@ export const useTickets = () => {
       if (input.labels !== undefined) body.labels = input.labels;
       if (input.type !== undefined) body.type = input.type;
       if (input.timeboxHours !== undefined) body.timeboxHours = input.timeboxHours;
+      if (input.parentTicketId !== undefined) body.parentTicketId = input.parentTicketId;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)
