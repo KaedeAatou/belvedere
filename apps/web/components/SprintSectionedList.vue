@@ -792,6 +792,10 @@ async function submitSplit(): Promise<void> {
   border-radius: var(--radius);
   width: 100%; max-width: 480px;
   box-shadow: 0 8px 32px rgba(8, 8, 8, 0.12);
+  /* 縦に長いダイアログ (US 3欄 + AI 診断) が viewport を超えてもヘッダ/フッタを保持し
+     本文だけスクロールさせる。フッタの作成/キャンセルが画面外に出ないようにする。 */
+  display: flex; flex-direction: column;
+  max-height: calc(100vh - 80px);
 }
 .dialog-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -800,7 +804,8 @@ async function submitSplit(): Promise<void> {
 }
 .dialog-title { font-family: var(--display); font-size: 20px; font-weight: 600; margin: 0; }
 .close-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: var(--ink-2); }
-.dialog-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+/* min-height:0 は flex 子で overflow を効かせるため必須。本文だけスクロール。 */
+.dialog-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; min-height: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
