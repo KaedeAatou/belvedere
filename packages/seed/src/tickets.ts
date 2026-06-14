@@ -174,7 +174,6 @@ export const seedTickets: Ticket[] = [
     createdAt: '2026-04-08T10:00:00+09:00',
     updatedAt: '2026-04-20T15:00:00+09:00',
     createdBy: 'agent:retrospective',
-    parentTicketId: 'WC-RETRO-S11-T2',
   },
   {
     id: 'WC-108',
