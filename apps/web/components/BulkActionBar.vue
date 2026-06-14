@@ -19,7 +19,7 @@ const emit = defineEmits<{
   setAssignee: [a: string];
   setPriority: [p: Priority];
   setValueImpact: [v: ValueImpact];
-  setSprint: [sp: string];
+  setSprint: [sp: string | null];
   remove: [];
   clear: [];
   selectAll: [];
@@ -45,7 +45,7 @@ function pickStatus(s: Status): void { emit('setStatus', s); closeMenu(); }
 function pickAssignee(a: string): void { emit('setAssignee', a); closeMenu(); }
 function pickPriority(p: Priority): void { emit('setPriority', p); closeMenu(); }
 function pickValueImpact(v: ValueImpact): void { emit('setValueImpact', v); closeMenu(); }
-function pickSprint(sp: string): void { emit('setSprint', sp); closeMenu(); }
+function pickSprint(sp: string | null): void { emit('setSprint', sp); closeMenu(); }
 
 function confirmRemove(): void {
   closeMenu();
@@ -127,12 +127,15 @@ function confirmRemove(): void {
           </div>
         </div>
 
-        <!-- スプリント移動 (解除は API 非対応 → 既存スプリントへ set のみ) -->
+        <!-- スプリント移動 (BACKLOG = sprintId 解除 / 既存スプリントへ set) -->
         <div class="bulk-item-wrap">
           <button class="bulk-item" data-testid="bulk-set-sprint">
             <span>スプリント移動</span><Icon name="caretRight" :size="12" />
           </button>
           <div class="bulk-flyout">
+            <button class="bulk-subitem" data-testid="bulk-sprint-backlog" @click="pickSprint(null)">
+              BACKLOG (未割当)
+            </button>
             <button v-for="sp in sprints" :key="sp.id" class="bulk-subitem"
                     :data-testid="`bulk-sprint-${sp.id}`" @click="pickSprint(sp.id)">S{{ sp.number }}</button>
             <p v-if="sprints.length === 0" class="bulk-empty">スプリントなし</p>
