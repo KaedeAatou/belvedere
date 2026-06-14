@@ -135,7 +135,10 @@ function normalizeVerdict(rawText: string, sprintGoal: string | null): StoryQual
       if (!kind || !severity || !message) return null;
       return { kind, severity, message };
     })
-    .filter((x): x is StoryQualityIssue => x !== null);
+    .filter((x): x is StoryQualityIssue => x !== null)
+    // active スプリント (= ゴール) が無いとき goal_fit は判定不能。prompt でもスキップを
+    // 指示しているが、将来の gemini が誤って goal_fit を返しても server 側で確実に落とす。
+    .filter((x) => sprintGoal !== null || x.kind !== 'goal_fit');
 
   // ok は契約定義 (warn が無ければ true) を server 側でも確定させる
   // (LLM 出力の ok を盲信せず issues から再計算し、契約不変条件を保証)。
