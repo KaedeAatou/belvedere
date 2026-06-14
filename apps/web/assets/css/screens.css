@@ -38,6 +38,8 @@
 .trow:hover .trow-drag { color: var(--ink-2); }
 .trow-drag-grab { cursor: grab; }
 .trow-drag-grab:active { cursor: grabbing; }
+/* pointer ベース d&d でドラッグ中の行を薄く表示 */
+.trow.dragging { opacity: 0.4; }
 /* ドロップ位置インジケータ (行 上端 / 下端 に 2px の accent ライン) */
 .trow.drop-before::after,
 .trow.drop-after::after {

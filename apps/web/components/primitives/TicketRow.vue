@@ -7,13 +7,15 @@ const props = defineProps<{
   dragHandle?: boolean;
   /**
    * 手動並び替えを有効化する。デフォルト false。
-   * BacklogScreen / PlanningScreen / RefinementScreen で true を渡し、drag* イベントを購読する。
-   * true にすると draggable=true が DOM に付き、handle (dragHandle prop) 以外の
-   * dragstart は onDragStart 内でキャンセルされる。
+   * BacklogScreen / PlanningScreen / RefinementScreen / ReviewScreen で true を渡す。
+   * true のときハンドルに pointerdown を仕込み、掴むと handleDown を emit する
+   * (確定/追跡は親の usePointerReorder が document リスナで行う)。
    */
   reorderable?: boolean;
   /** ドロップ位置インジケータ: 'before' = 行上端ライン / 'after' = 行下端ライン / null = 非表示。 */
   dropEdge?: 'before' | 'after' | null;
+  /** ドラッグ中の行 (薄く表示)。 */
+  dragging?: boolean;
   /**
    * 複数選択 (一括変更/削除) を有効化する。デフォルト false。
    * true のとき一番左にチェックボックス列を追加し、bulkSelected で選択状態を反映する。
@@ -25,9 +27,8 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   click: [];
-  reorderStart: [];
-  reorderOver: [evt: DragEvent];
-  reorderEnd: [];
+  /** ハンドルを pointerdown で掴んだ。親が usePointerReorder.start に渡す。 */
+  handleDown: [evt: PointerEvent];
   toggleSelect: [];
 }>();
 
@@ -38,61 +39,18 @@ const shown = computed(() => findings.value.slice(0, 2));
 const overflow = computed(() => Math.max(0, findings.value.length - 2));
 const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.message).join('\n'));
 
-// handle 限定ドラッグ (定番パターン: 行は常に draggable=true、handle 以外での
-// dragstart をキャンセルする)。
-// ref ではなくプレーンな変数にする — 描画に使わないため reactive にする必要がない。
-// dragArmed を ref にすると「mousedown → Vue 次 tick で draggable 反映 → ブラウザ判定」の
-// タイミングズレが発生し、ハンドルを掴んでも drag が始まらないバグが再現する。
-let fromHandle = false;
-function armDrag(): void {
-  if (props.reorderable) fromHandle = true;
-}
-function disarmDrag(): void {
-  fromHandle = false;
-}
-function onDragStart(e: DragEvent): void {
-  if (!props.reorderable) return;
-  if (!fromHandle) {
-    // handle 以外 (行本体・テキスト等) を掴んだときはドラッグをキャンセル。
-    // クリック選択は dragstart ではなく click で処理されるため影響しない。
-    e.preventDefault();
-    return;
-  }
-  // dataTransfer を必ず初期化する (2026-06-13)。Firefox は setData 無しではドラッグ自体が
-  // 始まらず、Chrome/Safari も effectAllowed と dropEffect の不一致でドロップが
-  // キャンセル扱いになることがある。中身はチケット id (drop 側は emit 経由で受けるため未使用)。
-  if (e.dataTransfer) {
-    e.dataTransfer.setData('text/plain', props.t.id);
-    e.dataTransfer.effectAllowed = 'move';
-  }
-  emit('reorderStart');
-}
-function onDragOver(e: DragEvent): void {
-  if (!props.reorderable) return;
-  e.preventDefault(); // drop を許可
-  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'; // effectAllowed='move' と一致させる
-  emit('reorderOver', e);
-}
-function onDrop(e: DragEvent): void {
-  // 確定は dragend に集約 (native drop は実機で不安定)。ここでは既定動作の抑止のみ。
-  if (!props.reorderable) return;
-  e.preventDefault();
-}
-function onDragEnd(): void {
-  fromHandle = false;
-  if (props.reorderable) emit('reorderEnd');
+// 並び替えは pointer ベース (usePointerReorder)。native HTML5 DnD は実機で drop/dragend の
+// 確定が取りこぼされるため使わない。行は data-ticket-id で elementFromPoint 解決に使われる。
+function onHandleDown(e: PointerEvent): void {
+  if (props.reorderable) emit('handleDown', e);
 }
 </script>
 
 <template>
   <div
-    :class="['trow', selectable && 'selectable', selected && 'selected', dropEdge === 'before' && 'drop-before', dropEdge === 'after' && 'drop-after']"
-    :draggable="reorderable || undefined"
+    :class="['trow', selectable && 'selectable', selected && 'selected', dragging && 'dragging', dropEdge === 'before' && 'drop-before', dropEdge === 'after' && 'drop-after']"
+    :data-ticket-id="t.id"
     @click="$emit('click')"
-    @dragstart="onDragStart"
-    @dragover="onDragOver"
-    @drop="onDrop"
-    @dragend="onDragEnd"
   >
     <span v-if="selectable" class="trow-check">
       <input
@@ -107,8 +65,8 @@ function onDragEnd(): void {
       v-if="dragHandle"
       class="trow-drag"
       :class="{ 'trow-drag-grab': reorderable }"
-      @mousedown="armDrag"
-      @mouseup="disarmDrag"
+      style="touch-action: none"
+      @pointerdown="onHandleDown"
     ><Icon name="drag" /></span>
     <span v-else />
     <TypeMark :type="t.type" />

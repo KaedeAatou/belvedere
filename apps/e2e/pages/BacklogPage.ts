@@ -109,118 +109,60 @@ export class BacklogPage extends BasePage {
   /**
    * ハンドル限定 d&d でバックログ行を並び替える。
    *
-   * Playwright の mouse.down → move → up では HTML5 の dragstart/dragover/drop イベントが
-   * 発火しない (ブラウザ制約)。BacklogScreen は dragover/drop を `.trow` 要素で受け、
-   * evt.clientY で before/after を判定するため、dispatchEvent で直接 DragEvent を送る。
-   *
-   * 手順:
-   *   1. handle に mouse.down — TicketRow の armDrag() を呼んで dragArmed = true にする
-   *   2. ドラッグ行 (.trow) に dragstart を dispatch — reorderStart emit
-   *   3. ターゲット行 (.trow) に dragover を dispatch (clientY = target 上端 + 2px → before 判定)
-   *   4. ターゲット行 (.trow) に drop を dispatch (同じ clientY)
-   *   5. ドラッグ行 (.trow) に dragend を dispatch — reorderEnd emit
-   *   6. mouse.up でポインタ解放
+   * pointer ベース実装 (usePointerReorder) に変わったため、Playwright 実マウス
+   * (mouse.down → move → up) で直接テストできる。合成 DragEvent は不要。
+   * pointerdown がハンドル要素に当たれば handleDown emit → usePointerReorder.start が走る。
    */
   async reorderDragBefore(dragTitle: string, targetTitle: string): Promise<void> {
     const dragRow = this.backlogRowByTitle(dragTitle);
     const targetRow = this.backlogRowByTitle(targetTitle);
     const handle = dragRow.locator('.trow-drag-grab');
 
-    // 1. handle に mouse.down で dragArmed = true (armDrag)
-    await handle.hover();
-    await this.page.mouse.down();
-
-    // bounding box を取得 (mouse.down 後でも安全に取得可能)
     const handleBox = await handle.boundingBox();
     const targetBox = await targetRow.boundingBox();
     if (!handleBox || !targetBox) {
-      await this.page.mouse.up();
       throw new Error('reorderDragBefore: bounding box が取得できません');
     }
 
-    // ターゲット行の上端 + 2px → BacklogScreen の onReorderOver が 'before' と判定する
+    const fromX = handleBox.x + handleBox.width / 2;
+    const fromY = handleBox.y + handleBox.height / 2;
+    // ターゲット行の上端 + 2px → usePointerReorder の resolveAt が 'before' と判定する
+    const toX = targetBox.x + targetBox.width / 2;
     const toClientY = targetBox.y + 2;
 
-    // 2–4. dispatchEvent で HTML5 DragEvent シーケンスを .trow 要素に送る。
-    // **`drop` はあえて発火しない**。実ブラウザはネストした draggable で native drop を
-    // 高頻度に取りこぼすため、本番は確定を `dragend` に寄せている。テストも drop を撃たず
-    // dragstart → dragover → dragend だけにして、本番と同じ「drop 無しで確定」経路を検証する。
-    // (drop を撃つと本番が drop 依存に退行しても気づけない盲点になる)
-    await this.page.evaluate(
-      ({ handleX, handleY, toClientY }) => {
-        // handle 上の任意の点から最も近い .trow 祖先を取る
-        const handleEl = document.elementFromPoint(handleX, handleY) as HTMLElement | null;
-        const dragRowEl = handleEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
-        if (!dragRowEl) return;
-
-        // target 行: toClientY の座標にある live-ticket 要素
-        const targetEl = document.elementFromPoint(handleX, toClientY) as HTMLElement | null;
-        const targetRowEl = targetEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
-        if (!targetRowEl || targetRowEl === dragRowEl) return;
-
-        const dt = new DataTransfer();
-        dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        targetRowEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: toClientY, dataTransfer: dt }));
-        dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      },
-      {
-        handleX: handleBox.x + handleBox.width / 2,
-        handleY: handleBox.y + handleBox.height / 2,
-        toClientY,
-      },
-    );
-
-    // 6. ポインタ解放
+    await this.page.mouse.move(fromX, fromY);
+    await this.page.mouse.down();
+    // 数ステップ移動してから pointerup (ブラウザがドラッグと認識するために最低限の移動が必要)
+    await this.page.mouse.move(fromX, fromY + 5);
+    await this.page.mouse.move(toX, toClientY, { steps: 10 });
     await this.page.mouse.up();
   }
 
   /**
-   * クロス区画 d&d: 指定タイトルの行を別区画 (section-current / section-next / section-backlog)
-   * へドラッグして落とす。SprintSectionedList の onSectionDragOver / onSectionDrop 経路を検証する。
-   *
-   * reorderDragBefore と同じ dispatchEvent 方式 (Playwright の mouse 移動では HTML5
-   * DragEvent が発火しないため)。ドロップは区画 div 本体に対して行う — 行に落とす経路
-   * (onReorderDrop の across 分岐) と異なり、区画が空でも成立する。
+   * クロス区画 d&d: 指定タイトルの行を別区画へドラッグして落とす。
+   * pointer ベース実装 (usePointerReorder) に変わったため実マウスで直接テストできる。
+   * ドロップ先は区画の中央付近 (既存行がない場所でも区画に data-section があるので OK)。
    */
   async dragRowToSection(dragTitle: string, sectionTestId: 'section-current' | 'section-next' | 'section-backlog'): Promise<void> {
     const dragRow = this.backlogRowByTitle(dragTitle);
     const handle = dragRow.locator('.trow-drag-grab');
-
-    // handle に mouse.down で fromHandle = true (armDrag)
-    await handle.hover();
-    await this.page.mouse.down();
+    const sectionEl = this.page.getByTestId(sectionTestId);
 
     const handleBox = await handle.boundingBox();
-    if (!handleBox) {
-      await this.page.mouse.up();
-      throw new Error('dragRowToSection: handle の bounding box が取得できません');
+    const sectionBox = await sectionEl.boundingBox();
+    if (!handleBox || !sectionBox) {
+      throw new Error('dragRowToSection: bounding box が取得できません');
     }
 
-    await this.page.evaluate(
-      ({ handleX, handleY, sectionTestId }) => {
-        const handleEl = document.elementFromPoint(handleX, handleY) as HTMLElement | null;
-        const dragRowEl = handleEl?.closest('[data-testid="live-ticket"]') as HTMLElement | null;
-        const sectionEl = document.querySelector(`[data-testid="${sectionTestId}"]`) as HTMLElement | null;
-        if (!dragRowEl || !sectionEl) return;
+    const fromX = handleBox.x + handleBox.width / 2;
+    const fromY = handleBox.y + handleBox.height / 2;
+    const toX = sectionBox.x + sectionBox.width / 2;
+    const toY = sectionBox.y + 12; // 区画ヘッダ下付近
 
-        const rect = sectionEl.getBoundingClientRect();
-        // 区画ヘッダ付近 (上端 + 8px) に落とす — 行の上ではなく区画 div 本体の drop を踏む。
-        const clientX = rect.x + rect.width / 2;
-        const clientY = rect.y + 8;
-
-        const dt = new DataTransfer();
-        // drop は撃たない (本番が dragend 確定。実ブラウザの drop 取りこぼしを再現)。
-        dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-        sectionEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer: dt }));
-        dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      },
-      {
-        handleX: handleBox.x + handleBox.width / 2,
-        handleY: handleBox.y + handleBox.height / 2,
-        sectionTestId,
-      },
-    );
-
+    await this.page.mouse.move(fromX, fromY);
+    await this.page.mouse.down();
+    await this.page.mouse.move(fromX, fromY + 5);
+    await this.page.mouse.move(toX, toY, { steps: 15 });
     await this.page.mouse.up();
   }
 

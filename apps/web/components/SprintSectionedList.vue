@@ -8,6 +8,8 @@
 // within vs across の判別: dragSection (開始区画) と drop 先の区画を比較。同区画なら reorder、別区画なら move。
 
 import type { Ticket, Priority, TicketType, Member, Sprint } from '@belvedere/shared';
+import { computeOrderIndexBetween, ORDER_STEP } from '~/composables/useTicketReorder';
+import type { ReorderHit } from '~/composables/usePointerReorder';
 
 type SectionKey = 'current' | 'next' | 'backlog';
 
@@ -67,18 +69,13 @@ const allVisibleIds = computed(() => [
   ...props.backlog.map((t) => t.id),
 ]);
 
-// ===== ドラッグ中の発生区画を記録 (within vs across 判別) =====
-const dragSection = ref<SectionKey | null>(null);
-// クロス区画ドラッグ中にホバーしている区画 (ドロップ先のハイライト用)。
-const hoverSection = ref<SectionKey | null>(null);
-
-// ===== ドラッグ中のオートスクロール (2026-06-13) =====
-// BACKLOG 区画は画面下・CURRENT は画面上にあり、リストが長いとドラッグ中に
-// スクロールしないとドロップ先まで物理的に届かない。ブラウザ標準の自動スクロールは
-// ネストした overflow コンテナで効かないことがあるため、dragover で自前スクロールする。
+// ===== d&d は pointer ベース (usePointerReorder) =====
+// native HTML5 DnD (draggable + drop/dragend) は実機で確定が取りこぼされ「離しても
+// 移動しない」が再発したため廃止。pointerdown→pointermove(document)→pointerup で確定する
+// (全ブラウザで確実 + Playwright 実マウスで忠実にテスト可)。詳細: composables/usePointerReorder.ts
 const rootEl = ref<HTMLElement | null>(null);
-const SCROLL_EDGE = 72; // 上下端からこの距離 (px) 以内で発動
-const SCROLL_MAX = 24; // 1 イベントあたりの最大スクロール量 (px)
+const SCROLL_EDGE = 72; // 上下端からこの距離 (px) 以内で自動スクロール
+const SCROLL_MAX = 24;
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   let cur: HTMLElement | null = el;
@@ -90,13 +87,12 @@ function findScrollParent(el: HTMLElement | null): HTMLElement | null {
   return null;
 }
 
-function autoScrollOnDrag(e: DragEvent): void {
-  if (!dragSection.value) return; // このリスト発のドラッグ中のみ
+function autoScroll(_x: number, y: number): void {
   const scroller = findScrollParent(rootEl.value);
   if (!scroller) return;
   const rect = scroller.getBoundingClientRect();
-  const fromTop = e.clientY - rect.top;
-  const fromBottom = rect.bottom - e.clientY;
+  const fromTop = y - rect.top;
+  const fromBottom = rect.bottom - y;
   if (fromTop < SCROLL_EDGE) {
     scroller.scrollTop -= Math.ceil(((SCROLL_EDGE - fromTop) / SCROLL_EDGE) * SCROLL_MAX);
   } else if (fromBottom < SCROLL_EDGE) {
@@ -104,78 +100,63 @@ function autoScrollOnDrag(e: DragEvent): void {
   }
 }
 
-// ===== 各区画の独立した並び替えインスタンス =====
-const currentSorted = computed(() => props.current);
-const nextSorted = computed(() => props.next);
-const backlogSorted = computed(() => props.backlog);
-
-const currentReorder = useTicketReorder({ sorted: currentSorted, patch: (id, body) => patchTicket(id, body) });
-const nextReorder = useTicketReorder({ sorted: nextSorted, patch: (id, body) => patchTicket(id, body) });
-const backlogReorder = useTicketReorder({ sorted: backlogSorted, patch: (id, body) => patchTicket(id, body) });
-
-function reorderFor(section: SectionKey) {
-  return section === 'current' ? currentReorder : section === 'next' ? nextReorder : backlogReorder;
+function listFor(section: SectionKey): Ticket[] {
+  return section === 'current' ? props.current : section === 'next' ? props.next : props.backlog;
 }
 
-function onReorderStart(section: SectionKey, id: string): void {
-  dragSection.value = section;
-  reorderFor(section).onReorderStart(id);
-}
-
-function onReorderOver(section: SectionKey, id: string, e: DragEvent): void {
-  // 同区画内のドラッグのみ行内インジケータ (before/after ライン) を出す。
-  if (dragSection.value !== section) return;
-  // 発生区画の行に戻ってきた = クロス移動の意図なし。stale な hoverSection を確実に消す。
-  // (区画 div の dragover が発火しない経路でも、dragend での誤った moveToSection を防ぐ)
-  hoverSection.value = null;
-  reorderFor(section).onReorderOver(id, e);
-}
-
-// native の `drop` は実ブラウザで不安定 (ネストした draggable 同士では発火しないことが多い)。
-// 確定は必ず発火する `dragend` (= onReorderEnd) に一本化する。行の drop は TicketRow 内部で
-// 既に preventDefault 済みなので、行側に drop ハンドラは持たない。
-//
-// dragend: ここで初めて確定する。ドラッグ開始区画 (originSection) と、ドラッグ中に
-// 最後にホバーした区画 (hoverSection) を比較し、
-//   - 別区画なら sprintId 変更 (moveToSection)
-//   - 同区画なら orderIndex 並び替え (commit)
-// を実行する。native drop の発火可否に依存しないため実機で確実に動く。
-async function onReorderEnd(originSection: SectionKey): Promise<void> {
-  const r = reorderFor(originSection);
-  const draggedId = r.draggingId.value;
-  const target = hoverSection.value;
-  if (draggedId && target && target !== originSection) {
-    // クロス区画: sprintId 変更 (origin の orderIndex は変えない)。
-    emit('moveToSection', draggedId, target);
-  } else {
-    // 同区画: orderIndex 並び替えを確定。
-    await r.commit();
+// カーソル下の行・区画・edge を DOM から解決 (elementFromPoint)。
+function resolveAt(x: number, y: number, draggedId: string): ReorderHit {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  const section = (el?.closest('[data-section]') as HTMLElement | null)?.getAttribute('data-section') ?? null;
+  const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
+  let id: string | null = null;
+  let edge: 'before' | 'after' | null = null;
+  const rid = rowEl?.getAttribute('data-ticket-id') ?? null;
+  if (rowEl && rid && rid !== draggedId) {
+    id = rid;
+    const r = rowEl.getBoundingClientRect();
+    edge = y < r.top + r.height / 2 ? 'before' : 'after';
   }
-  // 3 インスタンス全ての d&d 状態を掃除する (取りこぼし / 次ドラッグへの状態持ち越しを防ぐ)。
-  currentReorder.onReorderEnd();
-  nextReorder.onReorderEnd();
-  backlogReorder.onReorderEnd();
-  dragSection.value = null;
-  hoverSection.value = null;
+  return { id, section, edge };
 }
 
-// セクション div への drop も preventDefault のみ (確定は dragend に集約)。
-function onSectionDrop(_section: SectionKey, e: DragEvent): void {
-  e.preventDefault();
-}
-
-function onSectionDragOver(section: SectionKey, e: DragEvent): void {
-  // 区画跨ぎドロップを受け付けるため dragover で preventDefault + ドロップ先をハイライト。
-  if (dragSection.value && dragSection.value !== section) {
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    hoverSection.value = section;
-  } else if (dragSection.value) {
-    // 発生区画に戻ってきたら他区画のハイライトを消す。
-    hoverSection.value = null;
+// orderIndex gap 枯渇時の一括リバランス (現表示順にドラッグ行を差し込んで ORDER_STEP 刻みで全 patch)。
+async function rebalance(list: Ticket[], draggedId: string, targetId: string, before: boolean): Promise<void> {
+  const without = list.filter((t) => t.id !== draggedId);
+  const dragged = list.find((t) => t.id === draggedId);
+  if (!dragged) return;
+  const targetIdx = without.findIndex((t) => t.id === targetId);
+  const insertAt = targetIdx === -1 ? without.length : before ? targetIdx : targetIdx + 1;
+  const reordered = [...without.slice(0, insertAt), dragged, ...without.slice(insertAt)];
+  for (let i = 0; i < reordered.length; i++) {
+    const t = reordered[i];
+    if (t) await patchTicket(t.id, { orderIndex: (i + 1) * ORDER_STEP });
   }
-  autoScrollOnDrag(e);
 }
+
+async function commitReorder(c: {
+  draggedId: string; originSection: string; targetSection: string;
+  targetId: string | null; edge: 'before' | 'after' | null;
+}): Promise<void> {
+  const origin = c.originSection as SectionKey;
+  const target = c.targetSection as SectionKey;
+  if (target !== origin) {
+    // 別区画へドロップ = sprintId 変更 (親が patch)。
+    emit('moveToSection', c.draggedId, target);
+    return;
+  }
+  if (!c.targetId) return; // 行に乗っていない (区画余白) → 並び替えなし
+  const list = listFor(origin);
+  const newIndex = computeOrderIndexBetween(list, c.draggedId, c.targetId, c.edge === 'before');
+  if (newIndex === null) {
+    await rebalance(list, c.draggedId, c.targetId, c.edge === 'before');
+    return;
+  }
+  await patchTicket(c.draggedId, { orderIndex: newIndex });
+}
+
+const { draggingId: dragId, hoverSection, dropEdgeFor, start: startDrag } =
+  usePointerReorder({ resolveAt, commit: commitReorder, autoScroll });
 
 // ===== セクション統計 =====
 function stats(list: Ticket[]) {
@@ -411,8 +392,7 @@ async function submitSplit(): Promise<void> {
 
     <!-- CURRENT SPRINT -->
     <div :class="['backlog-section', hoverSection === 'current' && 'drop-target']" data-testid="section-current"
-         @dragover="(e) => onSectionDragOver('current', e)"
-         @drop="(e) => onSectionDrop('current', e)">
+         data-section="current">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">{{ currentLabel ?? 'Current Sprint' }}</span>
@@ -426,12 +406,10 @@ async function submitSplit(): Promise<void> {
       <TicketRow v-for="t in current" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle reorderable
                  selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="currentReorder.dropEdgeFor(t.id)"
+                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
                  @click="emit('select', t.id)"
                  @toggle-select="sel.toggle(t.id)"
-                 @reorder-start="onReorderStart('current', t.id)"
-                 @reorder-over="(e) => onReorderOver('current', t.id, e)"
-                 @reorder-end="onReorderEnd('current')">
+                 @handle-down="(e) => startDrag('current', t.id, e)">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
                   :data-testid="`split-${t.id}`" :title="splitChildLabel"
@@ -445,8 +423,7 @@ async function submitSplit(): Promise<void> {
 
     <!-- NEXT SPRINT -->
     <div :class="['backlog-section', hoverSection === 'next' && 'drop-target']" data-testid="section-next"
-         @dragover="(e) => onSectionDragOver('next', e)"
-         @drop="(e) => onSectionDrop('next', e)">
+         data-section="next">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">{{ nextLabel ?? 'Next Sprint' }}</span>
@@ -460,12 +437,10 @@ async function submitSplit(): Promise<void> {
       <TicketRow v-for="t in next" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle reorderable
                  selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="nextReorder.dropEdgeFor(t.id)"
+                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
                  @click="emit('select', t.id)"
                  @toggle-select="sel.toggle(t.id)"
-                 @reorder-start="onReorderStart('next', t.id)"
-                 @reorder-over="(e) => onReorderOver('next', t.id, e)"
-                 @reorder-end="onReorderEnd('next')">
+                 @handle-down="(e) => startDrag('next', t.id, e)">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
                   :data-testid="`split-${t.id}`" :title="splitChildLabel"
@@ -479,8 +454,7 @@ async function submitSplit(): Promise<void> {
 
     <!-- BACKLOG (未スケジュール) -->
     <div :class="['backlog-section', hoverSection === 'backlog' && 'drop-target']" data-testid="section-backlog"
-         @dragover="(e) => onSectionDragOver('backlog', e)"
-         @drop="(e) => onSectionDrop('backlog', e)">
+         data-section="backlog">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">Backlog</span>
@@ -496,12 +470,10 @@ async function submitSplit(): Promise<void> {
       <TicketRow v-for="t in backlog" :key="t.id" :t="t" data-testid="live-ticket"
                  :selected="selectedId === t.id" drag-handle reorderable
                  selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="backlogReorder.dropEdgeFor(t.id)"
+                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
                  @click="emit('select', t.id)"
                  @toggle-select="sel.toggle(t.id)"
-                 @reorder-start="onReorderStart('backlog', t.id)"
-                 @reorder-over="(e) => onReorderOver('backlog', t.id, e)"
-                 @reorder-end="onReorderEnd('backlog')">
+                 @handle-down="(e) => startDrag('backlog', t.id, e)">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
                   :data-testid="`split-${t.id}`" :title="splitChildLabel"

@@ -19,7 +19,7 @@ import type { ComputedRef } from 'vue';
 import type { Ticket } from '@belvedere/shared';
 
 // 端は ±1000、隣接は中間値。差が極小になったら一括リバランス。
-const ORDER_STEP = 1000;
+export const ORDER_STEP = 1000;
 const ORDER_MIN_GAP = 1e-6;
 
 /**
