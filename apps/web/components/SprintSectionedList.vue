@@ -104,10 +104,24 @@ function listFor(section: SectionKey): Ticket[] {
   return section === 'current' ? props.current : section === 'next' ? props.next : props.backlog;
 }
 
-// カーソル下の行・区画・edge を DOM から解決 (elementFromPoint)。
+// カーソル下の行・区画・edge を DOM から解決。
+// elementFromPoint は viewport 外の座標に対して null を返すため、区画は bounding box 比較
+// で特定する (スクロールが必要な距離のドラッグでも確実に section を解決できる)。
 function resolveAt(x: number, y: number, draggedId: string): ReorderHit {
+  // 区画: bounding box と (x,y) の重なりで判定 (viewport 外でも OK)。
+  let section: string | null = null;
+  const sectionKeys: SectionKey[] = ['current', 'next', 'backlog'];
+  for (const key of sectionKeys) {
+    const el = rootEl.value?.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
+      section = key;
+      break;
+    }
+  }
+  // 行: elementFromPoint (viewport 内での行 hover 検出)。
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  const section = (el?.closest('[data-section]') as HTMLElement | null)?.getAttribute('data-section') ?? null;
   const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
   let id: string | null = null;
   let edge: 'before' | 'after' | null = null;
