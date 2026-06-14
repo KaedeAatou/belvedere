@@ -125,6 +125,9 @@ function onReorderStart(section: SectionKey, id: string): void {
 function onReorderOver(section: SectionKey, id: string, e: DragEvent): void {
   // 同区画内のドラッグのみ行内インジケータ (before/after ライン) を出す。
   if (dragSection.value !== section) return;
+  // 発生区画の行に戻ってきた = クロス移動の意図なし。stale な hoverSection を確実に消す。
+  // (区画 div の dragover が発火しない経路でも、dragend での誤った moveToSection を防ぐ)
+  hoverSection.value = null;
   reorderFor(section).onReorderOver(id, e);
 }
 
