@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import type { Ticket, ValueImpact } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
+import type { ReorderHit } from '~/composables/usePointerReorder';
+import { computeOrderIndexBetween, ORDER_STEP } from '~/composables/useTicketReorder';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -27,17 +29,49 @@ const carry = computed(() =>
   [...sprintTickets.value.filter((t) => t.status !== 'done')].sort(compareTicketOrder),
 );
 
-// 持ち越し候補の並び替え (全チケット画面で同じ操作感にする横展開)。
-// 確定は native drop ではなく dragend (commit) に寄せる (実機で drop が発火しない問題への対処)。
-const { dropEdgeFor: carryDropEdgeFor, onReorderStart: carryReorderStart, onReorderOver: carryReorderOver, commit: carryCommit, onReorderEnd: carryReorderEnd } =
-  useTicketReorder({
-    sorted: carry,
-    patch: (id, body) => patchTicket(id, body),
-  });
-async function carryEnd(): Promise<void> {
-  await carryCommit();
-  carryReorderEnd();
+// 持ち越し候補の並び替え — pointer ベース (usePointerReorder)。
+// native DnD は実機で確定が取りこぼされるため廃止。
+function carryResolveAt(x: number, y: number, draggedId: string): ReorderHit {
+  const el = document.elementFromPoint(x, y) as HTMLElement | null;
+  const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
+  const rid = rowEl?.getAttribute('data-ticket-id') ?? null;
+  let id: string | null = null;
+  let edge: 'before' | 'after' | null = null;
+  if (rowEl && rid && rid !== draggedId) {
+    id = rid;
+    const r = rowEl.getBoundingClientRect();
+    edge = y < r.top + r.height / 2 ? 'before' : 'after';
+  }
+  // section は単一 ('carry') なので固定で返す。
+  return { id, section: 'carry', edge };
 }
+
+async function carryCommitFn(c: {
+  draggedId: string; originSection: string; targetSection: string;
+  targetId: string | null; edge: 'before' | 'after' | null;
+}): Promise<void> {
+  if (!c.targetId) return;
+  const list = carry.value;
+  const newIndex = computeOrderIndexBetween(list, c.draggedId, c.targetId, c.edge === 'before');
+  if (newIndex === null) {
+    // gap 枯渇: 一括リバランス
+    const without = list.filter((t) => t.id !== c.draggedId);
+    const dragged = list.find((t) => t.id === c.draggedId);
+    if (!dragged) return;
+    const idx = without.findIndex((t) => t.id === c.targetId);
+    const ins = idx === -1 ? without.length : c.edge === 'before' ? idx : idx + 1;
+    const reordered = [...without.slice(0, ins), dragged, ...without.slice(ins)];
+    for (let i = 0; i < reordered.length; i++) {
+      const t = reordered[i];
+      if (t) await patchTicket(t.id, { orderIndex: (i + 1) * ORDER_STEP });
+    }
+    return;
+  }
+  await patchTicket(c.draggedId, { orderIndex: newIndex });
+}
+
+const { draggingId: carryDragId, dropEdgeFor: carryDropEdgeFor, start: carryStart } =
+  usePointerReorder({ resolveAt: carryResolveAt, commit: carryCommitFn });
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
@@ -142,12 +176,10 @@ async function submitFeedback() {
           <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id"
                      drag-handle reorderable
                      selectable :bulk-selected="sel.isSelected(t.id)"
-                     :drop-edge="carryDropEdgeFor(t.id)"
+                     :drop-edge="carryDropEdgeFor(t.id)" :dragging="carryDragId === t.id"
                      @click="emit('select', t.id)"
                      @toggle-select="sel.toggle(t.id)"
-                     @reorder-start="carryReorderStart(t.id)"
-                     @reorder-over="(e) => carryReorderOver(t.id, e)"
-                     @reorder-end="carryEnd">
+                     @handle-down="(e) => carryStart('carry', t.id, e)">
             <template #extra>
               <StatusDot :status="t.status" />
             </template>
