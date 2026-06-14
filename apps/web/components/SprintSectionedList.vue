@@ -32,6 +32,12 @@ const props = defineProps<{
    * いずれも story 種別の行にのみボタンを出し、子は parentTicketId で親に紐付ける。
    */
   splitMode?: 'child-story' | 'task-spike';
+  /**
+   * BACKLOG セクション内の「New issue」ボタンを隠す。
+   * Backlog 画面は上部ツールバーに専用の New issue があるため二重になるので true を渡す。
+   * Refinement/Planning はツールバー側に作成導線が無いので false (既定) のまま section 側を使う。
+   */
+  hideSectionCreate?: boolean;
   /** 各行 #extra スロット用に finding ピル等を行が描く前提なので追加 props は不要。 */
 }>();
 
@@ -51,6 +57,7 @@ defineSlots<{
 const { createTicket, patchTicket, isLoading: createLoading, error: liveError } = useTickets();
 const { findingsFor, refresh: refreshFindings } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
+const { activeSprint, nextPlanned } = useSprints();
 
 // 複数選択 (全区画跨ぎ選択可)。BulkActionBar は上部に 1 つ。
 const sel = useTicketSelection();
@@ -121,42 +128,37 @@ function onReorderOver(section: SectionKey, id: string, e: DragEvent): void {
   reorderFor(section).onReorderOver(id, e);
 }
 
-function onReorderDrop(section: SectionKey, id: string): void {
-  const from = dragSection.value;
-  if (from === section) {
-    // within-section: 通常の並び替え。
-    void reorderFor(section).onReorderDrop(id);
-  } else if (from) {
-    // across-section: sprintId 変更。draggingId は drop 側区画には無いので
-    // 発生区画の onReorderEnd で状態を掃除しつつ、移動だけ emit する。
-    const draggedId = reorderFor(from).draggingId.value;
-    reorderFor(from).onReorderEnd();
-    if (draggedId) emit('moveToSection', draggedId, section);
+// native の `drop` は実ブラウザで不安定 (ネストした draggable 同士では発火しないことが多い)。
+// 確定は必ず発火する `dragend` (= onReorderEnd) に一本化する。行の drop は TicketRow 内部で
+// 既に preventDefault 済みなので、行側に drop ハンドラは持たない。
+//
+// dragend: ここで初めて確定する。ドラッグ開始区画 (originSection) と、ドラッグ中に
+// 最後にホバーした区画 (hoverSection) を比較し、
+//   - 別区画なら sprintId 変更 (moveToSection)
+//   - 同区画なら orderIndex 並び替え (commit)
+// を実行する。native drop の発火可否に依存しないため実機で確実に動く。
+async function onReorderEnd(originSection: SectionKey): Promise<void> {
+  const r = reorderFor(originSection);
+  const draggedId = r.draggingId.value;
+  const target = hoverSection.value;
+  if (draggedId && target && target !== originSection) {
+    // クロス区画: sprintId 変更 (origin の orderIndex は変えない)。
+    emit('moveToSection', draggedId, target);
+  } else {
+    // 同区画: orderIndex 並び替えを確定。
+    await r.commit();
   }
+  // 3 インスタンス全ての d&d 状態を掃除する (取りこぼし / 次ドラッグへの状態持ち越しを防ぐ)。
+  currentReorder.onReorderEnd();
+  nextReorder.onReorderEnd();
+  backlogReorder.onReorderEnd();
   dragSection.value = null;
   hoverSection.value = null;
 }
 
-function onReorderEnd(section: SectionKey): void {
-  reorderFor(section).onReorderEnd();
-  dragSection.value = null;
-  hoverSection.value = null;
-}
-
-// セクションのボディ/ヘッダにドロップ (空区画や行間以外へ落とした場合の区画跨ぎ移動)。
-function onSectionDrop(section: SectionKey, e: DragEvent): void {
+// セクション div への drop も preventDefault のみ (確定は dragend に集約)。
+function onSectionDrop(_section: SectionKey, e: DragEvent): void {
   e.preventDefault();
-  const from = dragSection.value;
-  hoverSection.value = null;
-  if (!from || from === section) {
-    // 同区画 or 不明なら何もしない (行の drop ハンドラに委ねる)。
-    dragSection.value = null;
-    return;
-  }
-  const draggedId = reorderFor(from).draggingId.value;
-  reorderFor(from).onReorderEnd();
-  dragSection.value = null;
-  if (draggedId) emit('moveToSection', draggedId, section);
 }
 
 function onSectionDragOver(section: SectionKey, e: DragEvent): void {
@@ -192,6 +194,22 @@ const newPriority = ref<Priority>('medium');
 const newEstimatePt = ref<number | null>(null);
 const newTimebox = ref<number | null>(null);
 const createError = ref<string | null>(null);
+
+// 起票先の区画 (Backlog / Next / Current)。作成時にそのまま sprintId に変換する。
+type CreateSection = 'backlog' | 'next' | 'current';
+const newSection = ref<CreateSection>('backlog');
+// 実在する区画だけ選べるようにする (active/planned スプリントが無ければ Backlog のみ)。
+const sectionOptions = computed<{ value: CreateSection; label: string }[]>(() => {
+  const opts: { value: CreateSection; label: string }[] = [{ value: 'backlog', label: 'Backlog (未スケジュール)' }];
+  if (nextPlanned.value) opts.push({ value: 'next', label: `Next — Sprint ${nextPlanned.value.number}` });
+  if (activeSprint.value) opts.push({ value: 'current', label: `Current — Sprint ${activeSprint.value.number}` });
+  return opts;
+});
+function sprintIdForSection(s: CreateSection): string | undefined {
+  if (s === 'current') return activeSprint.value?.id;
+  if (s === 'next') return nextPlanned.value?.id;
+  return undefined;
+}
 
 const suggestSpike = computed(
   () => props.allowedTypes.includes('spike') && /(調査|検証|比較|スパイク)/.test(newTitle.value) && newType.value !== 'spike',
@@ -238,6 +256,7 @@ function openCreate(): void {
   usIWant.value = '';
   usSoThat.value = '';
   storyVerdict.value = null;
+  newSection.value = 'backlog';
   showCreateDialog.value = true;
 }
 
@@ -270,6 +289,7 @@ async function submitCreate(): Promise<void> {
   const input: {
     title: string; priority: Priority; type: TicketType;
     estimatePt?: number; timeboxHours?: number; description?: string;
+    sprintId?: string; status?: 'backlog' | 'todo';
   } = {
     title: effectiveTitle,
     priority: newPriority.value,
@@ -281,6 +301,12 @@ async function submitCreate(): Promise<void> {
     if (newTimebox.value !== null) input.timeboxHours = newTimebox.value;
   } else if (newType.value !== 'task') {
     if (newEstimatePt.value !== null) input.estimatePt = newEstimatePt.value;
+  }
+  // 起票先区画 → sprintId/status。Current/Next はスプリント内なので todo、Backlog は未スケジュール。
+  const sid = sprintIdForSection(newSection.value);
+  if (sid !== undefined) {
+    input.sprintId = sid;
+    input.status = 'todo';
   }
   const created = await createTicket(input);
   if (created) {
@@ -402,7 +428,6 @@ async function submitSplit(): Promise<void> {
                  @toggle-select="sel.toggle(t.id)"
                  @reorder-start="onReorderStart('current', t.id)"
                  @reorder-over="(e) => onReorderOver('current', t.id, e)"
-                 @reorder-drop="onReorderDrop('current', t.id)"
                  @reorder-end="onReorderEnd('current')">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
@@ -437,7 +462,6 @@ async function submitSplit(): Promise<void> {
                  @toggle-select="sel.toggle(t.id)"
                  @reorder-start="onReorderStart('next', t.id)"
                  @reorder-over="(e) => onReorderOver('next', t.id, e)"
-                 @reorder-drop="onReorderDrop('next', t.id)"
                  @reorder-end="onReorderEnd('next')">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
@@ -463,7 +487,7 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ backlogStats.sp }}</b> SP</span>
           <span><b>{{ backlogStats.flagged }}</b> flagged</span>
         </div>
-        <button class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
+        <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
                 @click="openCreate"><Icon name="plus" /> New issue</button>
       </div>
       <TicketRow v-for="t in backlog" :key="t.id" :t="t" data-testid="live-ticket"
@@ -474,7 +498,6 @@ async function submitSplit(): Promise<void> {
                  @toggle-select="sel.toggle(t.id)"
                  @reorder-start="onReorderStart('backlog', t.id)"
                  @reorder-over="(e) => onReorderOver('backlog', t.id, e)"
-                 @reorder-drop="onReorderDrop('backlog', t.id)"
                  @reorder-end="onReorderEnd('backlog')">
         <template #extra>
           <button v-if="splitMode && t.type === 'story'" class="split-btn"
@@ -565,14 +588,22 @@ async function submitSplit(): Promise<void> {
           <span>💡 調査系のタイトルです。Spike にしますか?</span>
           <button type="button" class="spike-btn" data-testid="suggest-spike" @click="applySpike">Spike にする</button>
         </div>
-        <div class="field">
-          <label class="label" for="ssl-new-priority">優先度</label>
-          <select id="ssl-new-priority" v-model="newPriority" data-testid="new-ticket-priority" class="select-input">
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="urgent">urgent</option>
-          </select>
+        <div class="field-row">
+          <div class="field">
+            <label class="label" for="ssl-new-priority">優先度</label>
+            <select id="ssl-new-priority" v-model="newPriority" data-testid="new-ticket-priority" class="select-input">
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="urgent">urgent</option>
+            </select>
+          </div>
+          <div class="field">
+            <label class="label" for="ssl-new-section">起票先</label>
+            <select id="ssl-new-section" v-model="newSection" data-testid="new-ticket-section" class="select-input">
+              <option v-for="o in sectionOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+            </select>
+          </div>
         </div>
         <div class="field-row">
           <div v-if="newType === 'spike'" class="field">

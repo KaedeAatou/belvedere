@@ -1,17 +1,19 @@
 // チケット並び替え (fractional orderIndex / Linear 方式) の共通ロジック。
 // BacklogScreen / PlanningScreen / RefinementScreen で共有する。
 //
+// 確定は native の `drop` ではなく `dragend` (commit) で行う。実ブラウザは drop を
+// 取りこぼすため、必ず発火する dragend に寄せる (詳細は commit() の doc 参照)。
+//
 // 使い方:
 //   const sorted = computed(() => [...myTickets].sort(compareTicketOrder));
-//   const { draggingId, dropEdgeFor, onReorderStart, onReorderOver, onReorderDrop, onReorderEnd } =
+//   const { draggingId, dropEdgeFor, onReorderStart, onReorderOver, commit, onReorderEnd } =
 //     useTicketReorder({ sorted, patch: (id, body) => patchTicket(id, body) });
 //
-// TicketRow 側の配線:
+// TicketRow 側の配線 (drop は使わない / 確定は dragend で commit してから onReorderEnd):
 //   <TicketRow reorderable drag-handle :drop-edge="dropEdgeFor(t.id)"
 //              @reorder-start="onReorderStart(t.id)"
 //              @reorder-over="(e) => onReorderOver(t.id, e)"
-//              @reorder-drop="onReorderDrop(t.id)"
-//              @reorder-end="onReorderEnd" />
+//              @reorder-end="async () => { await commit(); onReorderEnd(); }" />
 
 import type { ComputedRef } from 'vue';
 import type { Ticket } from '@belvedere/shared';
@@ -117,19 +119,29 @@ export function useTicketReorder(opts: UseTicketReorderOptions) {
     dropTarget.value = { id, edge };
   }
 
-  async function onReorderDrop(targetId: string): Promise<void> {
+  /**
+   * 並び替えを確定する。**native の `drop` イベントではなく `dragend` から呼ぶ**。
+   *
+   * HTML5 DnD の `drop` は、ネストした draggable 同士や dropEffect の不一致で
+   * 実ブラウザでは高頻度に発火しない (合成 DragEvent を dispatch する e2e では
+   * 明示発火するので緑になり、この差で「テスト緑なのに実機で動かない」が起きていた)。
+   * `dragend` は drop の成否に関わらず必ず発火するため、確定はこちらに寄せる。
+   *
+   * 直近の dragover で記録した dropTarget (対象行 + before/after) を使って確定する。
+   */
+  async function commit(): Promise<void> {
     const dragged = draggingId.value;
     const target = dropTarget.value;
-    draggingId.value = null;
+    // 読み取った直後に無効化する。万一 dragend が二重に来ても二重 patch しない冪等性。
     dropTarget.value = null;
-    if (!dragged || !target || dragged === targetId) return;
+    if (!dragged || !target || dragged === target.id) return;
 
     // リバランスのベースは sortedRaw (フィルタ前) があればそちらを優先する。
     const base = opts.sortedRaw?.value ?? opts.sorted.value;
-    const newIndex = computeOrderIndexBetween(base, dragged, targetId, target.edge === 'before');
+    const newIndex = computeOrderIndexBetween(base, dragged, target.id, target.edge === 'before');
     if (newIndex === null) {
       // gap 枯渇 or 算出不能 → 一括リバランス後に再配置。
-      await rebalance(base, dragged, targetId, target.edge === 'before');
+      await rebalance(base, dragged, target.id, target.edge === 'before');
       return;
     }
     await opts.patch(dragged, { orderIndex: newIndex });
@@ -169,7 +181,7 @@ export function useTicketReorder(opts: UseTicketReorderOptions) {
     dropEdgeFor,
     onReorderStart,
     onReorderOver,
-    onReorderDrop,
+    commit,
     onReorderEnd,
   };
 }

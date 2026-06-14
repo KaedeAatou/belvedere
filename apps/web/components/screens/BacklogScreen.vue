@@ -176,6 +176,7 @@ onMounted(() => {
     :members="members" :sprints="sprints"
     :current-label="currentLabel" :next-label="nextLabel"
     :allowed-types="['story', 'incident', 'bug']"
+    hide-section-create
     @select="(id) => emit('select', id)"
     @move-to-section="onMoveToSection"
   />

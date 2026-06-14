@@ -141,10 +141,11 @@ export class BacklogPage extends BasePage {
     // ターゲット行の上端 + 2px → BacklogScreen の onReorderOver が 'before' と判定する
     const toClientY = targetBox.y + 2;
 
-    // 2–5. dispatchEvent で HTML5 DragEvent シーケンスを .trow 要素に送る
-    // .trow は data-testid="live-ticket" と同一要素。
-    // dragstart/dragover/drop のリスナは BacklogScreen → TicketRow の @dragstart/@dragover/@drop に付く。
-    // dragover の clientY が行の getBoundingClientRect().top から上半分かどうかで before/after 判定。
+    // 2–4. dispatchEvent で HTML5 DragEvent シーケンスを .trow 要素に送る。
+    // **`drop` はあえて発火しない**。実ブラウザはネストした draggable で native drop を
+    // 高頻度に取りこぼすため、本番は確定を `dragend` に寄せている。テストも drop を撃たず
+    // dragstart → dragover → dragend だけにして、本番と同じ「drop 無しで確定」経路を検証する。
+    // (drop を撃つと本番が drop 依存に退行しても気づけない盲点になる)
     await this.page.evaluate(
       ({ handleX, handleY, toClientY }) => {
         // handle 上の任意の点から最も近い .trow 祖先を取る
@@ -160,7 +161,6 @@ export class BacklogPage extends BasePage {
         const dt = new DataTransfer();
         dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
         targetRowEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientY: toClientY, dataTransfer: dt }));
-        targetRowEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientY: toClientY, dataTransfer: dt }));
         dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
       },
       {
@@ -209,9 +209,9 @@ export class BacklogPage extends BasePage {
         const clientY = rect.y + 8;
 
         const dt = new DataTransfer();
+        // drop は撃たない (本番が dragend 確定。実ブラウザの drop 取りこぼしを再現)。
         dragRowEl.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
         sectionEl.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer: dt }));
-        sectionEl.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientX, clientY, dataTransfer: dt }));
         dragRowEl.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
       },
       {

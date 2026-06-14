@@ -27,7 +27,6 @@ const emit = defineEmits<{
   click: [];
   reorderStart: [];
   reorderOver: [evt: DragEvent];
-  reorderDrop: [evt: DragEvent];
   reorderEnd: [];
   toggleSelect: [];
 }>();
@@ -75,9 +74,9 @@ function onDragOver(e: DragEvent): void {
   emit('reorderOver', e);
 }
 function onDrop(e: DragEvent): void {
+  // 確定は dragend に集約 (native drop は実機で不安定)。ここでは既定動作の抑止のみ。
   if (!props.reorderable) return;
   e.preventDefault();
-  emit('reorderDrop', e);
 }
 function onDragEnd(): void {
   fromHandle = false;

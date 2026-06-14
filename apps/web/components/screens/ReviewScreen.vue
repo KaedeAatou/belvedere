@@ -28,11 +28,16 @@ const carry = computed(() =>
 );
 
 // 持ち越し候補の並び替え (全チケット画面で同じ操作感にする横展開)。
-const { dropEdgeFor: carryDropEdgeFor, onReorderStart: carryReorderStart, onReorderOver: carryReorderOver, onReorderDrop: carryReorderDrop, onReorderEnd: carryReorderEnd } =
+// 確定は native drop ではなく dragend (commit) に寄せる (実機で drop が発火しない問題への対処)。
+const { dropEdgeFor: carryDropEdgeFor, onReorderStart: carryReorderStart, onReorderOver: carryReorderOver, commit: carryCommit, onReorderEnd: carryReorderEnd } =
   useTicketReorder({
     sorted: carry,
     patch: (id, body) => patchTicket(id, body),
   });
+async function carryEnd(): Promise<void> {
+  await carryCommit();
+  carryReorderEnd();
+}
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
@@ -142,8 +147,7 @@ async function submitFeedback() {
                      @toggle-select="sel.toggle(t.id)"
                      @reorder-start="carryReorderStart(t.id)"
                      @reorder-over="(e) => carryReorderOver(t.id, e)"
-                     @reorder-drop="carryReorderDrop(t.id)"
-                     @reorder-end="carryReorderEnd">
+                     @reorder-end="carryEnd">
             <template #extra>
               <StatusDot :status="t.status" />
             </template>
