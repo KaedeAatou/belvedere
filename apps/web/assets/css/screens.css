@@ -41,21 +41,12 @@
 .trow:hover .trow-drag { color: var(--ink-2); }
 .trow-drag-grab { cursor: grab; }
 .trow-drag-grab:active { cursor: grabbing; }
-/* pointer ベース d&d でドラッグ中の行を薄く表示。
-   ★ pointer-events:none は付けてはいけない: この class は元行 (.trow) に付き、その子の
-   ハンドル span (.trow-drag) に CSS 継承される。setPointerCapture はハンドル span に
-   張っているため、ハンドルが pointer-events:none になると W3C Pointer Events 仕様の
-   「Implicit Release of Pointer Capture」で capture が即暗黙解放され、ドラッグ中の
-   native テキスト選択遷移防止という修正の核が失効する (= 掴めるが動かない/複数行選択が再発)。
-   元行の自己ヒット除外は resolveAt の hit.id!==draggedId で行うので CSS 側は不要。 */
-.trow.dragging { opacity: 0.4; }
-/* ドロップ位置インジケータ (行 上端 / 下端 に 2px の accent ライン) */
-.trow.drop-before::after,
-.trow.drop-after::after {
-  content: ""; position: absolute; left: 0; right: 0; height: 2px; background: var(--accent); z-index: 1;
-}
-.trow.drop-before::after { top: -1px; }
-.trow.drop-after::after { bottom: -1px; }
+/* d&d は SortableJS (vue-draggable-plus)。各区画の VueDraggable に .dnd-list を付与。
+   ghost=挿入位置プレビュー / chosen=掴んだ行 / drag=カーソル追従クローン (SortableJS 既定クラス)。 */
+.dnd-list { min-height: 40px; }
+.trow.sortable-ghost { opacity: 0.35; background: var(--accent-bg, #fff3ee); }
+.trow.sortable-chosen { background: var(--bg-2); }
+.trow.sortable-drag { opacity: 0.95; box-shadow: 0 6px 18px rgba(8, 8, 8, 0.16); }
 .trow-id { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-3); letter-spacing: 0.08em; }
 .trow-title {
   font-size: 14px; color: var(--ink-0); letter-spacing: 0.03em;

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Ticket, ValueImpact } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
-import type { ReorderHit } from '~/composables/usePointerReorder';
-import { computeOrderIndexBetween, ORDER_STEP } from '~/composables/useTicketReorder';
+import { ORDER_STEP } from '~/composables/useTicketReorder';
+import { VueDraggable } from 'vue-draggable-plus';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -29,73 +29,30 @@ const carry = computed(() =>
   [...sprintTickets.value.filter((t) => t.status !== 'done')].sort(compareTicketOrder),
 );
 
-// 持ち越し候補の並び替え — pointer ベース (usePointerReorder)。
-// native DnD は実機で確定が取りこぼされるため廃止。
-function carryResolveAt(x: number, y: number, draggedId: string): ReorderHit {
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
-  const rid = rowEl?.getAttribute('data-ticket-id') ?? null;
-  let id: string | null = null;
-  let edge: 'before' | 'after' | null = null;
-  if (rowEl && rid && rid !== draggedId) {
-    id = rid;
-    const r = rowEl.getBoundingClientRect();
-    edge = y < r.top + r.height / 2 ? 'before' : 'after';
-  }
-  // forgiving drop: 行ちょうどでなく隙間/余白/自分自身の行の上で離しても、carry リスト内で
-  // Y が最も近い行へ吸着する (SprintSectionedList と同じ。これが無いと行の真上でしか確定せず
-  // 「効かない」と感じる)。carry リスト container 内に y がある時だけ吸着する。
-  if (!id) {
-    const cont = document.querySelector('[data-testid="carry-list"]') as HTMLElement | null;
-    const cr = cont?.getBoundingClientRect();
-    if (cont && cr && y >= cr.top && y <= cr.bottom) {
-      const rows = (Array.from(cont.querySelectorAll('[data-ticket-id]')) as HTMLElement[]).filter(
-        (r) => r.getAttribute('data-ticket-id') !== draggedId,
-      );
-      for (const r of rows) {
-        const rr = r.getBoundingClientRect();
-        if (y < rr.top + rr.height / 2) {
-          id = r.getAttribute('data-ticket-id');
-          edge = 'before';
-          break;
-        }
-      }
-      if (!id && rows.length > 0) {
-        id = rows[rows.length - 1]!.getAttribute('data-ticket-id');
-        edge = 'after';
-      }
-    }
-  }
-  // section は単一 ('carry') なので固定で返す。
-  return { id, section: 'carry', edge };
+// 持ち越し候補の並び替え — SortableJS (vue-draggable-plus)。単一リストなので group 不要。
+// carry は computed なので可変ミラーを v-model に渡し、onEnd で近傍から orderIndex を patch。
+const carryList = ref<Ticket[]>([]);
+watch(carry, (v) => { carryList.value = [...v]; }, { immediate: true });
+
+function orderBetween(prev: Ticket | undefined, next: Ticket | undefined): number {
+  const p = prev?.orderIndex ?? null;
+  const n = next?.orderIndex ?? null;
+  if (p === null && n === null) return ORDER_STEP;
+  if (p === null) return (n as number) - ORDER_STEP;
+  if (n === null) return p + ORDER_STEP;
+  return (p + n) / 2;
 }
 
-async function carryCommitFn(c: {
-  draggedId: string; originSection: string; targetSection: string;
-  targetId: string | null; edge: 'before' | 'after' | null;
-}): Promise<void> {
-  if (!c.targetId) return;
-  const list = carry.value;
-  const newIndex = computeOrderIndexBetween(list, c.draggedId, c.targetId, c.edge === 'before');
-  if (newIndex === null) {
-    // gap 枯渇: 一括リバランス
-    const without = list.filter((t) => t.id !== c.draggedId);
-    const dragged = list.find((t) => t.id === c.draggedId);
-    if (!dragged) return;
-    const idx = without.findIndex((t) => t.id === c.targetId);
-    const ins = idx === -1 ? without.length : c.edge === 'before' ? idx : idx + 1;
-    const reordered = [...without.slice(0, ins), dragged, ...without.slice(ins)];
-    for (let i = 0; i < reordered.length; i++) {
-      const t = reordered[i];
-      if (t) await patchTicket(t.id, { orderIndex: (i + 1) * ORDER_STEP });
-    }
-    return;
-  }
-  await patchTicket(c.draggedId, { orderIndex: newIndex });
+async function onCarryEnd(evt: { item: HTMLElement }): Promise<void> {
+  const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
+  if (!id) return;
+  const idx = carryList.value.findIndex((t) => t.id === id);
+  if (idx === -1) return;
+  const res = await patchTicket(id, {
+    orderIndex: orderBetween(carryList.value[idx - 1], carryList.value[idx + 1]),
+  });
+  if (!res) carryList.value = [...carry.value]; // 失敗時はサーバ状態へ戻す
 }
-
-const { draggingId: carryDragId, dropEdgeFor: carryDropEdgeFor, start: carryStart } =
-  usePointerReorder({ resolveAt: carryResolveAt, commit: carryCommitFn });
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴールが設定されていません');
@@ -197,18 +154,19 @@ async function submitFeedback() {
             @clear="sel.clear"
             @select-all="() => sel.selectMany(carry.map((t) => t.id))"
           />
-          <TicketRow v-for="t in carry" :key="t.id" :t="t" :selected="selectedId === t.id"
-                     drag-handle reorderable
-                     selectable :bulk-selected="sel.isSelected(t.id)"
-                     :drop-edge="carryDropEdgeFor(t.id)" :dragging="carryDragId === t.id"
-                     @click="emit('select', t.id)"
-                     @toggle-select="sel.toggle(t.id)"
-                     @handle-down="(e) => carryStart('carry', t.id, e)">
-            <template #extra>
-              <StatusDot :status="t.status" />
-            </template>
-          </TicketRow>
-          <p v-if="carry.length === 0" style="padding: 12px 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
+          <VueDraggable v-model="carryList" handle=".trow-drag-grab" :animation="150"
+                        :force-fallback="true" class="dnd-list" @end="onCarryEnd">
+            <TicketRow v-for="t in carryList" :key="t.id" :t="t" :selected="selectedId === t.id"
+                       drag-handle reorderable
+                       selectable :bulk-selected="sel.isSelected(t.id)"
+                       @click="emit('select', t.id)"
+                       @toggle-select="sel.toggle(t.id)">
+              <template #extra>
+                <StatusDot :status="t.status" />
+              </template>
+            </TicketRow>
+          </VueDraggable>
+          <p v-if="carryList.length === 0" style="padding: 12px 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
             未完了チケットはありません。
           </p>
         </div>
