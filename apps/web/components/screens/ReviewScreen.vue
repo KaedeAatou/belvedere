@@ -42,6 +42,30 @@ function carryResolveAt(x: number, y: number, draggedId: string): ReorderHit {
     const r = rowEl.getBoundingClientRect();
     edge = y < r.top + r.height / 2 ? 'before' : 'after';
   }
+  // forgiving drop: 行ちょうどでなく隙間/余白/自分自身の行の上で離しても、carry リスト内で
+  // Y が最も近い行へ吸着する (SprintSectionedList と同じ。これが無いと行の真上でしか確定せず
+  // 「効かない」と感じる)。carry リスト container 内に y がある時だけ吸着する。
+  if (!id) {
+    const cont = document.querySelector('[data-testid="carry-list"]') as HTMLElement | null;
+    const cr = cont?.getBoundingClientRect();
+    if (cont && cr && y >= cr.top && y <= cr.bottom) {
+      const rows = (Array.from(cont.querySelectorAll('[data-ticket-id]')) as HTMLElement[]).filter(
+        (r) => r.getAttribute('data-ticket-id') !== draggedId,
+      );
+      for (const r of rows) {
+        const rr = r.getBoundingClientRect();
+        if (y < rr.top + rr.height / 2) {
+          id = r.getAttribute('data-ticket-id');
+          edge = 'before';
+          break;
+        }
+      }
+      if (!id && rows.length > 0) {
+        id = rows[rows.length - 1]!.getAttribute('data-ticket-id');
+        edge = 'after';
+      }
+    }
+  }
   // section は単一 ('carry') なので固定で返す。
   return { id, section: 'carry', edge };
 }
@@ -157,7 +181,7 @@ async function submitFeedback() {
 
       <div style="margin-top: 24px">
         <h2 style="margin: 0 0 8px; font-size: 14px; font-weight: 500">Carry-over candidates</h2>
-        <div style="border: 1px solid var(--line-1)">
+        <div data-testid="carry-list" style="border: 1px solid var(--line-1)">
           <BulkActionBar
             v-if="sel.count.value > 0"
             :count="sel.count.value"
