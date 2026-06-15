@@ -1,4 +1,4 @@
-// Pointer ベースの d&d 並び替え/区画移動コンポーザブル (2026-06-14)。
+// Pointer ベースの d&d 並び替え/区画移動コンポーザブル (2026-06-14, 更新 2026-06-15)。
 //
 // 背景: HTML5 ネイティブ DnD (draggable + dragstart/dragover/drop/dragend) は実ブラウザで
 // drop/dragend の確定が高頻度に取りこぼされ、「ドラッグでオレンジは出るが離しても移動しない」
