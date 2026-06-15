@@ -140,30 +140,53 @@ export class BacklogPage extends BasePage {
 
   /**
    * クロス区画 d&d: 指定タイトルの行を別区画へドラッグして落とす。
-   * pointer ベース実装 (usePointerReorder) に変わったため実マウスで直接テストできる。
-   * ドロップ先は区画の中央付近 (既存行がない場所でも区画に data-section があるので OK)。
+   *
+   * pointer ベース実装 (usePointerReorder) では PointerEvent を使う。
+   * 問題: Playwright の mouse.move() は viewport 内にクランプされる。
+   * セクション (section-current) が viewport 外（スクロール上部）にある場合、
+   * mouse.move(toX, toY) の toY が 0 にクランプされ、且つセクションが完全に
+   * 上にスクロールされていると 0 もセクション内に入らず hoverSection が null になる。
+   * 解決: page.evaluate で PointerEvent を直接 dispatch し viewport 制約を回避する。
+   *   - pointerdown はハンドル要素に dispatch (scrollIntoViewIfNeeded 後に elementFromPoint で取得)
+   *   - pointermove/pointerup は document に dispatch (clientX/Y はセクション実座標、viewport外でも可)
+   * resolveAt は getBoundingClientRect と比較するため、viewport 外座標でも正しく検出できる。
    */
   async dragRowToSection(dragTitle: string, sectionTestId: 'section-current' | 'section-next' | 'section-backlog'): Promise<void> {
     const dragRow = this.backlogRowByTitle(dragTitle);
     const handle = dragRow.locator('.trow-drag-grab');
     const sectionEl = this.page.getByTestId(sectionTestId);
 
+    // ハンドルを viewport に入れてから座標を取得
+    await handle.scrollIntoViewIfNeeded();
     const handleBox = await handle.boundingBox();
+    // sectionBox はスクロール後でも取得 (viewport 外の負の Y になりうる)
     const sectionBox = await sectionEl.boundingBox();
     if (!handleBox || !sectionBox) {
       throw new Error('dragRowToSection: bounding box が取得できません');
     }
 
-    const fromX = handleBox.x + handleBox.width / 2;
-    const fromY = handleBox.y + handleBox.height / 2;
-    const toX = sectionBox.x + sectionBox.width / 2;
-    const toY = sectionBox.y + 12; // 区画ヘッダ下付近
+    const hX = handleBox.x + handleBox.width / 2;
+    const hY = handleBox.y + handleBox.height / 2;
+    const sX = sectionBox.x + sectionBox.width / 2;
+    const sY = sectionBox.y + sectionBox.height / 2; // セクション中央 (viewport 外でも OK)
 
-    await this.page.mouse.move(fromX, fromY);
-    await this.page.mouse.down();
-    await this.page.mouse.move(fromX, fromY + 5);
-    await this.page.mouse.move(toX, toY, { steps: 15 });
-    await this.page.mouse.up();
+    await this.page.evaluate(({ hX, hY, sX, sY }) => {
+      // 1. ハンドル要素に pointerdown を dispatch → onHandleDown → start()
+      const handleEl = document.elementFromPoint(hX, hY) as HTMLElement | null;
+      const dragHandle = handleEl?.closest('.trow-drag-grab') as HTMLElement | null;
+      if (!dragHandle) return;
+      dragHandle.dispatchEvent(new PointerEvent('pointerdown', {
+        bubbles: true, cancelable: true, clientX: hX, clientY: hY, button: 0, buttons: 1,
+      }));
+      // 2. document に pointermove を dispatch (セクションの実座標、viewport 外でも受け取れる)
+      document.dispatchEvent(new PointerEvent('pointermove', {
+        bubbles: true, cancelable: true, clientX: sX, clientY: sY, buttons: 1,
+      }));
+      // 3. document に pointerup を dispatch → onUp → commitReorder (moveToSection)
+      document.dispatchEvent(new PointerEvent('pointerup', {
+        bubbles: true, cancelable: true, clientX: sX, clientY: sY, button: 0,
+      }));
+    }, { hX, hY, sX, sY });
   }
 
   /** 指定区画内に指定タイトルの行が見えるか (クロス区画移動の検証用)。 */
