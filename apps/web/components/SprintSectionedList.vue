@@ -76,7 +76,16 @@ const allVisibleIds = computed(() => [
 // native テキスト選択抑止を内蔵する。各区画を同じ group の VueDraggable にし、ドロップ確定 (onEnd)
 // で「移動先区画→sprintId」と「近傍→orderIndex」を 1 回の patchTicket で永続化する。
 const rootEl = ref<HTMLElement | null>(null);
+// 区画ごとの SortableJS group。pull(出す) は常に可。put(受け入れ) は「その区画に対応する
+// スプリントが在る」時だけ可にする: 計画中(NEXT)スプリントが無い環境では NEXT へ put:false →
+// ドロップ自体を受け付けず「移動先に出るが離すと戻る」紛らわしい挙動を防ぐ。
+// (backlog は未割当=常に受け入れ可。current は active sprint がある時のみ)
 const DRAG_GROUP = 'belv-sections';
+// put 関数は SortableJS が dragover 毎に呼ぶので activeSprint/nextPlanned を都度ライブで読む
+// (静的オブジェクトで OK・group 再 init を避ける)。スプリント不在なら受け入れ false。
+const currentGroup = { name: DRAG_GROUP, put: (): boolean => !!activeSprint.value };
+const nextGroup = { name: DRAG_GROUP, put: (): boolean => !!nextPlanned.value };
+const backlogGroup = { name: DRAG_GROUP };
 
 // VueDraggable は v-model に可変配列を要求するので props の computed をローカルにミラーする。
 // SortableJS が並べ替え → onEnd で patch → tickets 更新 → props 変化 → watch で再同期、のループ。
@@ -377,7 +386,7 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ currentStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <VueDraggable v-model="currentList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+      <VueDraggable v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
                     :animation="150" :force-fallback="true" data-section="current" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in currentList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
@@ -408,7 +417,7 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ nextStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <VueDraggable v-model="nextList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+      <VueDraggable v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
                     :animation="150" :force-fallback="true" data-section="next" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in nextList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
@@ -441,7 +450,7 @@ async function submitSplit(): Promise<void> {
         <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
                 @click="openCreate"><Icon name="plus" /> New issue</button>
       </div>
-      <VueDraggable v-model="backlogList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+      <VueDraggable v-model="backlogList" :group="backlogGroup" handle=".trow-drag-grab"
                     :animation="150" :force-fallback="true" data-section="backlog" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in backlogList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
