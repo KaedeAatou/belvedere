@@ -42,11 +42,13 @@
 .trow-drag-grab { cursor: grab; }
 .trow-drag-grab:active { cursor: grabbing; }
 /* pointer ベース d&d でドラッグ中の行を薄く表示。
-   pointer-events:none で元行を hit-test から外し、resolveAt の elementFromPoint が
-   カーソル下の「下の行」を拾えるようにする (短距離 reorder で自行を掴んで不発になるのを防ぐ。
-   pointermove は setPointerCapture でハンドルに束縛され document へ bubble するため、
-   元行を pointer-events:none にしてもイベント配送は途切れない)。 */
-.trow.dragging { opacity: 0.4; pointer-events: none; }
+   ★ pointer-events:none は付けてはいけない: この class は元行 (.trow) に付き、その子の
+   ハンドル span (.trow-drag) に CSS 継承される。setPointerCapture はハンドル span に
+   張っているため、ハンドルが pointer-events:none になると W3C Pointer Events 仕様の
+   「Implicit Release of Pointer Capture」で capture が即暗黙解放され、ドラッグ中の
+   native テキスト選択遷移防止という修正の核が失効する (= 掴めるが動かない/複数行選択が再発)。
+   元行の自己ヒット除外は resolveAt の hit.id!==draggedId で行うので CSS 側は不要。 */
+.trow.dragging { opacity: 0.4; }
 /* ドロップ位置インジケータ (行 上端 / 下端 に 2px の accent ライン) */
 .trow.drop-before::after,
 .trow.drop-after::after {
