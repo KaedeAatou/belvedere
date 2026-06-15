@@ -120,6 +120,20 @@ function resolveAt(x: number, y: number, draggedId: string): ReorderHit {
       break;
     }
   }
+  // x が区画の左右外 (右の AI パネル / 左レール方向へドリフト) でも、y が区画の縦範囲に入れば
+  // その区画へ吸着する。これが無いと section=null になり、下の forgiving fallback
+  // (if (!id && section)) ごとスキップされて「効かない」が x ドリフト時に再発する。
+  if (!section) {
+    for (const key of sectionKeys) {
+      const el = rootEl.value?.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (y >= r.top && y <= r.bottom) {
+        section = key;
+        break;
+      }
+    }
+  }
   // 行: elementFromPoint (viewport 内での行 hover 検出)。
   const el = document.elementFromPoint(x, y) as HTMLElement | null;
   const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
