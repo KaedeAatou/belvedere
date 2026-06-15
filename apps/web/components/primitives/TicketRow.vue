@@ -6,10 +6,9 @@ const props = defineProps<{
   selected?: boolean;
   dragHandle?: boolean;
   /**
-   * 手動並び替えを有効化する。デフォルト false。
+   * 手動並び替えを有効化する (ハンドル .trow-drag-grab を表示)。デフォルト false。
    * BacklogScreen / PlanningScreen / RefinementScreen / ReviewScreen で true を渡す。
-   * true のときハンドルに pointerdown を仕込み、掴むと handleDown を emit する
-   * (確定/追跡は親の usePointerReorder が document リスナで行う)。
+   * 実際のドラッグは親の SortableJS (vue-draggable-plus) が handle=".trow-drag-grab" で掴む。
    */
   reorderable?: boolean;
   /** ドロップ位置インジケータ: 'before' = 行上端ライン / 'after' = 行下端ライン / null = 非表示。 */
@@ -25,10 +24,8 @@ const props = defineProps<{
   /** 一括選択チェックボックスの ON/OFF (selectable 時のみ意味を持つ)。 */
   bulkSelected?: boolean;
 }>();
-const emit = defineEmits<{
+defineEmits<{
   click: [];
-  /** ハンドルを pointerdown で掴んだ。親が usePointerReorder.start に渡す。 */
-  handleDown: [evt: PointerEvent];
   toggleSelect: [];
 }>();
 
@@ -39,14 +36,8 @@ const shown = computed(() => findings.value.slice(0, 2));
 const overflow = computed(() => Math.max(0, findings.value.length - 2));
 const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.message).join('\n'));
 
-// 並び替えは pointer ベース (usePointerReorder)。native HTML5 DnD は実機で drop/dragend の
-// 確定が取りこぼされるため使わない。行は data-ticket-id で elementFromPoint 解決に使われる。
-function onHandleDown(e: PointerEvent): void {
-  if (!props.reorderable) return;
-  // pointerdown が行 (.trow @click) 側へ伝播して誤って select されるのを断つ。
-  e.stopPropagation();
-  emit('handleDown', e);
-}
+// 並び替え/区画移動は親 (SprintSectionedList / ReviewScreen) の SortableJS が
+// handle=".trow-drag-grab" を掴んで行う。TicketRow はハンドルの見た目と data-ticket-id を提供するだけ。
 </script>
 
 <template>
@@ -70,7 +61,6 @@ function onHandleDown(e: PointerEvent): void {
       :class="{ 'trow-drag-grab': reorderable }"
       style="touch-action: none; user-select: none"
       draggable="false"
-      @pointerdown="onHandleDown"
       @click.stop
     ><Icon name="drag" /></span>
     <span v-else />

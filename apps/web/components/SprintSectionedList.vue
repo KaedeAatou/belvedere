@@ -8,8 +8,9 @@
 // within vs across の判別: dragSection (開始区画) と drop 先の区画を比較。同区画なら reorder、別区画なら move。
 
 import type { Ticket, Priority, TicketType, Member, Sprint } from '@belvedere/shared';
-import { computeOrderIndexBetween, ORDER_STEP } from '~/composables/useTicketReorder';
-import type { ReorderHit } from '~/composables/usePointerReorder';
+import { ORDER_STEP } from '~/composables/useTicketReorder';
+import type { PatchTicketInput } from '~/composables/useTickets';
+import { VueDraggable } from 'vue-draggable-plus';
 
 type SectionKey = 'current' | 'next' | 'backlog';
 
@@ -69,143 +70,68 @@ const allVisibleIds = computed(() => [
   ...props.backlog.map((t) => t.id),
 ]);
 
-// ===== d&d は pointer ベース (usePointerReorder) =====
-// native HTML5 DnD (draggable + drop/dragend) は実機で確定が取りこぼされ「離しても
-// 移動しない」が再発したため廃止。pointerdown→pointermove(document)→pointerup で確定する
-// (全ブラウザで確実 + Playwright 実マウスで忠実にテスト可)。詳細: composables/usePointerReorder.ts
+// ===== d&d は SortableJS (vue-draggable-plus) で実装 =====
+// 自前 pointer 実装は cross-section / 選択抑止 / ドロップ位置で edge case を量産したため廃止。
+// SortableJS は Trello/Jira 級で実績があり、group でリスト間移動、handle で点々限定ドラッグ、
+// native テキスト選択抑止を内蔵する。各区画を同じ group の VueDraggable にし、ドロップ確定 (onEnd)
+// で「移動先区画→sprintId」と「近傍→orderIndex」を 1 回の patchTicket で永続化する。
 const rootEl = ref<HTMLElement | null>(null);
-const SCROLL_EDGE = 72; // 上下端からこの距離 (px) 以内で自動スクロール
-const SCROLL_MAX = 24;
+const DRAG_GROUP = 'belv-sections';
 
-function findScrollParent(el: HTMLElement | null): HTMLElement | null {
-  let cur: HTMLElement | null = el;
-  while (cur) {
-    const { overflowY } = getComputedStyle(cur);
-    if ((overflowY === 'auto' || overflowY === 'scroll') && cur.scrollHeight > cur.clientHeight) return cur;
-    cur = cur.parentElement;
-  }
-  return null;
+// VueDraggable は v-model に可変配列を要求するので props の computed をローカルにミラーする。
+// SortableJS が並べ替え → onEnd で patch → tickets 更新 → props 変化 → watch で再同期、のループ。
+const currentList = ref<Ticket[]>([]);
+const nextList = ref<Ticket[]>([]);
+const backlogList = ref<Ticket[]>([]);
+function syncLists(): void {
+  currentList.value = [...props.current];
+  nextList.value = [...props.next];
+  backlogList.value = [...props.backlog];
+}
+syncLists();
+watch(() => [props.current, props.next, props.backlog], syncLists);
+
+function listRefFor(section: SectionKey) {
+  return section === 'current' ? currentList : section === 'next' ? nextList : backlogList;
 }
 
-function autoScroll(_x: number, y: number): void {
-  const scroller = findScrollParent(rootEl.value);
-  if (!scroller) return;
-  const rect = scroller.getBoundingClientRect();
-  const fromTop = y - rect.top;
-  const fromBottom = rect.bottom - y;
-  if (fromTop < SCROLL_EDGE) {
-    scroller.scrollTop -= Math.ceil(((SCROLL_EDGE - fromTop) / SCROLL_EDGE) * SCROLL_MAX);
-  } else if (fromBottom < SCROLL_EDGE) {
-    scroller.scrollTop += Math.ceil(((SCROLL_EDGE - fromBottom) / SCROLL_EDGE) * SCROLL_MAX);
-  }
+// 近傍 2 行の orderIndex から中間値を算出 (端は ±ORDER_STEP)。float 中点詰めで十分な精度。
+function orderBetween(prev: Ticket | undefined, next: Ticket | undefined): number {
+  const p = prev?.orderIndex ?? null;
+  const n = next?.orderIndex ?? null;
+  if (p === null && n === null) return ORDER_STEP;
+  if (p === null) return (n as number) - ORDER_STEP;
+  if (n === null) return p + ORDER_STEP;
+  return (p + n) / 2;
 }
 
-function listFor(section: SectionKey): Ticket[] {
-  return section === 'current' ? props.current : section === 'next' ? props.next : props.backlog;
-}
-
-// カーソル下の行・区画・edge を DOM から解決。
-// elementFromPoint は viewport 外の座標に対して null を返すため、区画は bounding box 比較
-// で特定する (スクロールが必要な距離のドラッグでも確実に section を解決できる)。
-function resolveAt(x: number, y: number, draggedId: string): ReorderHit {
-  // 区画: bounding box と (x,y) の重なりで判定 (viewport 外でも OK)。
-  let section: string | null = null;
-  const sectionKeys: SectionKey[] = ['current', 'next', 'backlog'];
-  for (const key of sectionKeys) {
-    const el = rootEl.value?.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
-    if (!el) continue;
-    const r = el.getBoundingClientRect();
-    if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) {
-      section = key;
-      break;
+// SortableJS のドロップ確定。evt.item=ドラッグ行 / evt.from,to=移動元,先リスト(data-section付き)。
+// 並べ替えは既にローカル配列へ反映済 → 移動先の近傍から orderIndex、区画変化なら sprintId を 1 patch で永続化。
+async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement }): Promise<void> {
+  const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
+  const fromSection = (evt.from?.getAttribute?.('data-section') ?? null) as SectionKey | null;
+  const toSection = (evt.to?.getAttribute?.('data-section') ?? null) as SectionKey | null;
+  if (!id || !toSection) { syncLists(); return; }
+  const list = listRefFor(toSection).value;
+  const idx = list.findIndex((t) => t.id === id);
+  if (idx === -1) { syncLists(); return; }
+  const patch: PatchTicketInput = { orderIndex: orderBetween(list[idx - 1], list[idx + 1]) };
+  // 区画が変わったら sprintId も変更 (current=active / next=planned / backlog=null 解除)。親 onMoveToSection と同写像。
+  if (fromSection !== toSection) {
+    if (toSection === 'current') {
+      if (!activeSprint.value) { syncLists(); return; }
+      patch.sprintId = activeSprint.value.id;
+    } else if (toSection === 'next') {
+      if (!nextPlanned.value) { syncLists(); return; }
+      patch.sprintId = nextPlanned.value.id;
+    } else {
+      patch.sprintId = null;
     }
   }
-  // x が区画の左右外 (右の AI パネル / 左レール方向へドリフト) でも、y が区画の縦範囲に入れば
-  // その区画へ吸着する。これが無いと section=null になり、下の forgiving fallback
-  // (if (!id && section)) ごとスキップされて「効かない」が x ドリフト時に再発する。
-  if (!section) {
-    for (const key of sectionKeys) {
-      const el = rootEl.value?.querySelector(`[data-section="${key}"]`) as HTMLElement | null;
-      if (!el) continue;
-      const r = el.getBoundingClientRect();
-      if (y >= r.top && y <= r.bottom) {
-        section = key;
-        break;
-      }
-    }
-  }
-  // 行: elementFromPoint (viewport 内での行 hover 検出)。
-  const el = document.elementFromPoint(x, y) as HTMLElement | null;
-  const rowEl = el?.closest('[data-ticket-id]') as HTMLElement | null;
-  let id: string | null = null;
-  let edge: 'before' | 'after' | null = null;
-  const rid = rowEl?.getAttribute('data-ticket-id') ?? null;
-  if (rowEl && rid && rid !== draggedId) {
-    id = rid;
-    const r = rowEl.getBoundingClientRect();
-    edge = y < r.top + r.height / 2 ? 'before' : 'after';
-  }
-  // forgiving drop: 行ちょうどの上でなく「行の隙間 / セクション見出し / 末尾余白 / 自分自身の行」
-  // で離しても、解決済み区画内で Y が最も近い行へ吸着して確定する。これが無いと行の真上でしか
-  // 離せず、隙間で離すと無反応になり「効かない」と感じる (実機ログで <gap>/<screen-body> 多発)。
-  if (!id && section) {
-    const rows = (Array.from(
-      rootEl.value?.querySelectorAll(`[data-section="${section}"] [data-ticket-id]`) ?? [],
-    ) as HTMLElement[]).filter((r) => r.getAttribute('data-ticket-id') !== draggedId);
-    for (const r of rows) {
-      const rr = r.getBoundingClientRect();
-      if (y < rr.top + rr.height / 2) {
-        id = r.getAttribute('data-ticket-id');
-        edge = 'before';
-        break;
-      }
-    }
-    if (!id && rows.length > 0) {
-      // どの行の中点より上でもない = 全行より下 → 末尾行の after に吸着。
-      id = rows[rows.length - 1]!.getAttribute('data-ticket-id');
-      edge = 'after';
-    }
-  }
-  return { id, section, edge };
+  const res = await patchTicket(id, patch);
+  if (!res) syncLists(); // 失敗時はサーバ状態へ戻す
+  else void refreshFindings();
 }
-
-// orderIndex gap 枯渇時の一括リバランス (現表示順にドラッグ行を差し込んで ORDER_STEP 刻みで全 patch)。
-async function rebalance(list: Ticket[], draggedId: string, targetId: string, before: boolean): Promise<void> {
-  const without = list.filter((t) => t.id !== draggedId);
-  const dragged = list.find((t) => t.id === draggedId);
-  if (!dragged) return;
-  const targetIdx = without.findIndex((t) => t.id === targetId);
-  const insertAt = targetIdx === -1 ? without.length : before ? targetIdx : targetIdx + 1;
-  const reordered = [...without.slice(0, insertAt), dragged, ...without.slice(insertAt)];
-  for (let i = 0; i < reordered.length; i++) {
-    const t = reordered[i];
-    if (t) await patchTicket(t.id, { orderIndex: (i + 1) * ORDER_STEP });
-  }
-}
-
-async function commitReorder(c: {
-  draggedId: string; originSection: string; targetSection: string;
-  targetId: string | null; edge: 'before' | 'after' | null;
-}): Promise<void> {
-  const origin = c.originSection as SectionKey;
-  const target = c.targetSection as SectionKey;
-  if (target !== origin) {
-    // 別区画へドロップ = sprintId 変更 (親が patch)。
-    emit('moveToSection', c.draggedId, target);
-    return;
-  }
-  if (!c.targetId) return; // 行に乗っていない (区画余白) → 並び替えなし
-  const list = listFor(origin);
-  const newIndex = computeOrderIndexBetween(list, c.draggedId, c.targetId, c.edge === 'before');
-  if (newIndex === null) {
-    await rebalance(list, c.draggedId, c.targetId, c.edge === 'before');
-    return;
-  }
-  await patchTicket(c.draggedId, { orderIndex: newIndex });
-}
-
-const { draggingId: dragId, hoverSection, dropEdgeFor, start: startDrag } =
-  usePointerReorder({ resolveAt, commit: commitReorder, autoScroll });
 
 // ===== セクション統計 =====
 function stats(list: Ticket[]) {
@@ -440,8 +366,7 @@ async function submitSplit(): Promise<void> {
     />
 
     <!-- CURRENT SPRINT -->
-    <div :class="['backlog-section', hoverSection === 'current' && 'drop-target']" data-testid="section-current"
-         data-section="current">
+    <div class="backlog-section" data-testid="section-current">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">{{ currentLabel ?? 'Current Sprint' }}</span>
@@ -452,27 +377,27 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ currentStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <TicketRow v-for="t in current" :key="t.id" :t="t" data-testid="live-ticket"
-                 :selected="selectedId === t.id" drag-handle reorderable
-                 selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
-                 @click="emit('select', t.id)"
-                 @toggle-select="sel.toggle(t.id)"
-                 @handle-down="(e) => startDrag('current', t.id, e)">
-        <template #extra>
-          <button v-if="splitMode && t.type === 'story'" class="split-btn"
-                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
-                  @click.stop="openSplit(t)">分割</button>
-          <slot name="row-extra" :ticket="t" />
-          <StatusDot :status="t.status" />
-        </template>
-      </TicketRow>
-      <p v-if="current.length === 0" class="live-msg">アクティブスプリントにチケットがありません。</p>
+      <VueDraggable v-model="currentList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+                    :animation="150" :force-fallback="true" data-section="current" class="dnd-list" @end="onDragEnd">
+        <TicketRow v-for="t in currentList" :key="t.id" :t="t" data-testid="live-ticket"
+                   :selected="selectedId === t.id" drag-handle reorderable
+                   selectable :bulk-selected="sel.isSelected(t.id)"
+                   @click="emit('select', t.id)"
+                   @toggle-select="sel.toggle(t.id)">
+          <template #extra>
+            <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                    :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                    @click.stop="openSplit(t)">分割</button>
+            <slot name="row-extra" :ticket="t" />
+            <StatusDot :status="t.status" />
+          </template>
+        </TicketRow>
+      </VueDraggable>
+      <p v-if="currentList.length === 0" class="live-msg">アクティブスプリントにチケットがありません。</p>
     </div>
 
     <!-- NEXT SPRINT -->
-    <div :class="['backlog-section', hoverSection === 'next' && 'drop-target']" data-testid="section-next"
-         data-section="next">
+    <div class="backlog-section" data-testid="section-next">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">{{ nextLabel ?? 'Next Sprint' }}</span>
@@ -483,27 +408,27 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ nextStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <TicketRow v-for="t in next" :key="t.id" :t="t" data-testid="live-ticket"
-                 :selected="selectedId === t.id" drag-handle reorderable
-                 selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
-                 @click="emit('select', t.id)"
-                 @toggle-select="sel.toggle(t.id)"
-                 @handle-down="(e) => startDrag('next', t.id, e)">
-        <template #extra>
-          <button v-if="splitMode && t.type === 'story'" class="split-btn"
-                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
-                  @click.stop="openSplit(t)">分割</button>
-          <slot name="row-extra" :ticket="t" />
-          <StatusDot :status="t.status" />
-        </template>
-      </TicketRow>
-      <p v-if="next.length === 0" class="live-msg">計画中スプリントにチケットがありません。</p>
+      <VueDraggable v-model="nextList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+                    :animation="150" :force-fallback="true" data-section="next" class="dnd-list" @end="onDragEnd">
+        <TicketRow v-for="t in nextList" :key="t.id" :t="t" data-testid="live-ticket"
+                   :selected="selectedId === t.id" drag-handle reorderable
+                   selectable :bulk-selected="sel.isSelected(t.id)"
+                   @click="emit('select', t.id)"
+                   @toggle-select="sel.toggle(t.id)">
+          <template #extra>
+            <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                    :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                    @click.stop="openSplit(t)">分割</button>
+            <slot name="row-extra" :ticket="t" />
+            <StatusDot :status="t.status" />
+          </template>
+        </TicketRow>
+      </VueDraggable>
+      <p v-if="nextList.length === 0" class="live-msg">計画中スプリントにチケットがありません。</p>
     </div>
 
     <!-- BACKLOG (未スケジュール) -->
-    <div :class="['backlog-section', hoverSection === 'backlog' && 'drop-target']" data-testid="section-backlog"
-         data-section="backlog">
+    <div class="backlog-section" data-testid="section-backlog">
       <div class="backlog-section-head">
         <Icon name="caretRight" />
         <span class="title">Backlog</span>
@@ -516,22 +441,23 @@ async function submitSplit(): Promise<void> {
         <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
                 @click="openCreate"><Icon name="plus" /> New issue</button>
       </div>
-      <TicketRow v-for="t in backlog" :key="t.id" :t="t" data-testid="live-ticket"
-                 :selected="selectedId === t.id" drag-handle reorderable
-                 selectable :bulk-selected="sel.isSelected(t.id)"
-                 :drop-edge="dropEdgeFor(t.id)" :dragging="dragId === t.id"
-                 @click="emit('select', t.id)"
-                 @toggle-select="sel.toggle(t.id)"
-                 @handle-down="(e) => startDrag('backlog', t.id, e)">
-        <template #extra>
-          <button v-if="splitMode && t.type === 'story'" class="split-btn"
-                  :data-testid="`split-${t.id}`" :title="splitChildLabel"
-                  @click.stop="openSplit(t)">分割</button>
-          <slot name="row-extra" :ticket="t" />
-          <StatusDot :status="t.status" />
-        </template>
-      </TicketRow>
-      <p v-if="backlog.length === 0" class="live-msg">未スケジュールのチケットはありません。</p>
+      <VueDraggable v-model="backlogList" :group="DRAG_GROUP" handle=".trow-drag-grab"
+                    :animation="150" :force-fallback="true" data-section="backlog" class="dnd-list" @end="onDragEnd">
+        <TicketRow v-for="t in backlogList" :key="t.id" :t="t" data-testid="live-ticket"
+                   :selected="selectedId === t.id" drag-handle reorderable
+                   selectable :bulk-selected="sel.isSelected(t.id)"
+                   @click="emit('select', t.id)"
+                   @toggle-select="sel.toggle(t.id)">
+          <template #extra>
+            <button v-if="splitMode && t.type === 'story'" class="split-btn"
+                    :data-testid="`split-${t.id}`" :title="splitChildLabel"
+                    @click.stop="openSplit(t)">分割</button>
+            <slot name="row-extra" :ticket="t" />
+            <StatusDot :status="t.status" />
+          </template>
+        </TicketRow>
+      </VueDraggable>
+      <p v-if="backlogList.length === 0" class="live-msg">未スケジュールのチケットはありません。</p>
     </div>
   </div>
 
