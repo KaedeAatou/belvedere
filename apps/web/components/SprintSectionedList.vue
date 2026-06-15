@@ -131,6 +131,27 @@ function resolveAt(x: number, y: number, draggedId: string): ReorderHit {
     const r = rowEl.getBoundingClientRect();
     edge = y < r.top + r.height / 2 ? 'before' : 'after';
   }
+  // forgiving drop: 行ちょうどの上でなく「行の隙間 / セクション見出し / 末尾余白 / 自分自身の行」
+  // で離しても、解決済み区画内で Y が最も近い行へ吸着して確定する。これが無いと行の真上でしか
+  // 離せず、隙間で離すと無反応になり「効かない」と感じる (実機ログで <gap>/<screen-body> 多発)。
+  if (!id && section) {
+    const rows = (Array.from(
+      rootEl.value?.querySelectorAll(`[data-section="${section}"] [data-ticket-id]`) ?? [],
+    ) as HTMLElement[]).filter((r) => r.getAttribute('data-ticket-id') !== draggedId);
+    for (const r of rows) {
+      const rr = r.getBoundingClientRect();
+      if (y < rr.top + rr.height / 2) {
+        id = r.getAttribute('data-ticket-id');
+        edge = 'before';
+        break;
+      }
+    }
+    if (!id && rows.length > 0) {
+      // どの行の中点より上でもない = 全行より下 → 末尾行の after に吸着。
+      id = rows[rows.length - 1]!.getAttribute('data-ticket-id');
+      edge = 'after';
+    }
+  }
   return { id, section, edge };
 }
 
