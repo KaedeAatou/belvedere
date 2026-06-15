@@ -14,6 +14,9 @@ test.describe('3 区画ビュー クロス区画移動', () => {
   test('BACKLOG 行を CURRENT へ d&d → 移動 + 永続 → BACKLOG へ戻す (sprintId 解除)', async ({ authedPage }) => {
     const backlog = new BacklogPage(authedPage);
     const sheet = new DetailSheetPage(authedPage);
+    // 全区画 (CURRENT/NEXT/BACKLOG) を同時に表示し、実マウスのクロス区画ドラッグが viewport
+    // クランプされないよう縦長にする (SortableJS は移動先リストへのカーソル侵入で移動を検知する)。
+    await authedPage.setViewportSize({ width: 1280, height: 1800 });
     await backlog.open();
 
     const title = `[E2E] 区画移動 ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;

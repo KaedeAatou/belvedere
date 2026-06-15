@@ -145,54 +145,37 @@ export class BacklogPage extends BasePage {
   }
 
   /**
-   * クロス区画 d&d: 指定タイトルの行を別区画へドラッグして落とす。
+   * クロス区画 d&d: 指定タイトルの行のハンドルを別区画 (dnd-list) へ実マウスでドラッグして落とす。
    *
-   * pointer ベース実装 (usePointerReorder) では PointerEvent を使う。
-   * 問題: Playwright の mouse.move() は viewport 内にクランプされる。
-   * セクション (section-current) が viewport 外（スクロール上部）にある場合、
-   * mouse.move(toX, toY) の toY が 0 にクランプされ、且つセクションが完全に
-   * 上にスクロールされていると 0 もセクション内に入らず hoverSection が null になる。
-   * 解決: page.evaluate で PointerEvent を直接 dispatch し viewport 制約を回避する。
-   *   - pointerdown はハンドル要素に dispatch (scrollIntoViewIfNeeded 後に elementFromPoint で取得)
-   *   - pointermove/pointerup は document に dispatch (clientX/Y はセクション実座標、viewport外でも可)
-   * resolveAt は getBoundingClientRect と比較するため、viewport 外座標でも正しく検出できる。
+   * d&d は SortableJS (vue-draggable-plus / forceFallback)。SortableJS のリスト間移動は
+   * カーソルが移動先リストへ「侵入」する過程の mousemove で検知されるため、合成 dispatch では
+   * 駆動できない (合成は v-model を破壊し重複を生む)。Playwright 実マウスで多ステップ移動し、
+   * 移動先 dnd-list (data-section=区画) の内側下部へ落とす (空区画/最下段でも確実に入る)。
+   * 前提: 呼び出し側で全区画が同時に見える縦長 viewport にしておく (mouse.move の viewport クランプ回避)。
    */
   async dragRowToSection(dragTitle: string, sectionTestId: 'section-current' | 'section-next' | 'section-backlog'): Promise<void> {
-    const dragRow = this.backlogRowByTitle(dragTitle);
-    const handle = dragRow.locator('.trow-drag-grab');
-    const sectionEl = this.page.getByTestId(sectionTestId);
+    const sectionKey = sectionTestId.replace('section-', ''); // current | next | backlog
+    const handle = this.backlogRowByTitle(dragTitle).first().locator('.trow-drag-grab');
+    const listEl = this.page.locator(`[data-section="${sectionKey}"]`);
 
-    // ハンドルを viewport に入れてから座標を取得
     await handle.scrollIntoViewIfNeeded();
-    const handleBox = await handle.boundingBox();
-    // sectionBox はスクロール後でも取得 (viewport 外の負の Y になりうる)
-    const sectionBox = await sectionEl.boundingBox();
-    if (!handleBox || !sectionBox) {
+    const hb = await handle.boundingBox();
+    await listEl.scrollIntoViewIfNeeded();
+    const lb = await listEl.boundingBox();
+    if (!hb || !lb) {
       throw new Error('dragRowToSection: bounding box が取得できません');
     }
+    const fx = hb.x + hb.width / 2;
+    const fy = hb.y + hb.height / 2;
+    const tx = lb.x + lb.width / 2;
+    const ty = lb.y + Math.max(8, lb.height - 8); // dnd-list 内側下部 (行 or 空ゾーン)
 
-    const hX = handleBox.x + handleBox.width / 2;
-    const hY = handleBox.y + handleBox.height / 2;
-    const sX = sectionBox.x + sectionBox.width / 2;
-    const sY = sectionBox.y + sectionBox.height / 2; // セクション中央 (viewport 外でも OK)
-
-    await this.page.evaluate(({ hX, hY, sX, sY }) => {
-      // 1. ハンドル要素に pointerdown を dispatch → onHandleDown → start()
-      const handleEl = document.elementFromPoint(hX, hY) as HTMLElement | null;
-      const dragHandle = handleEl?.closest('.trow-drag-grab') as HTMLElement | null;
-      if (!dragHandle) return;
-      dragHandle.dispatchEvent(new PointerEvent('pointerdown', {
-        bubbles: true, cancelable: true, clientX: hX, clientY: hY, button: 0, buttons: 1,
-      }));
-      // 2. document に pointermove を dispatch (セクションの実座標、viewport 外でも受け取れる)
-      document.dispatchEvent(new PointerEvent('pointermove', {
-        bubbles: true, cancelable: true, clientX: sX, clientY: sY, buttons: 1,
-      }));
-      // 3. document に pointerup を dispatch → onUp → commitReorder (moveToSection)
-      document.dispatchEvent(new PointerEvent('pointerup', {
-        bubbles: true, cancelable: true, clientX: sX, clientY: sY, button: 0,
-      }));
-    }, { hX, hY, sX, sY });
+    await this.page.mouse.move(fx, fy);
+    await this.page.mouse.down();
+    await this.page.mouse.move(fx, fy + 8, { steps: 4 }); // 動かし始め
+    await this.page.mouse.move(tx, ty, { steps: 35 });     // 移動先リストへ侵入 (多ステップで検知させる)
+    await this.page.mouse.move(tx, ty, { steps: 5 });      // 着地を安定
+    await this.page.mouse.up();
   }
 
   /** 指定区画内に指定タイトルの行が見えるか (クロス区画移動の検証用)。 */
