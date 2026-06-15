@@ -12,6 +12,9 @@
   cursor: pointer;
   position: relative;
   transition: background 0.15s ease;
+  /* ハンドルを掴んでドラッグした時に行テキストが範囲選択され「複数行が選択されたように
+     見える」のを防ぐ。行はクリックで詳細を開く UI でテキスト選択は不要。 */
+  user-select: none;
 }
 /* 一括選択 (複数選択 → 一括変更/削除) を有効化した行。先頭にチェックボックス列を足す。
    既存 .trow の grid は不変 — selectable のときだけ 22px 列を先頭に増やす。 */
@@ -38,8 +41,12 @@
 .trow:hover .trow-drag { color: var(--ink-2); }
 .trow-drag-grab { cursor: grab; }
 .trow-drag-grab:active { cursor: grabbing; }
-/* pointer ベース d&d でドラッグ中の行を薄く表示 */
-.trow.dragging { opacity: 0.4; }
+/* pointer ベース d&d でドラッグ中の行を薄く表示。
+   pointer-events:none で元行を hit-test から外し、resolveAt の elementFromPoint が
+   カーソル下の「下の行」を拾えるようにする (短距離 reorder で自行を掴んで不発になるのを防ぐ。
+   pointermove は setPointerCapture でハンドルに束縛され document へ bubble するため、
+   元行を pointer-events:none にしてもイベント配送は途切れない)。 */
+.trow.dragging { opacity: 0.4; pointer-events: none; }
 /* ドロップ位置インジケータ (行 上端 / 下端 に 2px の accent ライン) */
 .trow.drop-before::after,
 .trow.drop-after::after {

@@ -42,7 +42,10 @@ const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.messag
 // 並び替えは pointer ベース (usePointerReorder)。native HTML5 DnD は実機で drop/dragend の
 // 確定が取りこぼされるため使わない。行は data-ticket-id で elementFromPoint 解決に使われる。
 function onHandleDown(e: PointerEvent): void {
-  if (props.reorderable) emit('handleDown', e);
+  if (!props.reorderable) return;
+  // pointerdown が行 (.trow @click) 側へ伝播して誤って select されるのを断つ。
+  e.stopPropagation();
+  emit('handleDown', e);
 }
 </script>
 
@@ -65,8 +68,10 @@ function onHandleDown(e: PointerEvent): void {
       v-if="dragHandle"
       class="trow-drag"
       :class="{ 'trow-drag-grab': reorderable }"
-      style="touch-action: none"
+      style="touch-action: none; user-select: none"
+      draggable="false"
       @pointerdown="onHandleDown"
+      @click.stop
     ><Icon name="drag" /></span>
     <span v-else />
     <TypeMark :type="t.type" />
