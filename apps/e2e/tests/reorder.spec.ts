@@ -153,4 +153,64 @@ test.describe('Backlog 並び替え', () => {
       }
     }
   });
+
+  // ★ 実機赤を CI で捕まえる本命ガード。合成イベントではなく Playwright 実マウスで
+  //   usePointerReorder の start→setPointerCapture→onMove→onUp→commit を本物で踏む。
+  //   過去のデグレ (capture 欠如で動かない / 掴むとテキストが複数行選択される) は、この経路を
+  //   通さない API 直 PATCH・合成 PointerEvent テストでは緑になり隠れていた。
+  test('実 pointer でハンドルを掴み B を A の上へ → 並び替わる + ネイティブ選択が起きない (症状1/4 の実機ガード)', async ({
+    authedPage,
+  }) => {
+    const backlog = new BacklogPage(authedPage);
+    const sheet = new DetailSheetPage(authedPage);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const titleA = `[E2E] pdrag-A-${suffix}`;
+    const titleB = `[E2E] pdrag-B-${suffix}`;
+
+    await backlog.open();
+    await backlog.createTicket({ title: titleA, type: 'bug' });
+    await expect.poll(() => backlog.hasTicketWithTitle(titleA), { timeout: 10_000 }).toBe(true);
+    await backlog.createTicket({ title: titleB, type: 'bug' });
+    await expect.poll(() => backlog.hasTicketWithTitle(titleB), { timeout: 10_000 }).toBe(true);
+
+    // 自作 2 枚の相対 index のみ見る (並行 2 run が同一 WS を共有するため全体件数は見ない)。
+    const indexOf = (title: string): Promise<number> =>
+      authedPage.evaluate((t: string) => {
+        const rows = Array.from(document.querySelectorAll('[data-testid="live-ticket"]'));
+        return rows.findIndex((r) => r.textContent?.includes(t));
+      }, title);
+
+    try {
+      // B のハンドルを実マウスで掴み、A 行の上端へドロップ ('before')。
+      await backlog.reorderDragBefore(titleB, titleA);
+
+      // 症状4 ガード: B が A より上 (小さい index) に来る = commit→orderIndex PATCH→UI 反映が走った。
+      await expect
+        .poll(
+          async () => {
+            const ia = await indexOf(titleA);
+            const ib = await indexOf(titleB);
+            return ia >= 0 && ib >= 0 && ib < ia;
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+
+      // 症状1 ガード: ドラッグで native テキスト選択が起きていない (3 行全選択に見える現象の根)。
+      const selectionLen = await authedPage.evaluate(
+        () => window.getSelection()?.toString().length ?? 0,
+      );
+      expect(selectionLen).toBe(0);
+    } finally {
+      for (const title of [titleA, titleB]) {
+        if (await backlog.hasTicketWithTitle(title)) {
+          await backlog.openTicketByTitle(title);
+          if (await sheet.sheet.isVisible()) {
+            await sheet.deleteTwice();
+            await sheet.sheet.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+          }
+        }
+      }
+    }
+  });
 });
