@@ -107,18 +107,23 @@ export class BacklogPage extends BasePage {
   }
 
   /**
-   * ハンドル限定 d&d でバックログ行を並び替える。
+   * ハンドル限定 d&d でバックログ行を実マウスで並び替える (合成イベント禁止)。
    *
-   * pointer ベース実装 (usePointerReorder) に変わったため、Playwright 実マウス
-   * (mouse.down → move → up) で直接テストできる。合成 DragEvent は不要。
-   * pointerdown がハンドル要素に当たれば handleDown emit → usePointerReorder.start が走る。
+   * pointer ベース実装 (usePointerReorder) を **本物の trusted PointerEvent** で踏む。
+   * Playwright 実マウス (mouse.down → move → up) は handleDown emit → start →
+   * setPointerCapture → onMove → onUp → commit の全経路を駆動するため、capture 欠如や
+   * native テキスト選択への遷移といった「実機でしか出ないバグ」を CI で捕捉できる
+   * (合成 PointerEvent dispatch ではこの経路を踏めず緑になり、過去のデグレを隠していた)。
    */
   async reorderDragBefore(dragTitle: string, targetTitle: string): Promise<void> {
-    const dragRow = this.backlogRowByTitle(dragTitle);
-    const targetRow = this.backlogRowByTitle(targetTitle);
+    const dragRow = this.backlogRowByTitle(dragTitle).first();
+    const targetRow = this.backlogRowByTitle(targetTitle).first();
     const handle = dragRow.locator('.trow-drag-grab');
 
+    // 行が折り畳み/スクロール外でも掴めるよう、まず両行を viewport 内へ。
+    await handle.scrollIntoViewIfNeeded();
     const handleBox = await handle.boundingBox();
+    await targetRow.scrollIntoViewIfNeeded();
     const targetBox = await targetRow.boundingBox();
     if (!handleBox || !targetBox) {
       throw new Error('reorderDragBefore: bounding box が取得できません');
@@ -132,9 +137,10 @@ export class BacklogPage extends BasePage {
 
     await this.page.mouse.move(fromX, fromY);
     await this.page.mouse.down();
-    // 数ステップ移動してから pointerup (ブラウザがドラッグと認識するために最低限の移動が必要)
-    await this.page.mouse.move(fromX, fromY + 5);
-    await this.page.mouse.move(toX, toClientY, { steps: 10 });
+    // まず 6px 動かして DRAG_THRESHOLD(4px) を越えさせ start を本ドラッグへ昇格させる。
+    await this.page.mouse.move(fromX, fromY + 6);
+    // steps を刻んで onMove の連続追跡 (hoverSection / dropEdge 遷移) を本物で踏ませる。
+    await this.page.mouse.move(toX, toClientY, { steps: 12 });
     await this.page.mouse.up();
   }
 
