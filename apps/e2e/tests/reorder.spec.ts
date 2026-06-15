@@ -213,4 +213,29 @@ test.describe('Backlog 並び替え', () => {
       }
     }
   });
+
+  // ★ この具体バグ専用の deterministic 回帰ガード (2026-06-15)。
+  //   修正の核 setPointerCapture はハンドル span (.trow-drag-grab) に張る。行 (.trow) に
+  //   pointer-events:none が付くと子のハンドルへ CSS 継承され、W3C Pointer Events 仕様の
+  //   「Implicit Release of Pointer Capture」で capture が即暗黙解放 → d&d が実機で死ぬ。
+  //   実際に commit 07af83a が .trow.dragging{pointer-events:none} を入れて発生させた。
+  //   この自己無効化は実マウス/合成ドラッグでは native テキスト選択遷移が起きず検出不能なので
+  //   (Playwright も chrome drag ツールも緑になる)、computed style を直接 assert して捕まえる。
+  test('回帰ガード: ドラッグ中 (.trow.dragging) でもハンドルが pointer-events:none にならない (capture 自己解放防止)', async ({
+    authedPage,
+  }) => {
+    const backlog = new BacklogPage(authedPage);
+    await backlog.open();
+    await expect(backlog.liveTickets.first()).toBeVisible({ timeout: 10_000 });
+    const handlePE = await authedPage.evaluate(() => {
+      const row = document.querySelector('.trow');
+      const handle = row?.querySelector('.trow-drag-grab');
+      if (!row || !handle) return 'no-row-or-handle';
+      row.classList.add('dragging');
+      const pe = getComputedStyle(handle as Element).pointerEvents;
+      row.classList.remove('dragging');
+      return pe;
+    });
+    expect(handlePE).not.toBe('none');
+  });
 });
