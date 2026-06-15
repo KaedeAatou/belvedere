@@ -110,7 +110,7 @@ export function usePointerReorder(opts: PointerReorderOptions) {
     engaged = true;
     draggingId.value = pending.id;
     originSection.value = pending.section;
-    document.body.style.userSelect = 'none';
+    // userSelect=none は start() で設定済 (初動から選択抑止)。ここでは状態昇格のみ。
   }
 
   function onMove(e: PointerEvent): void {
@@ -191,10 +191,13 @@ export function usePointerReorder(opts: PointerReorderOptions) {
     pending = { section, id, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY, handle };
     engaged = false;
     // capture 済みでも document に張ればイベントは bubble して確実に届く (行の再描画にも頑健)。
-    document.addEventListener('pointermove', onMove);
+    // pointermove は { passive: false } を明示して onMove の e.preventDefault() を確実に効かせる。
+    document.addEventListener('pointermove', onMove, { passive: false });
     document.addEventListener('pointerup', onUp);
     document.addEventListener('pointercancel', onCancel);
+    // selectstart 抑止 + userSelect=none は pointerdown 時点で張る (engage を待たず初動から選択を殺す)。
     document.addEventListener('selectstart', onSelectStart, true);
+    document.body.style.userSelect = 'none';
     e.preventDefault();
   }
 
