@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import type { Ticket, Status } from '@belvedere/shared';
-import { VueDraggable } from 'vue-draggable-plus';
 
 const props = defineProps<{
   tickets: Ticket[];
@@ -28,23 +27,11 @@ const COL_LABEL: Record<Status, string> = {
   done: 'DONE',
 };
 
-// VueDraggable は v-model に可変配列を要求するため、各列を status フィルタからローカルにミラーする。
-// SortableJS が DOM を動かす → onDragEnd で move emit → tickets 更新 → sprintTickets 変化 →
-// watch で再同期、のループ (SprintSectionedList と同方式)。列内の並び順は Daily では永続しない。
-const colLists = reactive<Record<Status, Ticket[]>>({
-  backlog: [], todo: [], 'in-progress': [], review: [], done: [],
-});
-function syncCols(): void {
-  for (const col of cols) {
-    colLists[col] = sprintTickets.value.filter((t) => t.status === col);
-  }
+function colItems(col: Status) {
+  return sprintTickets.value.filter((t) => t.status === col);
 }
-syncCols();
-watch(sprintTickets, syncCols);
 
-const doneSP = computed(() =>
-  sprintTickets.value.filter((t) => t.status === 'done').reduce((n, t) => n + (t.estimatePt ?? 0), 0),
-);
+const doneSP = computed(() => colItems('done').reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const totalSP = computed(() => sprintTickets.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 const remaining = computed(() => Math.max(0, totalSP.value - doneSP.value));
 
@@ -69,18 +56,18 @@ function ageInDays(started?: string): number {
   return Math.max(1, Math.round((Date.now() - Date.parse(started)) / 86_400_000));
 }
 
-// d&d は vue-draggable-plus (SortableJS)。4 列を同一 group にし、列間ドラッグで status を変更する。
-// 確定は SortableJS の end (= drop 成否に関わらず必ず発火) で行う。旧 native DnD は drop でしか
-// emit せず、実ブラウザが drop を取りこぼすと移動が無かったことになる footgun を踏んでいた。
-const DAILY_GROUP = 'daily-board';
+const drag = ref<string | null>(null);
+const over = ref<string | null>(null);
 
-async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement }): Promise<void> {
-  const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
-  const fromStatus = (evt.from?.getAttribute?.('data-status') ?? null) as Status | null;
-  const toStatus = (evt.to?.getAttribute?.('data-status') ?? null) as Status | null;
-  // 列内の並べ替え (from===to) は Daily では永続しないため正準順に戻す。列が変わった時だけ status 変更。
-  if (!id || !toStatus || fromStatus === toStatus) { syncCols(); return; }
-  emit('move', id, toStatus);
+function onDragStart(id: string) { drag.value = id; }
+function onDragEnd() { drag.value = null; over.value = null; }
+function onDragOver(e: DragEvent, col: Status) { e.preventDefault(); over.value = col; }
+function onDragLeave(col: Status) { if (over.value === col) over.value = null; }
+function onDrop(e: DragEvent, col: Status) {
+  e.preventDefault();
+  if (drag.value) emit('move', drag.value, col);
+  over.value = null;
+  drag.value = null;
 }
 
 // ===== Burndown: 各チケットの SP 積み上げ (totalSP) を残量として、目標 velocity のペースと比較 =====
@@ -113,36 +100,47 @@ const dayTicks = computed(() => {
       <div v-for="col in cols" :key="col" class="col-board">
         <div class="ch">
           <span class="name">{{ COL_LABEL[col] }}</span>
-          <span class="count">{{ colLists[col].length }}</span>
+          <span class="count">{{ colItems(col).length }}</span>
         </div>
-        <VueDraggable v-model="colLists[col]" :group="DAILY_GROUP" handle=".daily-grab"
-                      :animation="150" :force-fallback="true" :data-status="col"
-                      :data-testid="`daily-col-${col}`" class="col-body" @end="onDragEnd">
-          <div v-for="t in colLists[col]" :key="t.id"
-               :class="['tcard', findingsFor(t.id).length > 0 && 'flagged']"
-               :data-testid="`daily-card-${t.id}`"
-               :data-ticket-id="t.id"
-               @click="emit('select', t.id)">
-            <div style="display: flex; align-items: center; gap: 6px">
-              <span class="daily-grab" style="touch-action: none; user-select: none" draggable="false" @click.stop><Icon name="drag" /></span>
-              <span class="id">{{ t.id }}</span>
-              <span style="flex: 1" />
-              <TypeMark :type="t.type" />
+        <div class="col-body"
+             :data-testid="`daily-col-${col}`"
+             :style="over === col ? { background: 'var(--bg-2)' } : {}"
+             @dragover="(e) => onDragOver(e, col)"
+             @dragleave="onDragLeave(col)"
+             @drop="(e) => onDrop(e, col)">
+          <template v-for="t in colItems(col)" :key="t.id">
+            <div :class="[
+                   'tcard',
+                   findingsFor(t.id).length > 0 && 'flagged',
+                   drag === t.id && 'dragging',
+                 ]"
+                 :data-testid="`daily-card-${t.id}`"
+                 draggable="true"
+                 @dragstart="onDragStart(t.id)"
+                 @dragend="onDragEnd"
+                 @click="emit('select', t.id)">
+              <div style="display: flex; justify-content: space-between; align-items: center">
+                <span class="id">{{ t.id }}</span>
+                <TypeMark :type="t.type" />
+              </div>
+              <div class="title">{{ t.title }}</div>
+              <div class="row">
+                <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
+                <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
+                <span class="spacer" />
+                <span v-if="col === 'in-progress' && t.startedAt"
+                      :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
+                  <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
+                </span>
+                <Avatar :user="t.assigneeId" />
+              </div>
             </div>
-            <div class="title">{{ t.title }}</div>
-            <div class="row">
-              <StoryPoints :value="t.estimatePt ?? null" :critical="t.estimatePt == null" />
-              <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
-              <span class="spacer" />
-              <span v-if="col === 'in-progress' && t.startedAt"
-                    :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
-                <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
-              </span>
-              <Avatar :user="t.assigneeId" />
-            </div>
+          </template>
+          <div v-if="colItems(col).length === 0"
+               style="padding: 24px 0; text-align: center; font-family: var(--mono); font-size: 10px; color: var(--ink-4); letter-spacing: 0.06em">
+            チケットなし
           </div>
-        </VueDraggable>
-        <div v-if="colLists[col].length === 0" class="col-empty-hint">チケットなし</div>
+        </div>
       </div>
     </div>
 

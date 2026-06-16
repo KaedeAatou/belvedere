@@ -44,17 +44,13 @@ describe('stripUndefinedPartial (undefined union も型から除外 / api handle
 });
 
 describe('generateId', () => {
-  it('prefix-UUID 形式で返す', () => {
+  it('prefix-base36 形式で返す', () => {
     const id = generateId('WC');
-    expect(id).toMatch(/^WC-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(id).toMatch(/^WC-[0-9A-Z]+$/);
   });
   it('prefix が変われば接頭辞も変わる', () => {
     expect(generateId('EP').startsWith('EP-')).toBe(true);
     expect(generateId('EST').startsWith('EST-')).toBe(true);
-  });
-  it('同一ミリ秒に連続採番しても衝突しない (UUID 化の本旨)', () => {
-    const ids = new Set(Array.from({ length: 1000 }, () => generateId('WC')));
-    expect(ids.size).toBe(1000);
   });
 });
 

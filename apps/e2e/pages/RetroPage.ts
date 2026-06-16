@@ -47,36 +47,41 @@ export class RetroPage extends BasePage {
   }
 
   /**
-   * Try カードを積み上げエリアへ実マウスでドラッグする (合成イベント禁止)。
-   *
-   * d&d は vue-draggable-plus (SortableJS) の clone group。Try 列 (pull:'clone') から
-   * 積み上げ (.stack-list / put:true) へカーソルが「侵入」する過程の mousemove で検知される
-   * ため、合成 DragEvent では駆動できない。ドラッグは handle=".retro-drag-grab" (「積み上げへ」
-   * ヒント) 限定なので、ノート本体ではなくハンドルを掴み、多ステップで .stack-list へ落とす。
-   * (BacklogPage.dragRowToSection / DailyPage.dragCardToCol と同じ実マウス方式。)
+   * Try カードを積み上げエリアへドラッグする。
+   * Playwright の dragTo は HTML5 d&d イベントを正しく発火しない場合があるため、
+   * 失敗時のフォールバックとして dragstart / dragover / drop の dispatchEvent を使う。
    */
   async dragTryCardToStack(card: Locator): Promise<void> {
-    const handle = card.locator('.retro-drag-grab');
-    const listEl = this.page.locator('.stack-list');
+    // まず Playwright の dragTo を試みる
+    try {
+      await card.dragTo(this.stack, { timeout: 5_000 });
+    } catch {
+      // フォールバック: HTML5 DragEvent を手動 dispatch
+      const cardBox = await card.boundingBox();
+      const stackBox = await this.stack.boundingBox();
+      if (!cardBox || !stackBox) {
+        throw new Error('dragTryCardToStack: bounding box が取得できません');
+      }
+      const fromX = cardBox.x + cardBox.width / 2;
+      const fromY = cardBox.y + cardBox.height / 2;
+      const toX = stackBox.x + stackBox.width / 2;
+      const toY = stackBox.y + stackBox.height / 2;
 
-    await handle.scrollIntoViewIfNeeded();
-    const hb = await handle.boundingBox();
-    await listEl.scrollIntoViewIfNeeded();
-    const lb = await listEl.boundingBox();
-    if (!hb || !lb) {
-      throw new Error('dragTryCardToStack: bounding box が取得できません');
+      await this.page.evaluate(
+        ({ fromX, fromY, toX, toY }) => {
+          const el = document.elementFromPoint(fromX, fromY) as HTMLElement | null;
+          const target = document.elementFromPoint(toX, toY) as HTMLElement | null;
+          if (!el || !target) return;
+
+          const dt = new DataTransfer();
+          el.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          target.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          target.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          el.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        },
+        { fromX, fromY, toX, toY },
+      );
     }
-    const fx = hb.x + hb.width / 2;
-    const fy = hb.y + hb.height / 2;
-    const tx = lb.x + lb.width / 2;
-    const ty = lb.y + Math.max(8, lb.height - 8); // 積み上げリスト内側下部 (アイテム末尾 or 空ゾーン)
-
-    await this.page.mouse.move(fx, fy);
-    await this.page.mouse.down();
-    await this.page.mouse.move(fx, fy + 8, { steps: 4 }); // 動かし始め (drag 起動)
-    await this.page.mouse.move(tx, ty, { steps: 35 });    // 積み上げへ侵入 (多ステップで検知させる)
-    await this.page.mouse.move(tx, ty, { steps: 5 });     // 着地を安定
-    await this.page.mouse.up();
   }
 
   /**
