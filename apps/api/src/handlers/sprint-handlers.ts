@@ -94,6 +94,53 @@ async function computeVelocity(repo: RepoContainer, workspaceId: string, sprintI
   return done.reduce((n, t) => n + (t.estimatePt ?? 0), 0);
 }
 
+// ===== 常時稼働カデンス用ヘルパ (active 1 + planned 1 を常に保つ) =====
+// スプリント期間の既定値 (2 週間)。seed と同じく 00:00:00〜23:59:59+09:00 (JST) に正規化する。
+const SPRINT_DAYS = 14;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const pad2 = (n: number): string => String(n).padStart(2, '0');
+
+/** epoch ms を JST 日付に直し +09:00 表記の ISO にする (サーバ TZ 非依存に UTC コンポーネントで読む)。 */
+function jstIso(instant: number, endOfDay: boolean): string {
+  const d = new Date(instant + 9 * 60 * 60 * 1000);
+  const ymd = `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+  return endOfDay ? `${ymd}T23:59:59+09:00` : `${ymd}T00:00:00+09:00`;
+}
+
+/** 起点 instant から 2 週間レンジを作る。 */
+function rangeFrom(startInstant: number): { startsAt: string; endsAt: string } {
+  return { startsAt: jstIso(startInstant, false), endsAt: jstIso(startInstant + (SPRINT_DAYS - 1) * DAY_MS, true) };
+}
+/** 既存スプリントの endsAt の翌日から 2 週間レンジを作る (期間重複を避ける)。 */
+function rangeAfter(prevEndsAt: string): { startsAt: string; endsAt: string } {
+  return rangeFrom(Date.parse(prevEndsAt) + DAY_MS);
+}
+
+/**
+ * ブートストラップ / 繰上げで生成するスプリント雛形。goal は空 (= 未設定、表示側で fallback)、
+ * capacity は velocity 駆動方針で 0。number を id に混ぜて同一ミリ秒の generateId 衝突を避ける。
+ */
+function buildSprint(
+  workspaceId: string,
+  number: number,
+  status: 'active' | 'planned',
+  range: { startsAt: string; endsAt: string },
+  name?: string,
+): Sprint {
+  return {
+    id: generateId(`SPRINT-${number}`),
+    workspaceId,
+    number,
+    ...(name !== undefined && name !== '' && { name }),
+    startsAt: range.startsAt,
+    endsAt: range.endsAt,
+    goal: '',
+    capacity: 0,
+    status,
+  };
+}
+
 /** PATCH /api/sprints/:id — goal / 期間の編集 (status は変えない)。 */
 export async function patchSprint(
   repo: RepoContainer,
@@ -182,4 +229,52 @@ export async function startSprint(
   }
   await repo.sprints.upsert(started);
   return { ok: true, status: 200, body: { started, completed } };
+}
+
+// 同一 workspace の並行 ensure を直列化する in-flight ロック (インメモリ単一プロセス前提)。
+// get→set の間に await が無く同期的なので二重作成は起きない。Firestore 化時は runTransaction へ (TODO)。
+const ensureLocks = new Map<string, Promise<void>>();
+
+/**
+ * 「常時稼働」不変条件を保証する: 当該 workspace に active 1 + planned 1 が無ければ補充する。
+ * GET /api/sprints の前に lazy 呼び出しし、既存 ws の欠落 (deployed dev) も新規 ws も初回ロードで整える。
+ * 二重作成は ensureLocks で防ぐ。completed/cancelled は触らない (履歴不変)。
+ */
+export async function ensureSprintCadence(repo: RepoContainer, workspaceId: string): Promise<void> {
+  const inflight = ensureLocks.get(workspaceId);
+  if (inflight) {
+    await inflight;
+    return;
+  }
+  const run = ensureSprintCadenceInner(repo, workspaceId).finally(() => ensureLocks.delete(workspaceId));
+  ensureLocks.set(workspaceId, run);
+  await run;
+}
+
+async function ensureSprintCadenceInner(repo: RepoContainer, workspaceId: string): Promise<void> {
+  const all = await repo.sprints.list({ workspaceId });
+  const hasActive = all.some((s) => s.status === 'active');
+  const hasPlanned = all.some((s) => s.status === 'planned');
+  if (hasActive && hasPlanned) return;
+
+  let nextNumber = all.reduce((n, s) => Math.max(n, s.number), 0);
+  // 期間の起点カーソル: 既存の最も遅い endsAt。無ければ今日。生成のたび前進させ重複を避ける。
+  let cursorEnd = all.reduce<string | null>(
+    (acc, s) => (acc && Date.parse(acc) >= Date.parse(s.endsAt) ? acc : s.endsAt),
+    null,
+  );
+  const nextRange = (): { startsAt: string; endsAt: string } => {
+    const range = cursorEnd ? rangeAfter(cursorEnd) : rangeFrom(Date.now());
+    cursorEnd = range.endsAt;
+    return range;
+  };
+
+  if (!hasActive) {
+    nextNumber += 1;
+    await repo.sprints.upsert(buildSprint(workspaceId, nextNumber, 'active', nextRange()));
+  }
+  if (!hasPlanned) {
+    nextNumber += 1;
+    await repo.sprints.upsert(buildSprint(workspaceId, nextNumber, 'planned', nextRange(), 'Next Sprint'));
+  }
 }
