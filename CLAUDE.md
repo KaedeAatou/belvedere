@@ -41,7 +41,15 @@ pnpm --filter @belvedere/mcp-server dev                     # stdio MCP server (
 cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 8081
 ```
 
-`pnpm test` で全 workspace のテストを vitest 経由で実行 (2026-06-09 〜)。現状 `packages/llm` (Mock LLM 役割判定) + `packages/repo` (memory backend where) が test を持つ。新規 package を作る時は `"test": "vitest run"` script を package.json に追加する (`--if-present` で skip される)。
+`pnpm test` で全 workspace のテストを vitest 経由で実行 (2026-06-09 〜)。現状 `packages/llm` (Mock LLM 役割判定) + `packages/repo` (memory backend where) + `packages/shared` + `apps/api` が test を持つ。新規 package を作る時は `"test": "vitest run"` script を package.json に追加する (`--if-present` で skip される)。テストの規律 (純粋関数は直接テスト / 実データ状態で踏む / バグは再現テスト先行) は `.claude/rules/testing.md` (常時 auto-load)。
+
+**実機 UI 検証 (d&d / drag / クリック等インタラクション変更は必須)** — 単体・e2e が緑でも実ブラウザで操作しないと残るバグがある (d&d 並び替えバグ 2026-06-16 の教訓):
+
+```bash
+./scripts/dev-local-noauth.sh   # 無認証で web :3000 + api :8080(memory+seed) を起動 → Ctrl+C で認証コード自動復元
+```
+
+→ 起動後 **Chrome DevTools MCP** で `localhost:3000` を開き、実 seed 上で d&d 等を操作して DOM 順 + API 永続 + リロード保持を確認する。手順は **`local-ui-verify` skill** に集約。**auth バイパス足場を毎回自作しない** — このスクリプトを使う (再発明防止)。
 
 ## Architecture (フォルダ構成 + 層分離)
 
@@ -95,8 +103,9 @@ apps/
 
 - prompts.ts / agents.py 編集 → `agent-prompt-sync` skill + `mock-llm-reviewer` subagent
 - 大きな変更後の docs 乖離 → `architecture-consistency-checker` subagent で監査
+- バグ修正 → **再現テスト先行** (最安レイヤで赤→修正→緑 / `.claude/rules/testing.md`)
 - e2e 失敗 → CI 修正ループ (artifact 解析 → 原因分類 → 修正 → 再 push、3 周上限)
-- UI 変更 → §V スクショ検証 (playwright-results の screens/*.png を Read で目視)
+- UI 変更 → §V UI 検証: 見た目はスクショ目視 (playwright-results の screens/*.png を Read)、**d&d/drag/クリック等インタラクションは `local-ui-verify` skill で実機操作** (= `dev-local-noauth.sh` + Chrome DevTools)
 - e2e は **並行 2 本が同一 WS を共有** — 件数厳密比較の assert は書かない (テキスト存在 + 自己清掃)
 
 ## Git commit (must)

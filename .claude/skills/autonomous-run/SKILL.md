@@ -15,8 +15,8 @@ color: purple
 |---|---|---|
 | 0. 計画 | TaskCreate でタスク分解。大規模方針変更クラス (project.md 参照) は A/B/C 案でユーザー確認。無人時は計画を提示してから着手 | — |
 | 1. 実装 | 委譲ガイド (下記)。prompts.ts / agents.py 編集 → **agent-prompt-sync skill** + **mock-llm-reviewer subagent**。プロンプト品質を問う変更 → **prompt-quality-reviewer subagent** | seed-guard / identifier-guard / ts-typecheck / eraser-arch-watcher |
-| 2. 検証 | `pnpm typecheck` (全 WS) + `pnpm test` → **belvedere-commit skill** で論理単位コミット | identifier-guard が staged diff を最終スキャン |
-| 3. デプロイ/CI | push → `gh run watch`。**e2e 失敗時は CI 修正ループ (下記)**。UI 変更時は **§V スクショ検証 (下記)** | post-push-check が CI 状態を自動表示 |
+| 2. 検証 | `pnpm typecheck` (全 WS) + `pnpm test` → **belvedere-commit skill** で論理単位コミット。**バグ修正は再現テスト先行** (`.claude/rules/testing.md`: 最安レイヤで赤→修正→緑) | identifier-guard が staged diff を最終スキャン |
+| 3. デプロイ/CI | push → `gh run watch`。**e2e 失敗時は CI 修正ループ (下記)**。UI 変更時は **§V UI 検証 (下記: スクショ + 実機操作)** | post-push-check が CI 状態を自動表示 |
 | 4. クローズ | docs 更新 (大きな変更後は **architecture-consistency-checker subagent** で乖離監査)。ARCHITECTURE.md の Mermaid 変更 → **eraser-arch-sync skill**。ユーザー決定・経緯は memory へ。週次 or 7 日リマインダーで **hackathon-check skill** | eraser-sync-reminder / hackathon-check-periodic |
 
 ## 委譲ガイド (サブエージェントのモデル選択)
@@ -48,11 +48,17 @@ color: purple
 注意: deploy-web / deploy-api の 2 つの workflow_run から e2e が**並行 2 本**起動し同一 Workspace を共有する。
 件数の厳密比較 assert は原理的に破綻するので書かない (テキスト存在ベース + 自己清掃が規約)。
 
-## §V スクショ検証 (UI 変更時は必須)
+## §V UI 検証 (UI 変更時は必須)
 
+**(a) スクショ目視** — レイアウト/見た目の変更に:
 1. e2e 成功後、playwright-results artifact の `screens/*.png` をダウンロード
 2. 変更した画面の PNG を **Read で実際に見て** レイアウト崩れ・意図との乖離を目視判定
 3. 乖離があれば修正してフェーズ 2 に戻る
+
+**(b) 実機操作** — d&d / drag / pointer / クリック等 **インタラクション**の変更に (必須):
+- 単体・e2e が緑でも実機で操作しないと残るバグがある (d&d 並び替えバグ 2026-06-16 の教訓)。
+- **`local-ui-verify` skill** を使う (= `scripts/dev-local-noauth.sh` で無認証ローカル起動 → Chrome DevTools MCP で実操作 → DOM 順 + API 永続 + リロード保持を assert)。
+- **自作の auth バイパス足場を毎回組まない** — 既存スクリプトを使う (再発明防止)。
 
 ## エスカレーション基準 (実行せず朝の質問リストへ)
 
