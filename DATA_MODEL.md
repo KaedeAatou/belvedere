@@ -105,17 +105,19 @@ export interface UserStory {
 // === Sprint ===
 export interface Sprint {
   id: string;
+  workspaceId: string;
   number: number;
+  name?: string;           // 表示名 (任意)。未設定時「Sprint 13」/ 設定時「Sprint 13 · 決済MVP」
   startsAt: string;
   endsAt: string;
   goal: string;
-  capacity: number;
+  capacity: number;        // velocity 駆動方針により UI 非表示・0 初期化 (SPRINT_OVER_VELOCITY)
   velocity?: number;
   status: 'planned' | 'active' | 'completed' | 'cancelled';
 }
 ```
 
-**Sprint ライフサイクル (2026-06-11/12)**: POST /api/sprints で `planned` 作成 (number は ws 内 max+1 / capacity は velocity 駆動方針により UI 非表示・0 初期化)。POST /api/sprints/:id/start で `planned`→`active`、同時に旧 `active` を `completed` 化し velocity を done チケット SP 合計で確定。PATCH /api/sprints/:id は goal/期間のみ (`completed`/`cancelled` は不変)。
+**Sprint ライフサイクル (2026-06-11/12 / カデンス 2026-06-16 改訂)**: POST /api/sprints/:id/start で `planned`→`active`、同時に旧 `active` を `completed` 化し velocity を done チケット SP 合計で確定 → 繰上げで新 `planned` ('Next Sprint') を自動生成。PATCH /api/sprints/:id は goal/期間/name のみ (`completed`/`cancelled` は不変)。**常時稼働カデンス**: workspace は常に active 1 + planned 1 を保持し、GET 時に `ensureSprintCadence` が不足分を遅延補充する (手動「新規作成」UI は撤去 / number は ws 内 max+1)。
 
 ```ts
 // === Ticket ===

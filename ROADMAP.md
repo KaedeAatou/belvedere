@@ -105,8 +105,13 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [x] **velocity 用語統一** (capacity 廃止 → SPRINT_OVER_VELOCITY。UI/ルール/prompt/Mock LLM/docs 一括 / 2026-06-11)
 - [x] **UI 再設計 (デザインフィードバック)**: 画面タイトル/stat 重複の排除、Daily Burndown を SP×velocity で再構成、Retro Try carry-forward 積み上げ (d&d)、サイドバー Artifacts 整理 (Firestore 永続 + retro.tries.list Tool で儀式 Agent のコンテキスト化 / 2026-06-12)
 - [x] **Sprint 開始フロー (B案)**: PATCH /api/sprints/:id + POST /api/sprints/:id/start (planned→active + velocity 確定)。ゴールは Planning のアウトプット + POST /api/sprints 新規作成 (0 から計画する入口 / 2026-06-12)
-- [ ] AI Integrity Panel は **空の枠だけ** (Phase 2 で配線)
-- [ ] **儀式画面を 3 区画モデルに再設計 (2026-06-13 / 進行中)**: Backlog / Refinement / Planning を CURRENT/NEXT/BACKLOG の 3 区画共通ビューに統一 (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)。画面差は起票できる種別と目的のみ。チケットの流れは Backlog で US 起票 → Refinement で最小価値 Story に分割 → Planning で task/spike に分割
+- [△] AI Integrity Panel: Mock LLM 経由の Agent 会話 (`useAgentChat` → POST /api/agents/:name) + 静的ルールチェック finding ピル表示は実装済。**Pub/Sub リアル配線 (本物 Agent 出力のリアルタイム表示) は Phase 2 待ち**
+- [x] **儀式画面を 3 区画モデルに再設計 (2026-06-13 着手 / 2026-06-16 完了)**: Backlog / Refinement / Planning を CURRENT/NEXT/BACKLOG の 3 区画共通ビュー (`SprintSectionedList.vue` + `useSprintSections.ts`) に統一 (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)。画面差は起票できる種別と目的のみ。チケットの流れは Backlog で US 起票 → Refinement で最小価値 Story に分割 → Planning で task/spike に分割
+- [x] **スプリント常時稼働 + カデンス前進 (2026-06-16)**: active 1 + planned 1 を常在 (`ensureSprintCadence` を GET で lazy 補充)。開始 = 現スプリント完了 → next 繰上げ → 新 'Next Sprint' 自動生成。`Sprint.name` 新設。手動「新規作成」UI 撤去
+- [x] **d&d 並び替えの堅牢化 (2026-06-16)**: `orderIndex` 破綻を区画密再採番 (`ORDER_STEP`) で根治 / `generateId` を短いランダム id 化し同一ミリ秒衝突を根絶 / 自前 native DnD を vue-draggable-plus へ移行し死蔵 `useTicketReorder` を撤去 (Tier1 完了、Tier2/3 は未実施)
+- [x] **テスト規律 + 実機 UI 検証 SOP 常設化 (2026-06-16/17)**: `.claude/rules/testing.md` (共有純粋関数の直接テスト / 実データ状態 / 再現テスト先行) + `compareTicketOrder`・未設定状態 d&d の回帰テスト + `scripts/dev-local-noauth.sh` + `local-ui-verify` skill
+
+> **2026-06-17 現在地**: Phase 1-C は実質完了 (test 259 緑 / typecheck 緑)。CRUD・3 区画儀式画面・スプリントライフサイクル・ルールエンジン 17・見積もりポーカー・d&d 並び替えはすべて稼働。残るは AI Integrity Panel のリアル配線 (Phase 2) のみ。**次は Phase 1-D (MCP Cloud Run)** — ただし MCP HTTP の OAuth 設定等ユーザー操作を含む。
 
 ### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
 - [ ] **MCP server を Cloud Run にデプロイ** (HTTP / Streamable HTTP transport 追加、stdio と両対応)
