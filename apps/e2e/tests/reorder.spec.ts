@@ -214,4 +214,61 @@ test.describe('Backlog 並び替え', () => {
     }
   });
 
+  // ★ 「テスト緑/実機赤」を断つ本命: 未設定 orderIndex の **3 枚** で、先頭の行を中段へ落とす。
+  //   旧バグ (1 件だけ orderIndex が付き compareTicketOrder 規則2 で先頭ジャンプ) は、2 枚
+  //   「B を A の上へ」だと「先頭化」が期待結果と偶然一致して緑になり隠れていた。3 枚で
+  //   「先頭の A を B の下へ動かしたのに先頭へ戻る」を踏むと、区画密再採番が無いと必ず赤になる。
+  test('未設定 orderIndex 3 枚: 先頭 A を中段へ d&d → 先頭ジャンプしない (症状1 の決定的ガード)', async ({
+    authedPage,
+  }) => {
+    const backlog = new BacklogPage(authedPage);
+    const sheet = new DetailSheetPage(authedPage);
+    const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // 作成順 = createdAt 昇順 → 未設定 orderIndex の既定並びは A, B, C (compareTicketOrder fallback)。
+    const titleA = `[E2E] jump-A-${suffix}`;
+    const titleB = `[E2E] jump-B-${suffix}`;
+    const titleC = `[E2E] jump-C-${suffix}`;
+    const titles = [titleA, titleB, titleC];
+
+    await backlog.open();
+    for (const t of titles) {
+      await backlog.createTicket({ title: t, type: 'bug' }); // orderIndex 未指定 = undefined (seed と同条件)
+      await expect.poll(() => backlog.hasTicketWithTitle(t), { timeout: 10_000 }).toBe(true);
+    }
+
+    // 自作 3 枚の相対 index のみ見る (並行 run が同一 WS 共有 → 件数 assert 禁止)。
+    const indexOf = (title: string): Promise<number> =>
+      authedPage.evaluate((t: string) => {
+        const rows = Array.from(document.querySelectorAll('[data-testid="live-ticket"]'));
+        return rows.findIndex((r) => r.textContent?.includes(t));
+      }, title);
+
+    try {
+      // 先頭 A のハンドルを掴み、C の上端へドロップ → A は B と C の間 (= B の下) へ来るのが正。
+      await backlog.reorderDragBefore(titleA, titleC);
+
+      // 決定的ガード: A が B より下 (大きい index)。旧バグなら A だけ orderIndex を得て先頭へ戻り index_A < index_B で赤。
+      await expect
+        .poll(
+          async () => {
+            const ia = await indexOf(titleA);
+            const ib = await indexOf(titleB);
+            return ia >= 0 && ib >= 0 && ia > ib;
+          },
+          { timeout: 10_000 },
+        )
+        .toBe(true);
+    } finally {
+      for (const title of titles) {
+        if (await backlog.hasTicketWithTitle(title)) {
+          await backlog.openTicketByTitle(title);
+          if (await sheet.sheet.isVisible()) {
+            await sheet.deleteTwice();
+            await sheet.sheet.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+          }
+        }
+      }
+    }
+  });
+
 });
