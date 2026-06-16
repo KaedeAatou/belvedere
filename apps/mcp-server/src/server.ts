@@ -14,6 +14,8 @@ import type {
   ValueImpact,
   Ticket,
   Epic,
+  Sprint,
+  TicketType,
 } from '@belvedere/shared';
 import { generateId, applyStatusTransition } from '@belvedere/shared';
 import { MCP_TOOLS } from './tools';
@@ -45,6 +47,7 @@ export async function callTool(
         if (typeof args.projectId === 'string') q.projectId = args.projectId;
         if (typeof args.assigneeId === 'string') q.assigneeId = args.assigneeId;
         if (typeof args.ritual === 'string') q.ritual = args.ritual as Ritual;
+        if (typeof args.type === 'string') q.type = args.type as TicketType;
         const tickets = await repo.tickets.list(q);
         return textResult(JSON.stringify({ count: tickets.length, tickets }, null, 2));
       }
@@ -83,6 +86,57 @@ export async function callTool(
         if (!tool) return errorResult('backlog.refinement.check tool not registered');
         const result = await tool.invoke(args);
         return textResult(JSON.stringify(result, null, 2));
+      }
+
+      // ========== Sprint 系 (bugfix ループの起点) ==========
+      case 'belvedere_sprint_list': {
+        const sprints = await repo.sprints.list({ workspaceId });
+        const filtered =
+          typeof args.status === 'string'
+            ? sprints.filter((s) => s.status === (args.status as Sprint['status']))
+            : sprints;
+        return textResult(JSON.stringify({ count: filtered.length, sprints: filtered }, null, 2));
+      }
+
+      case 'belvedere_sprint_current': {
+        const sprints = await repo.sprints.list({ workspaceId });
+        const current = sprints.find((s) => s.status === 'active') ?? null;
+        if (!current) {
+          return textResult(
+            JSON.stringify(
+              { current: null, hint: 'active な sprint がありません。UI でスプリントを開始してください' },
+              null,
+              2,
+            ),
+          );
+        }
+        return textResult(JSON.stringify({ current }, null, 2));
+      }
+
+      case 'belvedere_sprint_board': {
+        const sprints = await repo.sprints.list({ workspaceId });
+        const current = sprints.find((s) => s.status === 'active') ?? null;
+        if (!current) {
+          return textResult(
+            JSON.stringify(
+              { sprint: null, hint: 'active な sprint がありません。UI でスプリントを開始してください' },
+              null,
+              2,
+            ),
+          );
+        }
+        const tickets = await repo.tickets.list({ workspaceId, sprintId: current.id });
+        const byStatus: Record<Status, Ticket[]> = {
+          backlog: tickets.filter((t) => t.status === 'backlog'),
+          todo: tickets.filter((t) => t.status === 'todo'),
+          'in-progress': tickets.filter((t) => t.status === 'in-progress'),
+          review: tickets.filter((t) => t.status === 'review'),
+          done: tickets.filter((t) => t.status === 'done'),
+        };
+        const bugs = tickets.filter((t) => t.type === 'bug');
+        return textResult(
+          JSON.stringify({ sprint: current, byStatus, bugs, bugCount: bugs.length }, null, 2),
+        );
       }
 
       // ========== Agent invoke ==========

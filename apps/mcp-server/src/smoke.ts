@@ -167,6 +167,61 @@ const cases: SmokeCase[] = [
       );
     },
   },
+  // ===== Sprint 系 + bugfix ループ (current sprint の bug 発見 → 起票) =====
+  {
+    label: 'belvedere_sprint_list returns 3 sprints from seed (12/13/14)',
+    run: () => callTool('belvedere_sprint_list', {}),
+    expect: (r) => {
+      const v = r as { content: Array<{ text: string }> };
+      const parsed = JSON.parse(v.content[0]?.text ?? '{}');
+      return parsed.count === 3 && Array.isArray(parsed.sprints);
+    },
+  },
+  {
+    label: 'belvedere_sprint_current returns sprint-13 (the active one)',
+    run: () => callTool('belvedere_sprint_current', {}),
+    expect: (r) => {
+      const v = r as { content: Array<{ text: string }> };
+      const parsed = JSON.parse(v.content[0]?.text ?? '{}');
+      return parsed.current?.id === 'sprint-13' && parsed.current?.status === 'active';
+    },
+  },
+  {
+    label: 'belvedere_sprint_board returns sprint-13 with byStatus groups + bugCount',
+    run: () => callTool('belvedere_sprint_board', {}),
+    expect: (r) => {
+      const v = r as { content: Array<{ text: string }> };
+      const parsed = JSON.parse(v.content[0]?.text ?? '{}');
+      return (
+        parsed.sprint?.id === 'sprint-13' &&
+        typeof parsed.byStatus === 'object' &&
+        Array.isArray(parsed.byStatus['in-progress']) &&
+        typeof parsed.bugCount === 'number'
+      );
+    },
+  },
+  {
+    label: 'belvedere_ticket_list type=bug: seed に bug 無し → current sprint に起票後は取得できる',
+    run: async () => {
+      const before = await callTool('belvedere_ticket_list', { type: 'bug' });
+      await callTool('belvedere_ticket_create', {
+        title: 'smoke bug in current sprint',
+        type: 'bug',
+        sprintId: 'sprint-13',
+      });
+      const after = await callTool('belvedere_ticket_list', { sprintId: 'sprint-13', type: 'bug' });
+      return { before, after };
+    },
+    expect: (r) => {
+      const { before, after } = r as {
+        before: { content: Array<{ text: string }> };
+        after: { content: Array<{ text: string }> };
+      };
+      const beforeParsed = JSON.parse(before.content[0]?.text ?? '{}');
+      const afterParsed = JSON.parse(after.content[0]?.text ?? '{}');
+      return beforeParsed.count === 0 && afterParsed.count >= 1;
+    },
+  },
   {
     label: 'belvedere_ticket_update returns error for unknown ticket',
     run: () =>
