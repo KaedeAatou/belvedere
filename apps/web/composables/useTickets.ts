@@ -50,6 +50,11 @@ export const useTickets = () => {
   const error = useState<string | null>('tickets-error', () => null);
 
   const api = useApiClient();
+  // チケットを変更すると finding (ルールエンジン指摘) も古くなる。全 mutation 経路 — Daily の
+  // status 変更 / 区画移動 / bulk / DetailSheet 編集 / 分割 — をここに集約し、findings の
+  // invalidation を単一ソース化する (以前は呼び出し側で個別に refresh しており、changeStatus /
+  // bulk / 区画移動の経路で呼び忘れて指摘ピルが stale になっていた)。
+  const { refresh: refreshFindings } = useFindings();
 
   async function fetchTickets(filters?: { sprintId?: string; status?: Status }): Promise<void> {
     isLoading.value = true;
@@ -92,6 +97,7 @@ export const useTickets = () => {
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)
       tickets.value = [...tickets.value, created];
+      void refreshFindings();
       return created;
     } catch (e) {
       const err = e as { data?: { error?: string }; message?: string };
@@ -112,6 +118,7 @@ export const useTickets = () => {
       }
       const updated = await api.patch<Ticket>(`/api/tickets/${id}`, body);
       tickets.value = tickets.value.map((t) => (t.id === id ? updated : t));
+      void refreshFindings();
       return updated;
     } catch (e) {
       const err = e as { data?: { error?: string }; message?: string };
@@ -134,6 +141,7 @@ export const useTickets = () => {
         { status },
       );
       tickets.value = tickets.value.map((t) => (t.id === id ? res.ticket : t));
+      void refreshFindings();
       return res.ticket;
     } catch (e) {
       const err = e as { data?: { error?: string }; message?: string };
@@ -149,6 +157,7 @@ export const useTickets = () => {
     try {
       await api.delete<Ticket>(`/api/tickets/${id}`);
       tickets.value = tickets.value.filter((t) => t.id !== id);
+      void refreshFindings();
       return true;
     } catch (e) {
       const err = e as { data?: { error?: string }; message?: string };
