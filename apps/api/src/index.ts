@@ -32,7 +32,7 @@ import {
   type HandlerResult,
 } from './handlers/ticket-handlers';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
-import { createSprint, patchSprint, startSprint } from './handlers/sprint-handlers';
+import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
 import {
   createWorkspace,
@@ -152,6 +152,9 @@ app.get('/api/tickets', async (c) => {
 
 app.get('/api/sprints', async (c) => {
   const workspaceId = c.get('workspaceId');
+  // 「常時稼働」不変条件を遅延補充: active 1 + planned 1 が無ければ作ってから返す。
+  // 既存 ws の欠落 (deployed dev に planned が無く d&d が戻る問題) も次回ロードで自己修復する。
+  await ensureSprintCadence(repo, workspaceId);
   return c.json(await repo.sprints.list({ workspaceId }));
 });
 
