@@ -6,7 +6,7 @@ const props = defineProps<{ ticket: Ticket }>();
 const emit = defineEmits<{ close: [] }>();
 
 const { memberName, members } = useMembers();
-const { findingsFor, refresh: refreshFindings } = useFindings();
+const { findingsFor } = useFindings();
 const { patchTicket, deleteTicket } = useTickets();
 const { sprints } = useSprints();
 
@@ -64,7 +64,6 @@ async function saveEdit(): Promise<void> {
   saving.value = false;
   if (updated) {
     editing.value = false;
-    void refreshFindings(); // 編集で指摘が解消され得る
   } else {
     editError.value = '保存に失敗しました';
   }
@@ -95,7 +94,6 @@ function onDelete(): void {
 async function doDelete(): Promise<void> {
   const ok = await deleteTicket(props.ticket.id);
   if (ok) {
-    void refreshFindings();
     emit('close');
   }
 }
