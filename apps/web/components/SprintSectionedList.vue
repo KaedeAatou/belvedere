@@ -59,7 +59,7 @@ defineSlots<{
 }>();
 
 const { createTicket, patchTicket, isLoading: createLoading, error: liveError } = useTickets();
-const { findingsFor, refresh: refreshFindings } = useFindings();
+const { findingsFor } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
 
@@ -129,8 +129,7 @@ async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLEl
     }
   }
   const res = await patchTicket(id, patch);
-  if (!res) syncLists(); // 失敗時はサーバ状態へ戻す
-  else void refreshFindings();
+  if (!res) syncLists(); // 失敗時はサーバ状態へ戻す (成功時の findings 再取得は useTickets が担う)
 }
 
 // ===== セクション統計 =====
@@ -270,7 +269,6 @@ async function submitCreate(): Promise<void> {
   const created = await createTicket(input);
   if (created) {
     showCreateDialog.value = false;
-    void refreshFindings();
     emit('created');
   } else {
     createError.value = liveError.value ?? 'API 呼出失敗';
@@ -337,7 +335,6 @@ async function submitSplit(): Promise<void> {
       if (!created) throw new Error(liveError.value ?? `「${r.title}」の作成に失敗しました`);
     }
     showSplitDialog.value = false;
-    void refreshFindings();
     emit('created');
   } catch (e) {
     splitError.value = e instanceof Error ? e.message : '分割に失敗しました';
