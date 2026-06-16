@@ -155,8 +155,8 @@ test.describe('Backlog 並び替え', () => {
   });
 
   // ★ 実機赤を CI で捕まえる本命ガード。合成イベントではなく Playwright 実マウスで
-  //   usePointerReorder の start→setPointerCapture→onMove→onUp→commit を本物で踏む。
-  //   過去のデグレ (capture 欠如で動かない / 掴むとテキストが複数行選択される) は、この経路を
+  //   vue-draggable-plus(SortableJS) の掴み→fallback ドラッグ→onDragEnd→reorderTickets を本物で踏む。
+  //   過去のデグレ (掴んでも動かない / 掴むとテキストが複数行選択される) は、この経路を
   //   通さない API 直 PATCH・合成 PointerEvent テストでは緑になり隠れていた。
   test('実 pointer でハンドルを掴み B を A の上へ → 並び替わる + ネイティブ選択が起きない (症状1/4 の実機ガード)', async ({
     authedPage,

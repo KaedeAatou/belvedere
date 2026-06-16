@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import type { Ticket, ValueImpact } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
-import { orderBetween } from '~/composables/orderIndex';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const props = defineProps<{
@@ -14,7 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const { activeSprint, sprints, velocityHistory } = useSprints();
-const { patchTicket, createTicket } = useTickets();
+const { reorderTickets, createTicket } = useTickets();
 const { members } = useMembers();
 
 // 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = carry-over 候補全件。
@@ -37,11 +36,12 @@ watch(carry, (v) => { carryList.value = [...v]; }, { immediate: true });
 async function onCarryEnd(evt: { item: HTMLElement }): Promise<void> {
   const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
   if (!id) return;
-  const idx = carryList.value.findIndex((t) => t.id === id);
-  if (idx === -1) return;
-  const res = await patchTicket(id, {
-    orderIndex: orderBetween(carryList.value[idx - 1], carryList.value[idx + 1]),
-  });
+  if (!carryList.value.some((t) => t.id === id)) return;
+  // carry (非 done / 新並び順) の後に done を続けて active sprint 区画を「全件」密再採番する。
+  // carry だけ送ると done が旧 orderIndex のまま残り、他画面の CURRENT 区画 (done 含む) で
+  // 新旧 orderIndex が混在し順序が崩れる (= 報告バグと同型) ため done も必ず含める。
+  const orderedIds = [...carryList.value.map((t) => t.id), ...done.value.map((t) => t.id)];
+  const res = await reorderTickets({ orderedIds });
   if (!res) carryList.value = [...carry.value]; // 失敗時はサーバ状態へ戻す
 }
 const doneSP = computed(() => done.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));

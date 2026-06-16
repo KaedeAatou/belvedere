@@ -13,10 +13,9 @@ const emit = defineEmits<{
   startPoker: [id: string];
 }>();
 
-const { patchTicket } = useTickets();
 const { fetchFindings, findingsFor } = useFindings();
 const { members } = useMembers();
-const { activeSprint, nextPlanned, sprints, currentLabel, nextLabel } = useSprints();
+const { sprints, currentLabel, nextLabel } = useSprints();
 onMounted(() => { fetchFindings('refinement'); });
 
 // 全チケットを 3 区画へ振り分ける (フィルタなし)。
@@ -28,18 +27,8 @@ function needsPoker(t: Ticket): boolean {
   return findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING');
 }
 
-// ===== 区画跨ぎ d&d 移動 (sprintId 変更) =====
-async function onMoveToSection(ticketId: string, section: 'current' | 'next' | 'backlog'): Promise<void> {
-  if (section === 'current') {
-    if (!activeSprint.value) return;
-    await patchTicket(ticketId, { sprintId: activeSprint.value.id });
-  } else if (section === 'next') {
-    if (!nextPlanned.value) return;
-    await patchTicket(ticketId, { sprintId: nextPlanned.value.id });
-  } else {
-    await patchTicket(ticketId, { sprintId: null });
-  }
-}
+// 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
+// (旧 @move-to-section emit 経路は撤去済)。
 </script>
 
 <template>
@@ -52,7 +41,6 @@ async function onMoveToSection(ticketId: string, section: 'current' | 'next' | '
       :allowed-types="['incident', 'bug']"
       split-mode="child-story"
       @select="(id) => emit('select', id)"
-      @move-to-section="onMoveToSection"
     >
       <template #row-extra="{ ticket }">
         <button v-if="needsPoker(ticket)"

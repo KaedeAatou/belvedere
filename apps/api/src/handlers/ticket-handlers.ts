@@ -19,6 +19,7 @@ import {
   stripUndefinedPartial,
   generateId,
   applyStatusTransition,
+  ORDER_STEP,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 
@@ -69,6 +70,16 @@ export const TicketPatchBodySchema = TicketCreateBodySchema.partial().extend({
 
 export const TicketStatusChangeBodySchema = z.object({
   status: StatusSchema,
+});
+
+// POST /api/tickets/reorder body — 区画 d&d 確定時に「その区画の全 id を新並び順で」受け取り、
+// orderIndex を (i+1)*ORDER_STEP で密に再採番する。区画跨ぎ移動は movedId 1 件だけ sprintId を
+// 変更する (区画内の他チケット — 完了 sprint 紐付け等 — の sprintId は触らない)。
+// sprintId: string=その sprint へ / null|'' で未割当(解除) / 省略=sprint 変更なし。
+export const TicketReorderBodySchema = z.object({
+  orderedIds: z.array(z.string().min(1)).min(1, 'orderedIds is required'),
+  movedId: z.string().optional(),
+  sprintId: z.string().nullable().optional(),
 });
 
 // ------- 純粋関数ハンドラ -------
@@ -152,6 +163,79 @@ export async function patchTicket(
   }
   await repo.tickets.upsert(updated);
   return { ok: true, status: 200, body: updated };
+}
+
+/**
+ * 区画 d&d 確定時の密再採番 (2026-06-16)。
+ *
+ * 旧方式 (近傍 2 行の中点を 1 件だけ patch) は、区画内に orderIndex 未設定 (seed 由来) や
+ * 等値のチケットが 1 件でも在ると破綻した:
+ *   - 未設定隣接同士 → orderBetween が固定値 ORDER_STEP を返し、compareTicketOrder 規則2
+ *     「orderIndex あり が先」で**その 1 件だけ区画先頭へジャンプ**。
+ *   - 等値隣接 → 中点が両隣と同値になり tie-break で**元位置へ復帰**。
+ * → 区画全体を毎回 (i+1)*ORDER_STEP で密に振り直し、未設定/等値/精度枯渇を構造的に根絶する。
+ *
+ * orderedIds は「その区画の全チケット id を新並び順で」。movedId が在れば区画跨ぎ移動として
+ * その 1 件だけ sprintId を set (string) / clear (null|'') する。
+ *
+ * 並行削除耐性: 受け取った id のうち **既に消えている (get→null) ものは黙って除外**し、生き残りだけを
+ * 密再採番する。区画の無関係チケットが別タブ/並行 e2e run で消えても自分の並べ替えは通る (旧「1 件でも
+ * 欠ければ全体 404」は本番の無言 revert と e2e flaky を生んだ)。別 workspace の id だけは IDOR として
+ * 404 で中止する (正規クライアントでは起こり得ない)。書込は memory backend では同期 Map、firestore では
+ * 単発 set ×N (真のトランザクションではない — 既定 memory では部分適用は起きない)。
+ */
+export async function reorderTickets(
+  repo: RepoContainer,
+  ctx: HandlerContext,
+  body: unknown,
+): Promise<HandlerResult<Ticket[]>> {
+  const parsed = TicketReorderBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
+  }
+  const { orderedIds, movedId, sprintId } = parsed.data;
+  // 重複 id があると再採番が崩れる (同 id を 2 度書く)。
+  if (new Set(orderedIds).size !== orderedIds.length) {
+    return { ok: false, status: 400, body: { error: 'duplicate_ids' } };
+  }
+  // movedId は並び順の中に含まれていなければならない (移動先区画の id 列に居る前提)。
+  if (movedId !== undefined && !orderedIds.includes(movedId)) {
+    return { ok: false, status: 400, body: { error: 'moved_id_not_in_order' } };
+  }
+  // id を一括取得 (firestore で逐次 N 往復にしない)。
+  const fetched = await Promise.all(orderedIds.map((id) => repo.tickets.get(id)));
+  // 生存チケットだけを new 並び順で集める。不在 (並行削除) は skip、別 workspace は IDOR 404。
+  const survivors: Ticket[] = [];
+  for (let i = 0; i < fetched.length; i++) {
+    const existing = fetched[i];
+    if (!existing) continue; // 並行削除済 — 静かに除外して残りを再採番する
+    if (existing.workspaceId !== ctx.workspaceId) {
+      return { ok: false, status: 404, body: { error: 'not_found', details: { id: orderedIds[i]! } } };
+    }
+    survivors.push(existing);
+  }
+  // 生存分を 1..N で密再採番 (skip した穴は詰める)。movedId が生存していれば sprintId も変更。
+  // **実際に orderIndex/sprintId が変わる行だけ** upsert する: 1 件移動では隣接帯しか index が
+  // ずれないので、動かしていない無関係チケットへの write 増幅 + updatedAt 汚染を避けられる。
+  const now = new Date().toISOString();
+  const updates: Ticket[] = [];
+  for (let i = 0; i < survivors.length; i++) {
+    const existing = survivors[i]!;
+    const newOrder = (i + 1) * ORDER_STEP;
+    const isMoved = movedId !== undefined && existing.id === movedId && sprintId !== undefined;
+    const clearSprint = isMoved && (sprintId === null || sprintId === '');
+    const setSprint = isMoved && !clearSprint ? (sprintId as string) : undefined;
+    const orderChanged = existing.orderIndex !== newOrder;
+    const sprintChanged = isMoved && (clearSprint ? existing.sprintId !== undefined : existing.sprintId !== setSprint);
+    if (!orderChanged && !sprintChanged) continue; // 変化なし — 触らない (write/updatedAt を温存)
+    let next: Ticket = { ...existing, orderIndex: newOrder, updatedAt: now };
+    if (clearSprint) delete next.sprintId; // 未割当 (BACKLOG) へ。optional string なので key ごと削除。
+    else if (setSprint !== undefined) next = { ...next, sprintId: setSprint };
+    updates.push(next);
+  }
+  // 変わった行だけ書込 + 返す (frontend は id でマージし未変更行は現状維持)。
+  await Promise.all(updates.map((t) => repo.tickets.upsert(t)));
+  return { ok: true, status: 200, body: updates };
 }
 
 export async function changeTicketStatus(
