@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { RetroNote } from '@belvedere/shared';
+import type { RetroNote, RetroTry } from '@belvedere/shared';
+import { VueDraggable } from 'vue-draggable-plus';
 
 const { memberName } = useMembers();
 const { activeSprint } = useSprints();
@@ -61,24 +62,35 @@ async function submitAdd(key: ColKey) {
 }
 
 // ===== アクション積み上げ (carry-forward stack) =====
-// Try 列のノートを d&d で積み上げに移すと RetroTry として永続化され、
-// スプリントを跨いで蓄積される (各儀式 AI のコンテキスト)。重複は text 比較で抑止。
-const dragTryId = ref<string | null>(null);
-const stackOver = ref(false);
-
-function onTryDragStart(id: string) { dragTryId.value = id; }
-function onTryDragEnd() { dragTryId.value = null; }
+// Try 列のノートを d&d で積み上げに移すと RetroTry として永続化され、スプリントを跨いで蓄積される。
+// d&d は vue-draggable-plus (SortableJS) の clone group。Try 列は pull:'clone' の source、
+// 積み上げは put:true の target。これは「移動」ではなく「昇格」 — RetroNote(ノート)と
+// RetroTry(積み上げ)は別エンティティで、ノートは Try 列に残したまま新しい RetroTry を作る。
+// よって drop で挿入された clone は破棄し、onStackAdd で createTry を 1 回だけ呼ぶ。重複は text 比較で抑止。
+const TRY_GROUP = { name: 'retro-try', pull: 'clone', put: false } as const;
+const NODRAG_GROUP = { name: 'retro-none', pull: false, put: false } as const;
+const STACK_GROUP = { name: 'retro-try', pull: false, put: true } as const;
 
 const inStack = (noteText: string) => stack.value.some((s) => s.text === noteText);
 
-async function onStackDrop(e: DragEvent) {
-  e.preventDefault();
-  stackOver.value = false;
-  const note = notes.value.find((n) => n.id === dragTryId.value);
-  dragTryId.value = null;
-  if (!note) return;
-  // 重複判定は「同一 text が既に積み上げに存在するか」(現状ロジック踏襲)。
-  if (inStack(note.text)) return;
+// VueDraggable は v-model に可変配列を要求するので、列ノート(votes降順)と積み上げをローカルにミラーする。
+const colNotes = reactive<Record<ColKey, RetroNote[]>>({ keep: [], problem: [], try: [] });
+function syncColNotes(): void {
+  for (const c of colDefs) colNotes[c.key] = notesIn(c.key);
+}
+syncColNotes();
+watch(notes, syncColNotes, { deep: true });
+
+const stackMirror = ref<RetroTry[]>([]);
+watch(stack, () => { stackMirror.value = [...stack.value]; }, { immediate: true, deep: true });
+
+// 積み上げに clone がドロップされた時。clone は破棄して実データ(stack)で描画し直し、createTry を 1 回呼ぶ。
+async function onStackAdd(evt: { item: HTMLElement }): Promise<void> {
+  const noteId = evt.item?.getAttribute?.('data-note-id') ?? null;
+  // SortableJS が stackMirror に挿入した clone を即破棄 (実体は createTry → fetchTries で来る)。
+  stackMirror.value = [...stack.value];
+  const note = notes.value.find((n) => n.id === noteId);
+  if (!note || inStack(note.text)) return; // 冪等性: 同一 text が既に積み上げにあれば無視
   await createTry({
     text: note.text,
     sprintNumber: activeSprint.value?.number ?? 0,
@@ -98,33 +110,40 @@ async function onStackDrop(e: DragEvent) {
           <span class="ct">{{ notesIn(c.key).length }}</span>
         </div>
         <div class="retro-col-body">
-          <div v-for="n in notesIn(c.key)" :key="n.id"
-               data-testid="retro-note"
-               :class="['retro-note', c.key === 'try' && 'draggable', c.key === 'try' && inStack(n.text) && 'stacked']"
-               :draggable="c.key === 'try'"
-               @dragstart="c.key === 'try' && onTryDragStart(n.id)"
-               @dragend="onTryDragEnd">
-            <div class="text">{{ n.text }}</div>
-            <div class="meta">
-              <Avatar :user="n.authorId" />
-              <span>{{ memberName(n.authorId) }}</span>
-              <span v-if="c.key === 'try'" class="drag-hint"><Icon name="branch" :size="11" /> 積み上げへ</span>
-              <button
-                data-testid="retro-vote"
-                :class="['vote', hasVoted(n) && 'hot']"
-                title="投票"
-                @click="toggleVote(n.id)">
-                <Icon name="up" />
-                <span style="font-family: var(--mono); font-size: 10px">{{ n.votes.length }}</span>
-              </button>
-              <button v-if="isMine(n)" class="note-rm" title="ノートを削除"
-                      data-testid="retro-note-rm" @click="removeNote(n.id)">
-                <Icon name="x" :size="11" />
-              </button>
+          <VueDraggable
+            v-model="colNotes[c.key]"
+            :group="c.key === 'try' ? TRY_GROUP : NODRAG_GROUP"
+            :disabled="c.key !== 'try'"
+            :sort="false"
+            handle=".retro-drag-grab"
+            :animation="150" :force-fallback="true"
+            class="retro-notes">
+            <div v-for="n in colNotes[c.key]" :key="n.id"
+                 data-testid="retro-note"
+                 :data-note-id="n.id"
+                 :class="['retro-note', c.key === 'try' && 'draggable', c.key === 'try' && inStack(n.text) && 'stacked']">
+              <div class="text">{{ n.text }}</div>
+              <div class="meta">
+                <Avatar :user="n.authorId" />
+                <span>{{ memberName(n.authorId) }}</span>
+                <span v-if="c.key === 'try'" class="drag-hint retro-drag-grab" style="touch-action: none; user-select: none"><Icon name="branch" :size="11" /> 積み上げへ</span>
+                <button
+                  data-testid="retro-vote"
+                  :class="['vote', hasVoted(n) && 'hot']"
+                  title="投票"
+                  @click="toggleVote(n.id)">
+                  <Icon name="up" />
+                  <span style="font-family: var(--mono); font-size: 10px">{{ n.votes.length }}</span>
+                </button>
+                <button v-if="isMine(n)" class="note-rm" title="ノートを削除"
+                        data-testid="retro-note-rm" @click="removeNote(n.id)">
+                  <Icon name="x" :size="11" />
+                </button>
+              </div>
             </div>
-          </div>
+          </VueDraggable>
 
-          <!-- インライン追加 -->
+          <!-- インライン追加 (VueDraggable の外: ドラッグ対象にしない) -->
           <div v-if="addingCol === c.key" class="retro-add-form" :data-testid="`retro-add-form-${c.key}`">
             <textarea
               v-model="draftText"
@@ -147,17 +166,14 @@ async function onStackDrop(e: DragEvent) {
     </div>
 
     <!-- アクション積み上げ: Try ノートを d&d で蓄積 / スプリントを跨いで担当 AI のコンテキストになる -->
-    <div :class="['retro-stack', stackOver && 'drop-over']"
-         data-testid="retro-stack"
-         @dragover.prevent="stackOver = true"
-         @dragleave="stackOver = false"
-         @drop="onStackDrop">
+    <div class="retro-stack" data-testid="retro-stack">
       <div class="stack-head">
         <h3>Action items <span class="carry">— carry-forward 積み上げ</span></h3>
         <p>Try ノートを <b>ドラッグ</b>して積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
       </div>
-      <div class="stack-list">
-        <div v-for="a in stack" :key="a.id" data-testid="retro-stack-item" :class="['stack-item', a.done && 'done']">
+      <VueDraggable v-model="stackMirror" :group="STACK_GROUP" :sort="false" :animation="150"
+                    class="stack-list" @add="onStackAdd">
+        <div v-for="a in stackMirror" :key="a.id" data-testid="retro-stack-item" :class="['stack-item', a.done && 'done']">
           <span :class="['check', a.done && 'on']" @click="toggleDone(a)">
             <Icon v-if="a.done" name="check" :size="10" />
           </span>
@@ -167,9 +183,9 @@ async function onStackDrop(e: DragEvent) {
             <Icon name="x" :size="12" />
           </button>
         </div>
-        <div v-if="stack.length === 0" class="stack-empty">
-          Try ノートをここにドラッグして積み上げを開始
-        </div>
+      </VueDraggable>
+      <div v-if="stackMirror.length === 0" class="stack-empty">
+        Try ノートをここにドラッグして積み上げを開始
       </div>
     </div>
   </div>
