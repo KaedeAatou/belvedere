@@ -19,9 +19,15 @@ const pokerAutostart = useState<string | null>('poker-autostart', () => null);
 const { isOpen: searchOpen, query: searchQuery, close: closeSearch, filter: filterTickets } = useSearch();
 const searchResults = computed<Ticket[]>(() => filterTickets(tickets.value));
 const searchCursor = ref(0);
+// 検索 input の実体。テンプレートの ref="searchInputEl" を受ける宣言がなく、再オープン時に
+// autofocus が効かない (autofocus は要素の初回挿入時のみ) ため、open 監視で明示フォーカスする。
+const searchInputEl = ref<HTMLInputElement | null>(null);
 
 watch(searchQuery, () => { searchCursor.value = 0; });
-watch(searchOpen, (v) => { if (!v) searchCursor.value = 0; });
+watch(searchOpen, (v) => {
+  if (v) nextTick(() => searchInputEl.value?.focus());
+  else searchCursor.value = 0;
+});
 
 function onSearchSelect(id: string): void {
   closeSearch();
