@@ -62,7 +62,7 @@ describe('listRetroTries', () => {
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
   it('workspaceId スコープで自 workspace のみ返す', async () => {
-    // generateId は Date.now() ベースで同 ms 内は衝突するため、id を明示して直接投入する
+    // scope 判定を決定的にするため id/createdAt を明示して直接投入する (createRetroTry を経由しない)
     await repo.retroTries.upsert({ id: 'try-a', workspaceId: WS, text: 'A', sprintNumber: 13, done: false, createdAt: '2026-06-01T10:00:00+09:00', createdBy: 'u-dev' });
     await repo.retroTries.upsert({ id: 'try-b', workspaceId: 'ws-other', text: 'B (別 workspace)', sprintNumber: 13, done: false, createdAt: '2026-06-01T10:00:00+09:00', createdBy: 'u-x' });
     const res = await listRetroTries(repo, DEV);
