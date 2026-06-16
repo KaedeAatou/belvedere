@@ -8,7 +8,7 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'belvedere_ticket_list',
     description:
-      'Belvedere のチケット一覧を取得する。sprintId / status / projectId / assigneeId / ritual で絞り込み可。',
+      'Belvedere のチケット一覧を取得する。sprintId / status / projectId / assigneeId / ritual / type で絞り込み可。type === "bug" で bug だけ抽出できる。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -22,6 +22,11 @@ export const MCP_TOOLS: Tool[] = [
         ritual: {
           type: 'string',
           enum: ['planning', 'daily', 'refinement', 'review', 'retrospective'],
+        },
+        type: {
+          type: 'string',
+          enum: ['story', 'task', 'spike', 'bug', 'incident'],
+          description: 'チケット種別。"bug" 指定で current sprint の bug 抽出に使う。',
         },
       },
     },
@@ -72,6 +77,34 @@ export const MCP_TOOLS: Tool[] = [
         projectId: { type: 'string' },
       },
     },
+  },
+
+  // ========== Sprint 系 (bugfix ループの起点) ==========
+  {
+    name: 'belvedere_sprint_list',
+    description:
+      'スプリント一覧を取得する (id / number / name / goal / status / velocity)。current sprint は status === "active"。status で絞り込み可。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['planned', 'active', 'completed', 'cancelled'],
+        },
+      },
+    },
+  },
+  {
+    name: 'belvedere_sprint_current',
+    description:
+      '現行スプリント (status === "active") を 1 件返す。bugfix ループの起点。無ければ { current: null, hint } を返す。',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'belvedere_sprint_board',
+    description:
+      '現行スプリント + 配下チケットを status 別 (backlog / todo / in-progress / review / done) にまとめ、bug 一覧も添えて返す。1 コールで bugfix の起点 (どの bug が current sprint にあるか) が揃う。',
+    inputSchema: { type: 'object', properties: {} },
   },
 
   // ========== Agent invoke ==========
