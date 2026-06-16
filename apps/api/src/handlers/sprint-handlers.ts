@@ -23,6 +23,7 @@ const isPrivileged = (ctx: HandlerContext) => !!ctx.role && PRIVILEGED.includes(
 // POST /api/sprints body — ゴール先行で planned スプリントを新規作成する。
 // c社が 0 から計画を始めるための入口 (まだ active も planned も無い状態に対応)。
 export const SprintCreateBodySchema = z.object({
+  name: z.string().max(80).optional(),
   goal: z.string().min(1, 'goal must not be empty'),
   startsAt: z.string().min(1),
   endsAt: z.string().min(1),
@@ -55,6 +56,7 @@ export async function createSprint(
     id: generateId('SPRINT'),
     workspaceId: ctx.workspaceId,
     number: maxNumber + 1,
+    ...(parsed.data.name !== undefined && { name: parsed.data.name }),
     startsAt: parsed.data.startsAt,
     endsAt: parsed.data.endsAt,
     goal: parsed.data.goal,
@@ -68,16 +70,19 @@ export async function createSprint(
 // goal / 期間の編集 (planned・active のみ)。空ゴールは許さない。
 export const SprintPatchBodySchema = z
   .object({
+    name: z.string().max(80).optional(),
     goal: z.string().min(1, 'goal must not be empty').optional(),
     startsAt: z.string().min(1).optional(),
     endsAt: z.string().min(1).optional(),
   })
-  .refine((b) => b.goal !== undefined || b.startsAt !== undefined || b.endsAt !== undefined, {
-    message: 'at least one of goal/startsAt/endsAt is required',
-  });
+  .refine(
+    (b) => b.name !== undefined || b.goal !== undefined || b.startsAt !== undefined || b.endsAt !== undefined,
+    { message: 'at least one of name/goal/startsAt/endsAt is required' },
+  );
 
 // 開始時に最終ゴール/期間を同時確定できる (フロントは編集値を載せて「開始」1 クリックにする)。
 export const SprintStartBodySchema = z.object({
+  name: z.string().max(80).optional(),
   goal: z.string().min(1).optional(),
   startsAt: z.string().min(1).optional(),
   endsAt: z.string().min(1).optional(),
@@ -113,6 +118,7 @@ export async function patchSprint(
   }
   const next: Sprint = {
     ...existing,
+    ...(parsed.data.name !== undefined && { name: parsed.data.name }),
     ...(parsed.data.goal !== undefined && { goal: parsed.data.goal }),
     ...(parsed.data.startsAt !== undefined && { startsAt: parsed.data.startsAt }),
     ...(parsed.data.endsAt !== undefined && { endsAt: parsed.data.endsAt }),
@@ -166,6 +172,7 @@ export async function startSprint(
   const started: Sprint = {
     ...target,
     status: 'active',
+    ...(parsed.data.name !== undefined && { name: parsed.data.name }),
     ...(parsed.data.goal !== undefined && { goal: parsed.data.goal }),
     ...(parsed.data.startsAt !== undefined && { startsAt: parsed.data.startsAt }),
     ...(parsed.data.endsAt !== undefined && { endsAt: parsed.data.endsAt }),

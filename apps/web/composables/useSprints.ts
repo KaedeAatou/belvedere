@@ -41,7 +41,21 @@ export const useSprints = () => {
   /** 直近の次スプリント (最小 number の planned)。無ければ null。 */
   const nextPlanned = computed<Sprint | null>(() => plannedSprints.value[0] ?? null);
 
-  type SprintEdit = { goal?: string; startsAt?: string; endsAt?: string };
+  /**
+   * スプリント表示ラベル。name 有り→「Sprint 13 · 決済MVP」、無し→「Sprint 13」。
+   * suffix は状態接尾辞 (例 'planned' → 「Sprint 14 (planned)」)、s が無ければ fallback を返す。
+   */
+  const sprintLabel = (s: Sprint | null | undefined, suffix = '', fallback = ''): string => {
+    if (!s) return fallback;
+    const base = s.name && s.name.trim() ? `Sprint ${s.number} · ${s.name.trim()}` : `Sprint ${s.number}`;
+    return suffix ? `${base} (${suffix})` : base;
+  };
+  /** CURRENT 区画ラベル (active sprint)。Planning / Refinement のヘッダ共通。 */
+  const currentLabel = computed(() => sprintLabel(activeSprint.value, '', 'Current Sprint'));
+  /** NEXT 区画ラベル (planned sprint)。 */
+  const nextLabel = computed(() => sprintLabel(nextPlanned.value, 'planned', 'Next Sprint'));
+
+  type SprintEdit = { name?: string; goal?: string; startsAt?: string; endsAt?: string };
 
   /** goal / 期間の編集 (status は変えない)。成功後に再 fetch して画面へ反映。 */
   async function patchSprint(id: string, body: SprintEdit): Promise<void> {
@@ -56,11 +70,11 @@ export const useSprints = () => {
   }
 
   /** 新規 planned スプリントを作成 (number は max+1)。c社が 0 から計画する入口。成功後に再 fetch。 */
-  async function createSprint(body: { goal: string; startsAt: string; endsAt: string }): Promise<Sprint> {
+  async function createSprint(body: { name?: string; goal: string; startsAt: string; endsAt: string }): Promise<Sprint> {
     const created = await api.post<Sprint>('/api/sprints', body as Record<string, unknown>);
     await fetchSprints();
     return created;
   }
 
-  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
+  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, sprintLabel, currentLabel, nextLabel, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
 };
