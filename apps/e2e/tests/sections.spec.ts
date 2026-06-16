@@ -49,4 +49,37 @@ test.describe('3 区画ビュー クロス区画移動', () => {
       }
     }
   });
+
+  // ★ snap-back 回帰の本命ガード。NEXT (planned) スプリントが常在しないと、ドロップ先 sprintId が
+  //   無く「移動先に出てマウスを離すと元へ戻る」が起きていた (ensureSprintCadence で常時稼働化して解消)。
+  test('BACKLOG 行を NEXT へ d&d → 移動 + リロードで戻らない (常時稼働の回帰ガード)', async ({ authedPage }) => {
+    const backlog = new BacklogPage(authedPage);
+    const sheet = new DetailSheetPage(authedPage);
+    await authedPage.setViewportSize({ width: 1280, height: 1800 });
+    await backlog.open();
+
+    const title = `[E2E] NEXT移動 ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    try {
+      await backlog.createTicket({ title, type: 'bug' });
+      await expect(backlog.sectionRowByTitle('section-backlog', title).first()).toBeVisible({ timeout: 10_000 });
+
+      // BACKLOG → NEXT (planned スプリントが常在していないと sprintId が無く巻き戻る)
+      await backlog.dragRowToSection(title, 'section-next');
+      await expect(backlog.sectionRowByTitle('section-next', title).first()).toBeVisible({ timeout: 10_000 });
+
+      // リロードしても NEXT に留まる (sprintId が planned スプリントへ永続 = 戻らない)
+      await authedPage.reload();
+      await expect(backlog.liveSection).toBeVisible({ timeout: 15_000 });
+      await expect(backlog.sectionRowByTitle('section-next', title).first()).toBeVisible({ timeout: 10_000 });
+    } finally {
+      if (await backlog.hasTicketWithTitle(title)) {
+        await backlog.openTicketByTitle(title);
+        if (await sheet.sheet.isVisible()) {
+          await sheet.deleteTwice();
+          await sheet.sheet.waitFor({ state: 'hidden', timeout: 10_000 }).catch(() => undefined);
+        }
+      }
+    }
+  });
 });

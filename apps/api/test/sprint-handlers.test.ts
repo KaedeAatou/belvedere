@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
 import type { Sprint, Ticket } from '@belvedere/shared';
-import { createSprint, patchSprint, startSprint } from '../src/handlers/sprint-handlers';
+import { createSprint, patchSprint, startSprint, ensureSprintCadence } from '../src/handlers/sprint-handlers';
 
 const WS = 'ws-belvedere';
 const OWNER = { workspaceId: WS, user: { userId: 'u-owner', email: 'owner@example.com' }, role: 'owner' as const };
@@ -107,6 +107,14 @@ describe('patchSprint', () => {
     expect(res.body.status).toBe('planned');
   });
 
+  it('正常系: name を編集できる (Sprint.name 反映)', async () => {
+    const res = await patchSprint(repo, OWNER, 'sprint-14', { name: '決済MVP' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.name).toBe('決済MVP');
+    expect(res.body.status).toBe('planned');
+  });
+
   it('403: dev は編集不可 (owner/sm/po のみ)', async () => {
     const res = await patchSprint(repo, DEV, 'sprint-14', { goal: 'x' });
     expect(res.ok).toBe(false);
@@ -165,6 +173,29 @@ describe('startSprint', () => {
     expect((await repo.sprints.get('sprint-14'))?.status).toBe('active');
   });
 
+  it('newNext を自動生成 (planned / number=max+1 / 仮名 Next Sprint / 期間は started の後)', async () => {
+    const res = await startSprint(repo, OWNER, 'sprint-14', { goal: '次ゴール' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.newNext.status).toBe('planned');
+    expect(res.body.newNext.number).toBe(15); // max(13, 14) + 1
+    expect(res.body.newNext.name).toBe('Next Sprint');
+    // 期間は started.endsAt より後 (翌日開始)
+    expect(Date.parse(res.body.newNext.startsAt)).toBeGreaterThan(Date.parse(res.body.started.endsAt));
+    // 永続化: 繰上げ後の planned は newNext 1 件のみ (常時稼働を維持)
+    const all = await repo.sprints.list({ workspaceId: WS });
+    const planned = all.filter((s) => s.status === 'planned');
+    expect(planned).toHaveLength(1);
+    expect(planned[0]?.id).toBe(res.body.newNext.id);
+  });
+
+  it('start body の name を現スプリント (started) へ反映する', async () => {
+    const res = await startSprint(repo, OWNER, 'sprint-14', { goal: 'g', name: '決済MVP' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.started.name).toBe('決済MVP');
+  });
+
   it('現 active が無くても開始できる (completed は null)', async () => {
     await repo.sprints.upsert(sprint({ id: 'sprint-13', number: 13, status: 'completed', velocity: 27 }));
     const res = await startSprint(repo, OWNER, 'sprint-14', {});
@@ -193,5 +224,53 @@ describe('startSprint', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(404);
+  });
+});
+
+describe('ensureSprintCadence (常時稼働ブートストラップ)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  // memory repo は ws-belvedere を seed 済みのため、空 ws は別 id を使う。
+  const FRESH = 'ws-fresh-cadence';
+
+  it('空 workspace → active 1 + planned 2 を補充する', async () => {
+    await ensureSprintCadence(repo, FRESH);
+    const all = await repo.sprints.list({ workspaceId: FRESH });
+    const active = all.filter((s) => s.status === 'active');
+    const planned = all.filter((s) => s.status === 'planned');
+    expect(active).toHaveLength(1);
+    expect(planned).toHaveLength(1);
+    expect(active[0]?.number).toBe(1);
+    expect(planned[0]?.number).toBe(2);
+    expect(planned[0]?.name).toBe('Next Sprint'); // next は仮名
+  });
+
+  it('active 欠落 (completed / planned のみ) → active のみ補充し planned は据え置き', async () => {
+    await repo.sprints.upsert(sprint({ id: 's-comp', number: 7, status: 'completed', velocity: 20, workspaceId: FRESH }));
+    await repo.sprints.upsert(sprint({ id: 's-plan', number: 8, status: 'planned', workspaceId: FRESH }));
+    await ensureSprintCadence(repo, FRESH);
+    const all = await repo.sprints.list({ workspaceId: FRESH });
+    expect(all.filter((s) => s.status === 'active')).toHaveLength(1);
+    expect(all.filter((s) => s.status === 'planned')).toHaveLength(1);
+    // 既存 planned は新規作成されず据え置き
+    expect(all.find((s) => s.status === 'planned')?.id).toBe('s-plan');
+    // 新 active の number は max(7, 8) + 1
+    expect(all.find((s) => s.status === 'active')?.number).toBe(9);
+  });
+
+  it('active + planned が揃っていれば no-op (二重作成しない)', async () => {
+    await repo.sprints.upsert(sprint({ id: 's-a', number: 3, status: 'active', workspaceId: FRESH }));
+    await repo.sprints.upsert(sprint({ id: 's-p', number: 4, status: 'planned', workspaceId: FRESH }));
+    await ensureSprintCadence(repo, FRESH);
+    const all = await repo.sprints.list({ workspaceId: FRESH });
+    expect(all).toHaveLength(2);
+  });
+
+  it('並行呼び出しでも二重作成しない (ensureLocks 直列化)', async () => {
+    await Promise.all(Array.from({ length: 5 }, () => ensureSprintCadence(repo, FRESH)));
+    const all = await repo.sprints.list({ workspaceId: FRESH });
+    expect(all.filter((s) => s.status === 'active')).toHaveLength(1);
+    expect(all.filter((s) => s.status === 'planned')).toHaveLength(1);
   });
 });
