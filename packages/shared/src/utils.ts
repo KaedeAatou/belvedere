@@ -80,13 +80,21 @@ export function stripUndefinedPartial<T extends Record<string, unknown>>(
 }
 
 /**
- * チケット / Epic 等の ID を採番する。`${prefix}-${base36 timestamp}` 形式。
+ * チケット / Epic 等の ID を採番する。`${prefix}-${ランダム 8 hex}` 形式 (例 `WC-345ab9ad`)。
  *
- * 現状は時刻ベースの衝突回避のみ (現挙動維持)。Project.idPrefix からの連番採番
- * (例: BV-101 → BV-102) は Firestore トランザクションが要るためパーキングロット。
+ * ランダム由来なので同一ミリ秒に連続採番しても衝突しない (旧実装は Date.now() base36 のみで
+ * 同一 ms 衝突したため各所に回避ハックが要った)。8 hex = 約 43 億通りでデモ用途では実質衝突ゼロ。
+ *
+ * **長さは旧 base36 (`WC-MQB14T63` ≒ 11 字) と同等に保つ**: 一度フル UUID 36 字で採番したところ、
+ * 長い id を持つチケット行で実マウス d&d (sections.spec の区画間移動) が CI で壊れる回帰が出た
+ * (`.trow-id` 列 80px に収まらない長 id がレイアウト/ヒットテストに干渉した疑い)。短い id なら回避できる。
+ *
+ * Node 20.10+ / モダンブラウザ双方で `globalThis.crypto` が使える。このモジュールは
+ * compareTicketOrder 経由で web client bundle にも入るため `node:crypto` は import しない。
+ * Project.idPrefix からの連番採番 (例: BV-101 → BV-102) は Firestore トランザクションが要るため保留。
  *
  * @param prefix 'WC' (Task/Ticket) / 'EP' (Epic) / 'EST' 等
  */
 export function generateId(prefix: string): string {
-  return `${prefix}-${Date.now().toString(36).toUpperCase()}`;
+  return `${prefix}-${globalThis.crypto.randomUUID().slice(0, 8)}`;
 }
