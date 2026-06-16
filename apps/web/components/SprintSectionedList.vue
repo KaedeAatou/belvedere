@@ -2,13 +2,14 @@
 // 儀式画面の 3 区画共通ビュー (Wave 1 / 2026-06-13)。
 // Backlog / Refinement / Planning が共有する「CURRENT / NEXT / BACKLOG」セクションリスト。
 //
-// 区画内 d&d 並び替え: 各区画に独立した useTicketReorder インスタンスを持つ。
+// 区画内 d&d 並び替え: 各区画の VueDraggable (vue-draggable-plus / SortableJS) が DOM 並びを確定し、
+//   onDragEnd で近傍 2 行から orderBetween() を求めて 1 件 patch する。
 // 区画跨ぎ d&d 移動: ドラッグ開始区画とドロップ先区画が異なれば moveToSection を emit する
 //   (親が patchTicket で sprintId を current=activeSprint.id / next=nextPlanned.id / backlog=null に変更)。
 // within vs across の判別: dragSection (開始区画) と drop 先の区画を比較。同区画なら reorder、別区画なら move。
 
 import type { Ticket, Priority, TicketType, Member, Sprint } from '@belvedere/shared';
-import { ORDER_STEP } from '~/composables/useTicketReorder';
+import { orderBetween } from '~/composables/orderIndex';
 import type { PatchTicketInput } from '~/composables/useTickets';
 import { VueDraggable } from 'vue-draggable-plus';
 
@@ -102,16 +103,6 @@ watch(() => [props.current, props.next, props.backlog], syncLists);
 
 function listRefFor(section: SectionKey) {
   return section === 'current' ? currentList : section === 'next' ? nextList : backlogList;
-}
-
-// 近傍 2 行の orderIndex から中間値を算出 (端は ±ORDER_STEP)。float 中点詰めで十分な精度。
-function orderBetween(prev: Ticket | undefined, next: Ticket | undefined): number {
-  const p = prev?.orderIndex ?? null;
-  const n = next?.orderIndex ?? null;
-  if (p === null && n === null) return ORDER_STEP;
-  if (p === null) return (n as number) - ORDER_STEP;
-  if (n === null) return p + ORDER_STEP;
-  return (p + n) / 2;
 }
 
 // SortableJS のドロップ確定。evt.item=ドラッグ行 / evt.from,to=移動元,先リスト(data-section付き)。
