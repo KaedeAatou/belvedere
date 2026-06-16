@@ -11,16 +11,13 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { sprints, velocityHistory, activeSprint, nextPlanned, patchSprint, startSprint, createSprint } = useSprints();
+const { sprints, velocityHistory, activeSprint, nextPlanned, currentLabel, nextLabel, patchSprint, startSprint } = useSprints();
 const { patchTicket } = useTickets();
 const { members } = useMembers();
 
 // 全チケットを 3 区画へ。
 const allTickets = computed(() => props.tickets);
 const { current, next, backlog } = useSprintSections(allTickets);
-
-const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
-const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
 
 // ゴール / velocity は CURRENT (active sprint) に対して算出する。
 const totalSP = computed(() => current.value.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
@@ -31,7 +28,7 @@ const avgVelocity = computed(() => {
 });
 const hasVelocity = computed(() => avgVelocity.value > 0);
 const overBy = computed(() => totalSP.value - avgVelocity.value);
-const goal = computed(() => activeSprint.value?.goal ?? 'スプリントゴール未設定');
+const goal = computed(() => activeSprint.value?.goal?.trim() || 'スプリントゴール未設定');
 
 // 1 セグメント = 1 SP。velocity を超えた分が over (accent) になる。
 const barTotal = computed(() => Math.max(totalSP.value, avgVelocity.value, 1));
@@ -58,9 +55,12 @@ async function onMoveToSection(ticketId: string, section: 'current' | 'next' | '
   }
 }
 
-// ===== 次スプリント計画 (B案: ゴール先行で planned を練り「開始」で active 化) =====
+// ===== スプリント編集 / 計画 / 開始 ダイアログ =====
+// 常時稼働化 (active 1 + planned 1 が常在) により手動「新規作成」は不要。
+// dialogTarget='current' は active の名前/ゴール/期間の編集、'next' は planned の計画 + 開始。
 const showSprintDialog = ref(false);
-const createMode = ref(false);
+const dialogTarget = ref<'current' | 'next'>('next');
+const draftName = ref('');
 const draftGoal = ref('');
 const draftStart = ref(''); // YYYY-MM-DD (input[type=date])
 const draftEnd = ref('');
@@ -71,49 +71,36 @@ const toDate = (iso: string) => iso.slice(0, 10);
 const fromStart = (d: string) => `${d}T00:00:00+09:00`;
 const fromEnd = (d: string) => `${d}T23:59:59+09:00`;
 
-function defaultRange(): { start: string; end: string } {
-  const now = new Date();
-  const end = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
-  return { start: now.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
-}
+const dialogSprint = computed(() => (dialogTarget.value === 'current' ? activeSprint.value : nextPlanned.value));
+const dialogTitle = computed(() =>
+  dialogTarget.value === 'current' ? `現スプリント (${currentLabel.value}) を編集` : `次スプリント (${nextLabel.value}) を計画`,
+);
 
-function openSprintDialog() {
-  const s = nextPlanned.value;
+function openSprintDialog(target: 'current' | 'next') {
+  const s = target === 'current' ? activeSprint.value : nextPlanned.value;
   if (!s) return;
-  createMode.value = false;
-  draftGoal.value = s.goal === 'スプリントゴールが設定されていません' ? '' : s.goal;
+  dialogTarget.value = target;
+  draftName.value = s.name ?? '';
+  draftGoal.value = s.goal ?? '';
   draftStart.value = toDate(s.startsAt);
   draftEnd.value = toDate(s.endsAt);
   sprintError.value = null;
   showSprintDialog.value = true;
 }
 
-function openCreateDialog() {
-  createMode.value = true;
-  draftGoal.value = '';
-  const r = defaultRange();
-  draftStart.value = r.start;
-  draftEnd.value = r.end;
-  sprintError.value = null;
-  showSprintDialog.value = true;
-}
-
-async function createNewSprint() {
-  const err = validate();
-  if (err) { sprintError.value = err; return; }
-  sprintBusy.value = true; sprintError.value = null;
-  try {
-    await createSprint(buildBody());
-    showSprintDialog.value = false;
-  } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
-}
-
+// 名前 (空可) は常に送る (空 = 名前解除)。ゴールは空なら省略 (patch の min(1) を踏まないため)。
 function buildBody() {
-  return { goal: draftGoal.value.trim(), startsAt: fromStart(draftStart.value), endsAt: fromEnd(draftEnd.value) };
+  const name = draftName.value.trim();
+  const g = draftGoal.value.trim();
+  return {
+    name,
+    ...(g !== '' && { goal: g }),
+    startsAt: fromStart(draftStart.value),
+    endsAt: fromEnd(draftEnd.value),
+  };
 }
 
-function validate(): string | null {
-  if (!draftGoal.value.trim()) return 'スプリントゴールを入力してください。';
+function validateDates(): string | null {
   if (!draftStart.value || !draftEnd.value) return '開始日と終了日を入力してください。';
   if (Date.parse(fromStart(draftStart.value)) > Date.parse(fromEnd(draftEnd.value))) return '開始日は終了日より前にしてください。';
   return null;
@@ -124,10 +111,11 @@ function errText(e: unknown): string {
   return err.data?.error ?? err.message ?? 'unknown error';
 }
 
+// 保存: current / next いずれも patch (status は変えない)。
 async function saveSprint() {
-  const err = validate();
+  const err = validateDates();
   if (err) { sprintError.value = err; return; }
-  const s = nextPlanned.value; if (!s) return;
+  const s = dialogSprint.value; if (!s) return;
   sprintBusy.value = true; sprintError.value = null;
   try {
     await patchSprint(s.id, buildBody());
@@ -135,8 +123,9 @@ async function saveSprint() {
   } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
 }
 
+// 開始: next のみ。ゴールはスクラムの必須アウトプットなので開始時のみ必須にする。
 async function startNextSprint() {
-  const err = validate();
+  const err = validateDates() ?? (draftGoal.value.trim() ? null : 'スプリントゴールを入力してください。');
   if (err) { sprintError.value = err; return; }
   const s = nextPlanned.value; if (!s) return;
   sprintBusy.value = true; sprintError.value = null;
@@ -212,21 +201,24 @@ onMounted(() => {
     <div class="goal-block">
       <div style="display: flex; align-items: center; margin-bottom: 8px">
         <div class="t-cap">
-          <template v-if="activeSprint">Sprint {{ activeSprint.number }} (進行中)</template>
+          <template v-if="activeSprint">{{ currentLabel }} (進行中)</template>
           <template v-else>SPRINT GOAL</template>
         </div>
         <div style="margin-left: auto; display: flex; gap: 8px">
-          <button v-if="nextPlanned" class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog">
+          <button v-if="activeSprint" class="h-btn" data-testid="edit-current-sprint" @click="openSprintDialog('current')">
+            <Icon name="edit" /> 現スプリントを編集
+          </button>
+          <button v-if="nextPlanned" class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog('next')">
             <Icon name="edit" /> 次スプリントを計画
           </button>
-          <button v-if="nextPlanned" class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog">
+          <button v-if="nextPlanned" class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog('next')">
             スプリントを開始 →
-          </button>
-          <button v-else class="h-btn" data-testid="create-sprint" @click="openCreateDialog">
-            <Icon name="plus" /> 新規スプリントを計画
           </button>
         </div>
       </div>
+      <p v-if="!activeSprint && !nextPlanned" class="sprint-empty" data-testid="sprint-empty">
+        スプリントを準備中です。表示されない場合はページをリロードしてください。
+      </p>
       <div class="goal-text">{{ goal }}</div>
       <div class="smart-row">
         <div v-for="s in smart" :key="s.letter" :class="['smart-cell', s.ok ? 'ok' : 'weak']">
@@ -333,24 +325,29 @@ onMounted(() => {
     </div>
   </div>
 
-  <!-- 次スプリント計画ダイアログ (ゴール先行 → 開始で active 化) -->
+  <!-- スプリント編集 / 計画 ダイアログ (current=編集 / next=計画 + 開始) -->
   <div v-if="showSprintDialog" class="dialog-overlay" data-testid="sprint-dialog" @click.self="showSprintDialog = false">
     <div class="dialog">
       <div class="dialog-head">
-        <h2 class="dialog-title">{{ createMode ? '新規スプリントを計画' : `次スプリント (S${nextPlanned?.number}) を計画` }}</h2>
+        <h2 class="dialog-title">{{ dialogTitle }}</h2>
         <button class="close-btn" @click="showSprintDialog = false">×</button>
       </div>
       <div class="dialog-body">
-        <p v-if="createMode" style="font-size: 12px; color: var(--ink-2); margin: 0 0 14px; line-height: 1.6">
-          新しいスプリントを <b style="color: var(--ink-0)">planned</b> として作成します。
-          作成後、Pull from backlog でチケットを積み、準備ができたら「開始」で active 化します。
+        <p v-if="dialogTarget === 'current'" style="font-size: 12px; color: var(--ink-2); margin: 0 0 14px; line-height: 1.6">
+          進行中スプリントの名前 / ゴール / 期間を編集します。状態 (active) は変わりません。
         </p>
         <p v-else style="font-size: 12px; color: var(--ink-2); margin: 0 0 14px; line-height: 1.6">
           ゴールはプランニングのアウトプットです。ゴールと期間を決めて
-          <b style="color: var(--ink-0)">開始</b>すると、現在のスプリントは完了し velocity が確定します。
+          <b style="color: var(--ink-0)">開始</b>すると、現在のスプリントは完了 (velocity 確定) し、
+          このスプリントが現在のスプリントへ繰り上がります。
         </p>
         <div class="field">
-          <label class="label" for="sp-goal">スプリントゴール <span class="req">*</span></label>
+          <label class="label" for="sp-name">スプリント名 <span style="color: var(--ink-3)">(任意)</span></label>
+          <input id="sp-name" v-model="draftName" data-testid="sprint-name-input"
+                 type="text" class="text-input" maxlength="80" placeholder="例: 決済MVP" />
+        </div>
+        <div class="field">
+          <label class="label" for="sp-goal">スプリントゴール <span v-if="dialogTarget === 'next'" class="req">*</span></label>
           <textarea id="sp-goal" v-model="draftGoal" data-testid="sprint-goal-input"
                     class="text-input" rows="3" maxlength="200"
                     placeholder="例: 決済フローの MVP を本番公開し、離脱率を計測可能にする" />
@@ -368,10 +365,10 @@ onMounted(() => {
         <p v-if="sprintError" class="msg-error" data-testid="sprint-error">{{ sprintError }}</p>
       </div>
       <div class="dialog-foot">
-        <template v-if="createMode">
-          <button class="btn-cancel" :disabled="sprintBusy" @click="showSprintDialog = false">キャンセル</button>
-          <button class="btn-primary" :disabled="sprintBusy" data-testid="sprint-create-submit" @click="createNewSprint">
-            スプリントを作成
+        <button class="btn-cancel" :disabled="sprintBusy" @click="showSprintDialog = false">キャンセル</button>
+        <template v-if="dialogTarget === 'current'">
+          <button class="btn-primary" :disabled="sprintBusy" data-testid="sprint-save" @click="saveSprint">
+            保存
           </button>
         </template>
         <template v-else>
@@ -424,6 +421,11 @@ onMounted(() => {
 }
 .text-input:focus { outline: none; border-color: var(--accent); }
 .msg-error { color: var(--err); font-size: 12px; margin: 0; }
+.sprint-empty {
+  font-size: 12.5px; color: var(--ink-2);
+  background: var(--bg-2); border: var(--hairline) solid var(--line-1);
+  border-radius: var(--radius); padding: 10px 12px; margin: 0 0 10px;
+}
 .dialog-foot {
   display: flex; justify-content: flex-end; gap: 8px;
   padding: 16px 20px;
