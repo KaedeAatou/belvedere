@@ -12,7 +12,6 @@
 
 import { z } from 'zod';
 import type { Member, Workspace } from '@belvedere/shared';
-import { generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerResult } from './ticket-handlers';
 import { inviteSentinelId, isInviteSentinel } from '../config/invite-bind';
@@ -82,8 +81,9 @@ export async function createWorkspace(
   const slug = slugify(parsed.data.name);
   let id = `ws-${slug}`;
   // slug 衝突は乱数サフィックスで回避 (seed ws-belvedere や既存ユーザ作成分との衝突対策)。
+  // workspace id は人が見るため UUID 全体ではなく先頭 8 hex に短縮する。
   if (await repo.workspaces.get(id)) {
-    id = `ws-${slug}-${generateId('w').slice(2).toLowerCase()}`;
+    id = `ws-${slug}-${globalThis.crypto.randomUUID().slice(0, 8)}`;
   }
   const now = new Date().toISOString();
   const workspace: Workspace = {
