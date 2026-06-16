@@ -175,6 +175,7 @@ class FsTicketRepo implements TicketRepository {
     if (q.status) query = query.where('status', '==', q.status);
     if (q.assigneeId) query = query.where('assigneeId', '==', q.assigneeId);
     if (q.ritual) query = query.where('ritual', '==', q.ritual);
+    if (q.type) query = query.where('type', '==', q.type);
     if (q.storyId) query = query.where('parentTicketId', '==', q.storyId);
     const snap = await query.get();
     const xs = parseList<Ticket>(COL.tickets, snap.docs, TicketSchema);
