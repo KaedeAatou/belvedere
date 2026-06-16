@@ -42,11 +42,43 @@ test.describe('Sprint 計画ダイアログ', () => {
     expect(startValue, 'sprint-start-input がプリフィルされていない').toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(endValue, 'sprint-end-input がプリフィルされていない').toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-    // goal は空文字か任意の文字列 (「設定されていません」の場合は openSprintDialog で空にリセット)
+    // goal は空文字か任意の文字列 (自動生成スプリントの空 goal は openSprintDialog で空のまま)
     // → 型的に string であることだけ確認 (空文字 OK)
     expect(typeof goalValue).toBe('string');
 
+    // name 入力欄もプリフィルされている (string、空 OK)
+    expect(typeof (await planning.sprintNameInput.inputValue())).toBe('string');
+
     // ★ キャンセル: × ボタンで閉じる (保存・開始ボタンは押さない)
+    await planning.sprintCloseBtn.click();
+    await expect(planning.sprintDialog).toBeHidden({ timeout: 5_000 });
+  });
+
+  test('edit-current-sprint がある場合: 現スプリント編集ダイアログ表示 → プリフィル → キャンセル', async ({ authedPage }) => {
+    const planning = new PlanningPage(authedPage);
+    await planning.open();
+
+    // activeSprint が無い環境ではボタンが表示されない → skip (常時稼働化で通常は存在する)
+    const btnCount = await planning.editCurrentSprintBtn.count();
+    if (btnCount === 0) {
+      test.skip(true, 'edit-current-sprint ボタンが存在しない (activeSprint なし) — skip');
+      return;
+    }
+
+    await planning.editCurrentSprintBtn.click();
+    await expect(planning.sprintDialog).toBeVisible({ timeout: 10_000 });
+
+    // current の name / goal / 期間がプリフィル (start/end は YYYY-MM-DD)
+    const startValue = await planning.sprintStartInput.inputValue();
+    const endValue = await planning.sprintEndInput.inputValue();
+    expect(startValue, 'sprint-start-input がプリフィルされていない').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(endValue, 'sprint-end-input がプリフィルされていない').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(typeof (await planning.sprintNameInput.inputValue())).toBe('string');
+
+    // 現スプリント編集モードには「開始」ボタンが無い (sprint-start は next 専用) — 破壊操作を防ぐ
+    await expect(planning.sprintStartBtn).toHaveCount(0);
+
+    // ★ キャンセル: × ボタンで閉じる (保存は押さない)
     await planning.sprintCloseBtn.click();
     await expect(planning.sprintDialog).toBeHidden({ timeout: 5_000 });
   });

@@ -6,9 +6,11 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class PlanningPage extends BasePage {
-  // ---- スプリント計画ダイアログ ----
+  // ---- スプリント編集 / 計画ダイアログ (current=編集 / next=計画+開始) ----
+  readonly editCurrentSprintBtn: Locator;
   readonly planNextSprintBtn: Locator;
   readonly sprintDialog: Locator;
+  readonly sprintNameInput: Locator;
   readonly sprintGoalInput: Locator;
   readonly sprintStartInput: Locator;
   readonly sprintEndInput: Locator;
@@ -25,8 +27,10 @@ export class PlanningPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
+    this.editCurrentSprintBtn = page.getByTestId('edit-current-sprint');
     this.planNextSprintBtn = page.getByTestId('plan-next-sprint');
     this.sprintDialog = page.getByTestId('sprint-dialog');
+    this.sprintNameInput = page.getByTestId('sprint-name-input');
     this.sprintGoalInput = page.getByTestId('sprint-goal-input');
     this.sprintStartInput = page.getByTestId('sprint-start-input');
     this.sprintEndInput = page.getByTestId('sprint-end-input');
