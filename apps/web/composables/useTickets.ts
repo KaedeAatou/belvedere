@@ -127,6 +127,39 @@ export const useTickets = () => {
     }
   }
 
+  /**
+   * 区画 d&d 確定 — 区画全体を密再採番する (POST /api/tickets/reorder)。
+   *
+   * orderedIds に「その区画の全 id を新並び順で」渡すとサーバが orderIndex を (i+1)*1000 で
+   * 振り直す。区画跨ぎ移動は movedId + sprintId を渡すと movedId 1 件だけ sprint を変える
+   * (string=その sprint へ / null=未割当へ)。返ってきた区画チケットでローカルを置換する。
+   *
+   * 旧「近傍中点を 1 件 patch」方式は、区画内に orderIndex 未設定/等値が在ると先頭ジャンプや
+   * 元位置復帰を起こしたため、区画全体の密再採番に統一した。
+   */
+  async function reorderTickets(input: {
+    orderedIds: string[];
+    movedId?: string;
+    sprintId?: string | null;
+  }): Promise<Ticket[] | null> {
+    error.value = null;
+    try {
+      const body: Record<string, unknown> = { orderedIds: input.orderedIds };
+      if (input.movedId !== undefined) body.movedId = input.movedId;
+      // sprintId は null も意味を持つ (解除) ので undefined のときだけ送らない。
+      if (input.sprintId !== undefined) body.sprintId = input.sprintId;
+      const updated = await api.post<Ticket[]>('/api/tickets/reorder', body);
+      const byId = new Map(updated.map((t) => [t.id, t]));
+      tickets.value = tickets.value.map((t) => byId.get(t.id) ?? t);
+      void refreshFindings();
+      return updated;
+    } catch (e) {
+      const err = e as { data?: { error?: string }; message?: string };
+      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      return null;
+    }
+  }
+
   /** ステータス遷移 (専用 endpoint。サーバが startedAt/completedAt を自動スタンプ)。
    *  API は { from, to, ticket } を返すため res.ticket で置換する。
    */
@@ -166,5 +199,5 @@ export const useTickets = () => {
     }
   }
 
-  return { tickets, isLoading, error, fetchTickets, createTicket, patchTicket, changeStatus, deleteTicket };
+  return { tickets, isLoading, error, fetchTickets, createTicket, patchTicket, reorderTickets, changeStatus, deleteTicket };
 };

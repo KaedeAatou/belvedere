@@ -9,6 +9,7 @@ import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
 import {
   createTicket,
   patchTicket,
+  reorderTickets,
   changeTicketStatus,
   deleteTicket,
 } from '../src/handlers/ticket-handlers';
@@ -235,6 +236,141 @@ describe('patchTicket', () => {
     expect(res.body.orderIndex).toBe(1250.5);
     const got = await repo.tickets.get(id);
     expect(got?.orderIndex).toBe(1250.5);
+  });
+});
+
+describe('reorderTickets (区画 d&d 密再採番)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  // seed 由来の「orderIndex 未設定」を再現するヘルパ (orderIndex を渡さず作成)。
+  async function mk(title: string, extra: Record<string, unknown> = {}): Promise<string> {
+    const r = await createTicket(repo, CTX, { title, ...extra });
+    if (!r.ok) throw new Error('setup failed');
+    return r.body.id;
+  }
+
+  it('正常系: orderedIds の並び順に (i+1)*1000 で密再採番する (未設定→全件 distinct)', async () => {
+    // 3 枚とも orderIndex 未設定 (= seed 状態)。
+    const a = await mk('A');
+    const b = await mk('B');
+    const c = await mk('C');
+    // 新並び順を [c, a, b] で送る。
+    const res = await reorderTickets(repo, CTX, { orderedIds: [c, a, b] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const byId = new Map(res.body.map((t) => [t.id, t.orderIndex]));
+    expect(byId.get(c)).toBe(1000);
+    expect(byId.get(a)).toBe(2000);
+    expect(byId.get(b)).toBe(3000);
+    // 永続化 + 全件 distinct (症状: 未設定隣接で先頭ジャンプ、の根絶)。
+    expect((await repo.tickets.get(a))?.orderIndex).toBe(2000);
+    const vals = res.body.map((t) => t.orderIndex);
+    expect(new Set(vals).size).toBe(vals.length);
+  });
+
+  it('回帰ガード(症状2): 「1 つ下へ」移動しても再採番値は単調 distinct で元位置へ戻らない', async () => {
+    // 旧バグ: 等値/未設定隣接の中点が衝突し tie-break で元位置復帰。
+    const a = await mk('A');
+    const b = await mk('B');
+    const c = await mk('C');
+    // 初期並び [a, b, c] → b を 1 つ下げて [a, c, b]。
+    const res = await reorderTickets(repo, CTX, { orderedIds: [a, c, b] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const oi = (id: string) => res.body.find((t) => t.id === id)!.orderIndex!;
+    // c < b (b が確実に c の下) かつ a < c < b で単調。衝突なし。
+    expect(oi(a)).toBeLessThan(oi(c));
+    expect(oi(c)).toBeLessThan(oi(b));
+  });
+
+  it('正常系: 区画跨ぎ移動は movedId 1 件だけ sprintId を set し、他の sprintId は触らない', async () => {
+    // backlog の x を current(sprint-active) へ。y は完了 sprint 紐付けのまま据え置きを確認。
+    const x = await mk('X');                                   // sprintId 無し
+    const y = await mk('Y', { sprintId: 'sprint-done-99' });   // 完了 sprint 紐付け
+    const res = await reorderTickets(repo, CTX, {
+      orderedIds: [y, x],
+      movedId: x,
+      sprintId: 'sprint-active',
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect((await repo.tickets.get(x))?.sprintId).toBe('sprint-active'); // moved のみ変更
+    expect((await repo.tickets.get(y))?.sprintId).toBe('sprint-done-99'); // 巻き込まれない
+  });
+
+  it('正常系: sprintId=null は movedId の sprint を解除する (BACKLOG へ戻す d&d)', async () => {
+    const x = await mk('X', { sprintId: 'sprint-active' });
+    const res = await reorderTickets(repo, CTX, { orderedIds: [x], movedId: x, sprintId: null });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const got = await repo.tickets.get(x);
+    expect(got?.sprintId).toBeUndefined();
+    expect('sprintId' in (got ?? {})).toBe(false); // key ごと削除
+  });
+
+  it('IDOR: orderedIds に別 workspace の id が 1 件でもあれば 404 + 何も書かない', async () => {
+    const mine = await mk('mine');
+    const other = await createTicket(repo, OTHER_CTX, { title: 'theirs' });
+    if (!other.ok) throw new Error('setup failed');
+    const before = (await repo.tickets.get(mine))?.orderIndex;
+    const res = await reorderTickets(repo, CTX, { orderedIds: [mine, other.body.id] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(404);
+    // 部分適用していない (mine の orderIndex は据え置き)。
+    expect((await repo.tickets.get(mine))?.orderIndex).toBe(before);
+  });
+
+  it('回帰ガード(並行削除): 不在 id は skip して残りを密再採番する (404 にしない)', async () => {
+    // 区画の無関係チケットが別タブ/並行 e2e run で消えても自分の並べ替えは通す (旧「1件でも欠ければ全体404」の撤回)。
+    const a = await mk('A');
+    const b = await mk('B');
+    const c = await mk('C');
+    await repo.tickets.delete(b); // 並行削除を再現
+    const res = await reorderTickets(repo, CTX, { orderedIds: [a, b, c] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // b は除外、a,c だけ穴を詰めて 1000/2000 に再採番。
+    expect(res.body.map((t) => t.id)).toEqual([a, c]);
+    expect(res.body.map((t) => t.orderIndex)).toEqual([1000, 2000]);
+    expect(await repo.tickets.get(b)).toBeNull();
+  });
+
+  it('write 最小化: 並びが変わらない行は再書込しない (body 空 + updatedAt 据え置き)', async () => {
+    const a = await mk('A');
+    const b = await mk('B');
+    await reorderTickets(repo, CTX, { orderedIds: [a, b] }); // a=1000, b=2000 に密採番
+    const beforeA = (await repo.tickets.get(a))!.updatedAt;
+    // 同じ並びで再 reorder → 変化なし → 何も書かない。
+    const res = await reorderTickets(repo, CTX, { orderedIds: [a, b] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body).toEqual([]); // 変わった行のみ返す → 0 件
+    expect((await repo.tickets.get(a))!.updatedAt).toBe(beforeA); // updatedAt 据え置き
+  });
+
+  it('異常系: orderedIds 空 → 400', async () => {
+    const res = await reorderTickets(repo, CTX, { orderedIds: [] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('異常系: 重複 id → 400 (duplicate_ids)', async () => {
+    const a = await mk('A');
+    const res = await reorderTickets(repo, CTX, { orderedIds: [a, a] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('異常系: movedId が orderedIds に無い → 400', async () => {
+    const a = await mk('A');
+    const res = await reorderTickets(repo, CTX, { orderedIds: [a], movedId: 'WC-not-in-list', sprintId: 'sprint-active' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
   });
 });
 

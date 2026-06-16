@@ -8,6 +8,17 @@ import type { Priority, Status, Ticket } from './types';
 const PRIORITY_RANK: Record<Priority, number> = { urgent: 3, high: 2, medium: 1, low: 0 };
 
 /**
+ * 手動並び替え orderIndex の刻み幅 (1000)。
+ *
+ * 区画の d&d 確定時は区画全体を `(i + 1) * ORDER_STEP` で密に再採番する (reorderTickets)。
+ * 「近傍 2 行の中点を 1 件だけ patch」方式は、区画内に orderIndex 未設定 (seed 由来) や
+ * 等値のチケットが 1 件でも在ると破綻した (未設定隣接→固定値で先頭ジャンプ / 等値隣接→中点衝突で
+ * 元位置へ復帰) ため、区画全体を毎回密再採番する方式に統一した。
+ * api (reorderTickets handler) と web (composables) で同じ刻み幅を共有する。
+ */
+export const ORDER_STEP = 1000;
+
+/**
  * バックログ表示順の比較関数 (memory / firestore 両 backend で共有 / 2026-06-12)。
  *
  * 規則:

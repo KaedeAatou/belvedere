@@ -8,7 +8,6 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string] }>();
 
 const { activeSprint, nextPlanned, sprints } = useSprints();
-const { patchTicket } = useTickets();
 const { findingsFor } = useFindings();
 const { members } = useMembers();
 
@@ -71,19 +70,8 @@ const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.estimatePt 
 const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
 const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
 
-// ===== 区画跨ぎ d&d 移動 (sprintId 変更) =====
-async function onMoveToSection(ticketId: string, section: 'current' | 'next' | 'backlog'): Promise<void> {
-  if (section === 'current') {
-    if (!activeSprint.value) return;
-    await patchTicket(ticketId, { sprintId: activeSprint.value.id });
-  } else if (section === 'next') {
-    if (!nextPlanned.value) return;
-    await patchTicket(ticketId, { sprintId: nextPlanned.value.id });
-  } else {
-    // BACKLOG へ戻す = sprintId 解除 (null で API がフィールド削除)。
-    await patchTicket(ticketId, { sprintId: null });
-  }
-}
+// 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
+// (旧 @move-to-section emit 経路は撤去済)。本画面はフィルタ中だけ並び替えを止める責務を持つ。
 
 // D-13 + U-2: kbd C で作成ダイアログを開く / ESC で閉じるは child 側に委譲しないが、
 // 開く操作だけはここで担う (toolbar とショートカット)。
@@ -177,8 +165,8 @@ onMounted(() => {
     :current-label="currentLabel" :next-label="nextLabel"
     :allowed-types="['story', 'incident', 'bug']"
     hide-section-create
+    :reorder-disabled="filterCount > 0 || showFlaggedOnly"
     @select="(id) => emit('select', id)"
-    @move-to-section="onMoveToSection"
   />
 </template>
 

@@ -3,14 +3,14 @@
 // Backlog / Refinement / Planning が共有する「CURRENT / NEXT / BACKLOG」セクションリスト。
 //
 // 区画内 d&d 並び替え: 各区画の VueDraggable (vue-draggable-plus / SortableJS) が DOM 並びを確定し、
-//   onDragEnd で近傍 2 行から orderBetween() を求めて 1 件 patch する。
-// 区画跨ぎ d&d 移動: ドラッグ開始区画とドロップ先区画が異なれば moveToSection を emit する
-//   (親が patchTicket で sprintId を current=activeSprint.id / next=nextPlanned.id / backlog=null に変更)。
-// within vs across の判別: dragSection (開始区画) と drop 先の区画を比較。同区画なら reorder、別区画なら move。
+//   onDragEnd で「移動先区画の全 id を新並び順で」reorderTickets に渡し区画全体を密再採番する。
+// 区画跨ぎ d&d 移動: ドラッグ開始区画とドロップ先区画が異なれば、同じ reorderTickets 呼出に
+//   movedId + sprintId (current=activeSprint.id / next=nextPlanned.id / backlog=null) を載せ、
+//   その 1 件だけ sprint を変える (区画内の他チケットの sprintId は触らない)。
+// within vs across の判別: fromSection (開始区画) と toSection (drop 先) を比較。
+// ※ 旧「近傍 2 行の orderBetween で 1 件 patch」は区画内に orderIndex 未設定/等値が在ると破綻したため撤去。
 
 import type { Ticket, Priority, TicketType, Member, Sprint } from '@belvedere/shared';
-import { orderBetween } from '~/composables/orderIndex';
-import type { PatchTicketInput } from '~/composables/useTickets';
 import { VueDraggable } from 'vue-draggable-plus';
 
 type SectionKey = 'current' | 'next' | 'backlog';
@@ -42,13 +42,17 @@ const props = defineProps<{
    * Refinement/Planning はツールバー側に作成導線が無いので false (既定) のまま section 側を使う。
    */
   hideSectionCreate?: boolean;
+  /**
+   * 並び替え d&d を無効化する (既定 false)。
+   * Backlog 画面でフィルタ適用中は区画の一部しか表示されず、可視分だけ密再採番すると隠れた
+   * 同区画チケットと orderIndex が混ざって順序が崩れる (= 報告バグと同型) ため、フィルタ中は true。
+   */
+  reorderDisabled?: boolean;
   /** 各行 #extra スロット用に finding ピル等を行が描く前提なので追加 props は不要。 */
 }>();
 
 const emit = defineEmits<{
   select: [id: string];
-  /** 区画跨ぎ移動 (sprintId 変更)。親が patch する。 */
-  moveToSection: [ticketId: string, section: SectionKey];
   /** 作成成功後 (親で findings 再取得などに使う)。 */
   created: [];
 }>();
@@ -58,7 +62,7 @@ defineSlots<{
   'row-extra'(props: { ticket: Ticket }): unknown;
 }>();
 
-const { createTicket, patchTicket, isLoading: createLoading, error: liveError } = useTickets();
+const { createTicket, reorderTickets, isLoading: createLoading, error: liveError } = useTickets();
 const { findingsFor } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
@@ -75,7 +79,7 @@ const allVisibleIds = computed(() => [
 // 自前 pointer 実装は cross-section / 選択抑止 / ドロップ位置で edge case を量産したため廃止。
 // SortableJS は Trello/Jira 級で実績があり、group でリスト間移動、handle で点々限定ドラッグ、
 // native テキスト選択抑止を内蔵する。各区画を同じ group の VueDraggable にし、ドロップ確定 (onEnd)
-// で「移動先区画→sprintId」と「近傍→orderIndex」を 1 回の patchTicket で永続化する。
+// で「移動先区画の全 id を新並び順で」reorderTickets に送り区画全体を密再採番 (+跨ぎは sprintId) する。
 const rootEl = ref<HTMLElement | null>(null);
 // 区画ごとの SortableJS group。pull(出す) は常に可。put(受け入れ) は「その区画に対応する
 // スプリントが在る」時だけ可にする: 計画中(NEXT)スプリントが無い環境では NEXT へ put:false →
@@ -106,29 +110,35 @@ function listRefFor(section: SectionKey) {
 }
 
 // SortableJS のドロップ確定。evt.item=ドラッグ行 / evt.from,to=移動元,先リスト(data-section付き)。
-// 並べ替えは既にローカル配列へ反映済 → 移動先の近傍から orderIndex、区画変化なら sprintId を 1 patch で永続化。
+// 並べ替えは既にローカル配列へ反映済 → 移動先区画の全 id を新並び順でサーバへ送り密再採番する。
+// 旧「近傍 2 行の中点を 1 件 patch」は区画内に orderIndex 未設定/等値が在ると先頭ジャンプや
+// 元位置復帰を起こした (orderBetween + compareTicketOrder 規則2) ため、区画全体の再採番に統一。
 async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement }): Promise<void> {
   const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
   const fromSection = (evt.from?.getAttribute?.('data-section') ?? null) as SectionKey | null;
   const toSection = (evt.to?.getAttribute?.('data-section') ?? null) as SectionKey | null;
   if (!id || !toSection) { syncLists(); return; }
   const list = listRefFor(toSection).value;
-  const idx = list.findIndex((t) => t.id === id);
-  if (idx === -1) { syncLists(); return; }
-  const patch: PatchTicketInput = { orderIndex: orderBetween(list[idx - 1], list[idx + 1]) };
-  // 区画が変わったら sprintId も変更 (current=active / next=planned / backlog=null 解除)。親 onMoveToSection と同写像。
+  if (!list.some((t) => t.id === id)) { syncLists(); return; }
+  const input: { orderedIds: string[]; movedId?: string; sprintId?: string | null } = {
+    orderedIds: list.map((t) => t.id),
+  };
+  // 区画が変わったら movedId 1 件だけ sprintId を変更 (current=active / next=planned / backlog=null 解除)。
   if (fromSection !== toSection) {
     if (toSection === 'current') {
       if (!activeSprint.value) { syncLists(); return; }
-      patch.sprintId = activeSprint.value.id;
+      input.movedId = id;
+      input.sprintId = activeSprint.value.id;
     } else if (toSection === 'next') {
       if (!nextPlanned.value) { syncLists(); return; }
-      patch.sprintId = nextPlanned.value.id;
+      input.movedId = id;
+      input.sprintId = nextPlanned.value.id;
     } else {
-      patch.sprintId = null;
+      input.movedId = id;
+      input.sprintId = null;
     }
   }
-  const res = await patchTicket(id, patch);
+  const res = await reorderTickets(input);
   if (!res) syncLists(); // 失敗時はサーバ状態へ戻す (成功時の findings 再取得は useTickets が担う)
 }
 
@@ -375,7 +385,8 @@ async function submitSplit(): Promise<void> {
         </div>
       </div>
       <VueDraggable v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
-                    :animation="150" :force-fallback="true" data-section="current" class="dnd-list" @end="onDragEnd">
+                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    data-section="current" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in currentList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"
@@ -406,7 +417,8 @@ async function submitSplit(): Promise<void> {
         </div>
       </div>
       <VueDraggable v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
-                    :animation="150" :force-fallback="true" data-section="next" class="dnd-list" @end="onDragEnd">
+                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    data-section="next" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in nextList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"
@@ -439,7 +451,8 @@ async function submitSplit(): Promise<void> {
                 @click="openCreate"><Icon name="plus" /> New issue</button>
       </div>
       <VueDraggable v-model="backlogList" :group="backlogGroup" handle=".trow-drag-grab"
-                    :animation="150" :force-fallback="true" data-section="backlog" class="dnd-list" @end="onDragEnd">
+                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    data-section="backlog" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in backlogList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"

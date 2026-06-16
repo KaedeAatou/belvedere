@@ -109,10 +109,10 @@ export class BacklogPage extends BasePage {
   /**
    * ハンドル限定 d&d でバックログ行を実マウスで並び替える (合成イベント禁止)。
    *
-   * pointer ベース実装 (usePointerReorder) を **本物の trusted PointerEvent** で踏む。
-   * Playwright 実マウス (mouse.down → move → up) は handleDown emit → start →
-   * setPointerCapture → onMove → onUp → commit の全経路を駆動するため、capture 欠如や
-   * native テキスト選択への遷移といった「実機でしか出ないバグ」を CI で捕捉できる
+   * vue-draggable-plus (SortableJS / force-fallback) の実ドラッグを **本物の trusted PointerEvent**
+   * で踏む。Playwright 実マウス (mouse.down → move → up) は handle 掴み → fallback ドラッグ →
+   * onDragEnd → reorderTickets(区画密再採番) の全経路を駆動するため、capture 欠如や native
+   * テキスト選択への遷移といった「実機でしか出ないバグ」を CI で捕捉できる
    * (合成 PointerEvent dispatch ではこの経路を踏めず緑になり、過去のデグレを隠していた)。
    */
   async reorderDragBefore(dragTitle: string, targetTitle: string): Promise<void> {
@@ -131,7 +131,7 @@ export class BacklogPage extends BasePage {
 
     const fromX = handleBox.x + handleBox.width / 2;
     const fromY = handleBox.y + handleBox.height / 2;
-    // ターゲット行の上端 + 2px → usePointerReorder の resolveAt が 'before' と判定する
+    // ターゲット行の上端 + 2px → SortableJS が drop 位置を 'before' (ターゲットの上) と判定する
     const toX = targetBox.x + targetBox.width / 2;
     const toClientY = targetBox.y + 2;
 

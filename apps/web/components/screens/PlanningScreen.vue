@@ -42,18 +42,8 @@ const smart = [
   { letter: 'T', name: 'Time-bound', ok: true, note: '期限が明確か' },
 ];
 
-// ===== 区画跨ぎ d&d 移動 (sprintId 変更) =====
-async function onMoveToSection(ticketId: string, section: 'current' | 'next' | 'backlog'): Promise<void> {
-  if (section === 'current') {
-    if (!activeSprint.value) return;
-    await patchTicket(ticketId, { sprintId: activeSprint.value.id });
-  } else if (section === 'next') {
-    if (!nextPlanned.value) return;
-    await patchTicket(ticketId, { sprintId: nextPlanned.value.id });
-  } else {
-    await patchTicket(ticketId, { sprintId: null });
-  }
-}
+// 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
+// (旧 @move-to-section emit 経路は撤去済)。patchTicket は下の submitPull で引き続き使う。
 
 // ===== スプリント編集 / 計画 / 開始 ダイアログ =====
 // 常時稼働化 (active 1 + planned 1 が常在) により手動「新規作成」は不要。
@@ -271,7 +261,6 @@ onMounted(() => {
         :allowed-types="['incident', 'bug']"
         split-mode="task-spike"
         @select="(id) => emit('select', id)"
-        @move-to-section="onMoveToSection"
       />
     </div>
   </div>

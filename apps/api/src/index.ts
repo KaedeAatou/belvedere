@@ -26,6 +26,7 @@ import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspa
 import {
   createTicket,
   patchTicket,
+  reorderTickets,
   changeTicketStatus,
   deleteTicket,
   type HandlerContext,
@@ -228,6 +229,13 @@ app.post('/api/tickets', async (c) => {
 app.patch('/api/tickets/:id', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
   return respond(c, await patchTicket(repo, buildCtx(c), c.req.param('id'), body));
+});
+// 区画 d&d 確定 — 区画全体を密再採番 + 跨ぎ移動の sprintId を 1 件だけ変更。
+// 書込は検証通過後にまとめて行うが真のトランザクションではない (memory は同期 Map で部分適用なし、
+// firestore は単発 set ×N)。`/api/tickets/reorder` は `:id` を取る POST ルートが無いので衝突しない。
+app.post('/api/tickets/reorder', async (c) => {
+  const body = await c.req.json<unknown>().catch(() => ({}));
+  return respond(c, await reorderTickets(repo, buildCtx(c), body));
 });
 app.patch('/api/tickets/:id/status', async (c) => {
   const body = await c.req.json<unknown>().catch(() => ({}));
