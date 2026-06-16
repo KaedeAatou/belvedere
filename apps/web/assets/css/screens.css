@@ -187,7 +187,19 @@
   display: flex; flex-direction: column;
   border-right: var(--hairline) solid var(--line-1);
   overflow: hidden;
+  position: relative; /* col-empty-hint の絶対配置の基準 */
 }
+/* 空列のヒント: VueDraggable (.col-body flex:1) の上に重ね、ドロップを邪魔しない */
+.col-empty-hint {
+  position: absolute; left: 0; right: 0; top: 52px;
+  text-align: center; font-family: var(--mono); font-size: 10px;
+  color: var(--ink-4); letter-spacing: 0.06em; pointer-events: none;
+}
+/* daily カードのドラッグハンドル (handle=".daily-grab")。カード本体クリックは選択に残す */
+.daily-grab { color: var(--ink-4); display: inline-flex; cursor: grab; }
+.daily-grab:active { cursor: grabbing; }
+.tcard:hover .daily-grab { color: var(--ink-2); }
+.tcard.sortable-ghost { opacity: 0.4; }
 .col-board:last-child { border-right: 0; }
 .col-board .ch {
   padding: 12px 12px 8px;
@@ -201,7 +213,7 @@
   border: var(--hairline) solid var(--line-1);
   background: var(--bg-1);
   padding: 12px 14px;
-  cursor: grab;
+  cursor: pointer; /* カード本体クリック=選択。ドラッグは .daily-grab ハンドルのみ */
   position: relative;
   border-radius: 4px;
   transition: all 0.15s ease;
