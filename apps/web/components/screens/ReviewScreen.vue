@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Ticket, ValueImpact } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
-import { ORDER_STEP } from '~/composables/useTicketReorder';
+import { orderBetween } from '~/composables/orderIndex';
 import { VueDraggable } from 'vue-draggable-plus';
 
 const props = defineProps<{
@@ -33,15 +33,6 @@ const carry = computed(() =>
 // carry は computed なので可変ミラーを v-model に渡し、onEnd で近傍から orderIndex を patch。
 const carryList = ref<Ticket[]>([]);
 watch(carry, (v) => { carryList.value = [...v]; }, { immediate: true });
-
-function orderBetween(prev: Ticket | undefined, next: Ticket | undefined): number {
-  const p = prev?.orderIndex ?? null;
-  const n = next?.orderIndex ?? null;
-  if (p === null && n === null) return ORDER_STEP;
-  if (p === null) return (n as number) - ORDER_STEP;
-  if (n === null) return p + ORDER_STEP;
-  return (p + n) / 2;
-}
 
 async function onCarryEnd(evt: { item: HTMLElement }): Promise<void> {
   const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
