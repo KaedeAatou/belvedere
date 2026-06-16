@@ -63,9 +63,15 @@ export const useSprints = () => {
     await fetchSprints();
   }
 
-  /** planned スプリントを開始 (active 化)。現 active は completed + velocity 確定。成功後に再 fetch。 */
+  /**
+   * planned スプリントを開始 (active 化)。現 active は completed + velocity 確定、
+   * さらに新しい next (planned) が API 側で自動生成される。成功後に再 fetch。
+   */
   async function startSprint(id: string, body: SprintEdit): Promise<void> {
-    await api.post<{ started: Sprint; completed: Sprint | null }>(`/api/sprints/${id}/start`, body as Record<string, unknown>);
+    await api.post<{ started: Sprint; completed: Sprint | null; newNext: Sprint }>(
+      `/api/sprints/${id}/start`,
+      body as Record<string, unknown>,
+    );
     await fetchSprints();
   }
 

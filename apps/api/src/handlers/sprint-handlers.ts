@@ -180,14 +180,15 @@ export async function patchSprint(
 /**
  * POST /api/sprints/:id/start — planned スプリントを active 化する。
  * 同時に現 active があれば completed にし velocity を done SP で確定する (二重 active 防止)。
- * body にゴール/期間があれば開始と同時に確定する。
+ * さらに繰上げ後に新しい planned (next) を自動生成し「常時稼働」を維持する。
+ * body にゴール/名前/期間があれば開始と同時に現スプリント (started) へ確定する。
  */
 export async function startSprint(
   repo: RepoContainer,
   ctx: HandlerContext,
   id: string,
   body: unknown,
-): Promise<HandlerResult<{ started: Sprint; completed: Sprint | null }>> {
+): Promise<HandlerResult<{ started: Sprint; completed: Sprint | null; newNext: Sprint }>> {
   const target = await repo.sprints.get(id);
   if (!target || target.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
@@ -228,7 +229,14 @@ export async function startSprint(
     return { ok: false, status: 400, body: { error: 'starts_after_ends' } };
   }
   await repo.sprints.upsert(started);
-  return { ok: true, status: 200, body: { started, completed } };
+
+  // 繰上げで planned が空く → 新しい next を自動生成し常時稼働を維持する。
+  // number は当該 ws の max+1 (started=target は番号を消費しない)、期間は started の後ろ。
+  const maxNumber = all.reduce((n, s) => Math.max(n, s.number), 0);
+  const newNext = buildSprint(ctx.workspaceId, maxNumber + 1, 'planned', rangeAfter(started.endsAt), 'Next Sprint');
+  await repo.sprints.upsert(newNext);
+
+  return { ok: true, status: 200, body: { started, completed, newNext } };
 }
 
 // 同一 workspace の並行 ensure を直列化する in-flight ロック (インメモリ単一プロセス前提)。
