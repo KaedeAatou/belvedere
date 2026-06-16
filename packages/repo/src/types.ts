@@ -18,6 +18,7 @@ import type {
   Project,
   Status,
   Ritual,
+  TicketType,
   EstimationSession,
   RetroTry,
   RetroNote,
@@ -43,6 +44,7 @@ export interface TicketQuery {
   status?: Status;
   assigneeId?: string;
   ritual?: Ritual;
+  type?: TicketType;
   storyId?: string;
 }
 

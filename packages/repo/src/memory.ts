@@ -66,6 +66,7 @@ class MemTicketRepo implements TicketRepository {
     if (q.status) xs = xs.filter((t) => t.status === q.status);
     if (q.assigneeId) xs = xs.filter((t) => t.assigneeId === q.assigneeId);
     if (q.ritual) xs = xs.filter((t) => t.ritual === q.ritual);
+    if (q.type) xs = xs.filter((t) => t.type === q.type);
     // storyId は Ticket.parentTicketId へマップ (User Story → 子 Task の親子関係)。
     if (q.storyId) xs = xs.filter((t) => t.parentTicketId === q.storyId);
     // 表示順を repo 層で確定する (orderIndex → フォールバック priority/createdAt)。
