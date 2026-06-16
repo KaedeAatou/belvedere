@@ -16,15 +16,12 @@ const emit = defineEmits<{
 const { patchTicket } = useTickets();
 const { fetchFindings, findingsFor } = useFindings();
 const { members } = useMembers();
-const { activeSprint, nextPlanned, sprints } = useSprints();
+const { activeSprint, nextPlanned, sprints, currentLabel, nextLabel } = useSprints();
 onMounted(() => { fetchFindings('refinement'); });
 
 // 全チケットを 3 区画へ振り分ける (フィルタなし)。
 const allTickets = computed(() => props.tickets);
 const { current, next, backlog } = useSprintSections(allTickets);
-
-const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
-const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
 
 // SP 未見積もりのストーリーか (ポーカー開始ボタンの表示条件)。
 function needsPoker(t: Ticket): boolean {

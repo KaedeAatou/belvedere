@@ -97,6 +97,7 @@ export const SprintSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   number: z.number(),
+  name: z.string().optional(),
   startsAt: z.string(),
   endsAt: z.string(),
   goal: z.string(),

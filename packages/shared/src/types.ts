@@ -57,6 +57,8 @@ export interface Sprint {
   id: string;
   workspaceId: string;
   number: number;
+  /** 表示名 (任意)。未設定時は番号のみ表示 (「Sprint 13」)、設定時は「Sprint 13 · 決済MVP」。 */
+  name?: string;
   startsAt: string;
   endsAt: string;
   goal: string;
