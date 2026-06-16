@@ -119,8 +119,7 @@ function rangeAfter(prevEndsAt: string): { startsAt: string; endsAt: string } {
 
 /**
  * ブートストラップ / 繰上げで生成するスプリント雛形。goal は空 (= 未設定、表示側で fallback)、
- * capacity は velocity 駆動方針で 0。連番 number は Sprint.number として保持するだけで、
- * id は generateId (UUID) が一意性を保証する (旧実装は同一ミリ秒衝突回避で number を id に混ぜていた)。
+ * capacity は velocity 駆動方針で 0。number を id に混ぜて同一ミリ秒の generateId 衝突を避ける。
  */
 function buildSprint(
   workspaceId: string,
@@ -130,7 +129,7 @@ function buildSprint(
   name?: string,
 ): Sprint {
   return {
-    id: generateId('SPRINT'),
+    id: generateId(`SPRINT-${number}`),
     workspaceId,
     number,
     ...(name !== undefined && name !== '' && { name }),
