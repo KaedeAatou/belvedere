@@ -14,6 +14,8 @@
 // 注意: 環境変数で上書きできるようにするより、ハードコードの方が PR レビューで「誰が
 // owner になるか」が見える化される利点がある。会社メアドを混入させない歯止めにもなる。
 
+import { MCP_SERVICE_EMAIL } from './service-token';
+
 export interface AllowlistEntry {
   workspaceId: string;
   role: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
@@ -25,6 +27,14 @@ export const emailAllowlist: Record<string, AllowlistEntry> = {
     workspaceId: 'ws-belvedere',
     role: 'owner',
     displayName: 'Kagaya',
+  },
+  // MCP サービスプリンシパル (機械認証パス / 2026-06-17): service token で認証された
+  // Claude Code 経由の MCP は ws-belvedere の po member として動く (最小権限: member 招待 /
+  // workspace 削除は owner/sm 専用なので不可)。識別子は config/service-token.ts が単一ソース。
+  [MCP_SERVICE_EMAIL]: {
+    workspaceId: 'ws-belvedere',
+    role: 'po',
+    displayName: 'MCP Service',
   },
   // e2e robot user (Stage 2 / 2026-06-11): 専用 workspace ws-e2e-test の owner として
   // 本番 ws-belvedere を汚さずに CRUD 動作確認。Firebase Auth に user 作成不要、
