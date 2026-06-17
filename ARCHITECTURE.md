@@ -59,7 +59,7 @@ graph TB
         AG_R["agent-reviewer<br/>FLOOR 04"]
         AG_X["agent-retrospective<br/>FLOOR 05"]
         TOOL["tool-server<br/>Slack/GitHub/Calendar"]
-        MCP["mcp-server (FLOOR M)<br/>stdio + HTTP / 11 Tools"]
+        MCP["mcp-server (FLOOR M)<br/>stdio / API HTTP クライアント / 14 Tools"]
     end
 
     subgraph AIClients["AI Agent Clients (MCP)"]
@@ -101,10 +101,10 @@ graph TB
     CB --> AR
     AR -.image pull.-> API
 
-    %% --- MCP フロー ---
+    %% --- MCP フロー (Firestore を直接触らず、サービストークンで API を HTTPS 認証 →
+    %%     人間ユーザーと同じ workspaceMiddleware / IDOR ガードを通る) ---
     CC & CUR --> MCP
-    MCP --> ORC
-    MCP --> FS
+    MCP -->|HTTPS Bearer service token| API
 
     %% --- Agent オーケストレーション ---
     WEB -.Phase 3 以降.-> ORC
@@ -146,7 +146,7 @@ graph TB
 | 🟢 deployed | GH / WIF / CB / AR | WIF 鍵レス CI/CD パイプライン全段動作確認済 |
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
 | 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。実 API + Firestore seed 投入済 (2026-06-11) |
-| 🟡 implemented | MCP | stdio mode で 11 Tools 実装 / smoke test 14/14 / HTTP deploy は Phase 1-D |
+| 🟡 implemented | MCP | stdio / API HTTP クライアント (14 Tools) / サービストークン認証で API の workspace-scope・IDOR ガードを通る / smoke 19 + 統合テスト緑 / Firestore 直結しない |
 | 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
 | 🟢 deployed | FS | Firestore (default) instance 作成済 / 実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
@@ -247,8 +247,8 @@ ai-agent-hackathon/
 │   ├── api/              # Hono on Cloud Run (TS) — Phase 1 で deploy
 │   ├── cli/              # Mock LLM CLI demo (5 + Orchestrator ロール)
 │   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — Phase 3 で実 Gemini 接続
-│   └── mcp-server/       # MCP server (stdio Phase 0 完成 / HTTP Phase 1-D で Cloud Run)
-│       └── 11 Tools: read 6 + invoke_agent 1 + CRUD 4
+│   └── mcp-server/       # MCP server (stdio / Belvedere API の HTTP クライアント / サービストークン認証)
+│       └── 14 Tools: read 8 (sprint 含む) + invoke_agent 1 + CRUD 5
 ├── packages/
 │   ├── shared/           # 型・スキーマ・定数 (Project / Ritual / ValueImpact / Epic.rationale 等)
 │   ├── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / 5 members)
@@ -306,13 +306,15 @@ ai-agent-hackathon/
 - Secret Manager で API key / Slack token 管理 (リポジトリには絶対置かない)
 - **Firebase Auth (個人 Google) で Web / API / MCP HTTP 認証** (`ROADMAP.md` Phase 1-B、6/9-14 着手予定 — Firestore データ層は 6/9 実装完了、認証は残作業) — IAP は本番ドメイン取得後に検討 (Phase 4)
 - Firestore セキュリティルールで個人 Google アカウントだけが read/write できるよう制限 (個人参加要件のエビデンス)
-- MCP HTTP は OAuth 2.1 (個人 Google アカウント、`ROADMAP.md` Phase 1-D)
+- **MCP は API の HTTP クライアント**として動き、**サービストークン (Secret Manager 管理) で認証**する (`apps/api/src/config/service-token.ts`)。Firestore を直接触る裏口にせず、人間ユーザーと同じ authMiddleware → workspaceMiddleware → IDOR ガードを通す。トークンは定数時間比較・env 未設定で無効・最小権限 (ws-belvedere の po) にスコープ。詳細は `docs/setup-mcp.md`
 - WIF (Workload Identity Federation) で GitHub Actions ↔ GCP デプロイ時の鍵レス認証 (= ユーザー認証ではなく CI 認証)
 - OWASP Top 10 自動チェック (release gate, GitHub Actions、Phase 4)
 - Cloud Armor で WAF (Phase 4 / 任意)
 - 監査: Cloud Audit Logs を BigQuery にエクスポート (Phase 4 / 任意)
 
-**現状 (2026-06-10〜)**: Firebase Auth Bearer 検証 (`apps/api/src/middleware/auth.ts`) + workspaceMiddleware (所属検証 / X-Workspace-Id 切替 / 招待自動 bind) 実装済。Cloud Run IAM は allUsers のまま、認証はアプリ層 JWT が担う (`infra/cloudbuild.yaml` の設計コメント参照。Cloud Run + Firebase Auth の標準パターン)。
+**現状 (2026-06-10〜)**: Firebase Auth Bearer 検証 (`apps/api/src/middleware/auth.ts`) + workspaceMiddleware (所属検証 / X-Workspace-Id 切替 / 招待自動 bind) 実装済。Cloud Run IAM は allUsers のまま、認証はアプリ層 JWT が担う (`infra/cloudbuild.yaml` の設計コメント参照。Cloud Run + Firebase Auth の標準パターン)。**Cloud Run `--allow-unauthenticated` は意図的に維持** (web ブラウザが直接叩くため allUsers が妥当 / 認可はアプリ層が担保) — 2026-06-17 にこの方針を確認。
+
+**MCP の機械認証 (2026-06-17)**: 人間ログインできない MCP 用に、`authMiddleware` が Firebase ID token に加え **サービストークン** (`MCP_SERVICE_TOKEN` env / Secret Manager) を受け付ける。一致時は専用プリンシパル (`svc:mcp`) として通り、email-allowlist 経由で ws-belvedere の po member に bootstrap されて以降は人間と同じ workspace-scope / IDOR ガードを通る。env 未設定ならこのパスは無効 (安全側の既定)。
 
 ---
 
