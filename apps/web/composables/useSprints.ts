@@ -42,12 +42,14 @@ export const useSprints = () => {
   const nextPlanned = computed<Sprint | null>(() => plannedSprints.value[0] ?? null);
 
   /**
-   * スプリント表示ラベル。name 有り→「Sprint 13 · 決済MVP」、無し→「Sprint 13」。
-   * suffix は状態接尾辞 (例 'planned' → 「Sprint 14 (planned)」)、s が無ければ fallback を返す。
+   * スプリント表示ラベル (WC-c6d339fb)。**番号 (Sprint 13) は出さない**。
+   * name 有り→ name のみ (例「決済MVP」)、name 無し→ fallback (例「Current Sprint」)。
+   * suffix は状態接尾辞 (例 'planned' → 「決済MVP (planned)」)。s が無くても fallback を返す。
+   * 別プロジェクト等でスプリント番号が連番にならない運用に対応するため、付けた名前を主役にする。
    */
   const sprintLabel = (s: Sprint | null | undefined, suffix = '', fallback = ''): string => {
     if (!s) return fallback;
-    const base = s.name && s.name.trim() ? `Sprint ${s.number} · ${s.name.trim()}` : `Sprint ${s.number}`;
+    const base = s.name && s.name.trim() ? s.name.trim() : fallback;
     return suffix ? `${base} (${suffix})` : base;
   };
   /** CURRENT 区画ラベル (active sprint)。Planning / Refinement のヘッダ共通。 */
