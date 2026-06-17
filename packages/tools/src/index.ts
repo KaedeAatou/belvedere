@@ -1,6 +1,7 @@
 import type { AgentTool } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
 import type { Ritual } from '@belvedere/shared';
+import type { KnowledgeSearcher } from './knowledge';
 import { runTicketRules, buildRuleContext } from './ticket-rules';
 import { checkTicketQuality } from './quality';
 import { checkBacklogRefinement } from './refinement';
@@ -25,14 +26,35 @@ export {
   type RefinementSignal,
 } from './refinement';
 
+// RAG 検索層 (KnowledgeSearcher) — apps/api の createApp({repo, llm, knowledge}) 注入で使う
+export {
+  MockKnowledgeSearcher,
+  ElasticKnowledgeSearcher,
+  createKnowledgeSearcher,
+  type KnowledgeSearcher,
+  type KnowledgeHit,
+  type KnowledgeSearchOpts,
+  type MockKnowledgeDoc,
+  type KnowledgeBackend,
+  type KnowledgeFactoryConfig,
+} from './knowledge';
+
+/** buildTools に注入する追加依存 (storage 非依存の検索層など)。 */
+export interface BuildToolsDeps {
+  /** RAG 検索層。未注入なら knowledge.search ツールを出さない (mock LLM / CLI デモを温存)。 */
+  knowledge?: KnowledgeSearcher;
+}
+
 /**
  * Tool ファクトリ。RepoContainer + workspaceId を closure cap し、各 Tool の
  * repo.*.list 呼び出しに workspaceId を自動注入する (Phase 1-B IDOR fix / 2026-06-10)。
  *
  * Tool 自体は workspaceId を引数として受け取らない (LLM が任意の値を入れて越境するのを防ぐ)。
  * 呼出側 (api / cli / mcp-server) で「認証済みの workspaceId」を渡す責務を持つ。
+ *
+ * deps.knowledge を渡すと knowledge.search (RAG 検索) ツールが追加される。
  */
-export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[] {
+export function buildTools(repo: RepoContainer, workspaceId: string, deps: BuildToolsDeps = {}): AgentTool[] {
   const ticketListTool: AgentTool<{ sprintId?: string; status?: string; assigneeId?: string }, unknown> = {
     spec: {
       name: 'ticket.list',
@@ -288,7 +310,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     },
   };
 
-  return [
+  const tools: AgentTool[] = [
     ticketListTool,
     sprintGetTool,
     projectListTool,
@@ -301,4 +323,34 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
     slackPostTool,
     humanAskTool,
   ];
+
+  // RAG 検索層が注入されている時のみ knowledge.search を出す (未注入なら従来通り = mock LLM / CLI 温存)。
+  if (deps.knowledge) {
+    const knowledge = deps.knowledge;
+    const knowledgeSearchTool: AgentTool<{ query: string; topK?: number }, unknown> = {
+      spec: {
+        name: 'knowledge.search',
+        description:
+          'Scrum 知識ベース (公式 Scrum Guide / DoD / Story Point 等) と過去ふりかえり Try を意味検索する。指摘や提案の根拠を示すため、結果の source ID (例 definition-of-done.md#完了の定義) を引用するのに使う。',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            topK: { type: 'number' },
+          },
+          required: ['query'],
+        },
+      },
+      async invoke({ query, topK }) {
+        const hits = await knowledge.search(query, {
+          workspaceId,
+          ...(topK !== undefined && { topK }),
+        });
+        return { count: hits.length, hits };
+      },
+    };
+    tools.push(knowledgeSearchTool);
+  }
+
+  return tools;
 }
