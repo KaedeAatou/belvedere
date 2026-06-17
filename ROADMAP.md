@@ -111,13 +111,13 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 - [x] **d&d 並び替えの堅牢化 (2026-06-16)**: `orderIndex` 破綻を区画密再採番 (`ORDER_STEP`) で根治 / `generateId` を短いランダム id 化し同一ミリ秒衝突を根絶 / 自前 native DnD を vue-draggable-plus へ移行し死蔵 `useTicketReorder` を撤去 (Tier1 完了、Tier2/3 は未実施)
 - [x] **テスト規律 + 実機 UI 検証 SOP 常設化 (2026-06-16/17)**: `.claude/rules/testing.md` (共有純粋関数の直接テスト / 実データ状態 / 再現テスト先行) + `compareTicketOrder`・未設定状態 d&d の回帰テスト + `scripts/dev-local-noauth.sh` + `local-ui-verify` skill
 
-> **2026-06-17 現在地**: Phase 1-C は実質完了 (test 259 緑 / typecheck 緑)。CRUD・3 区画儀式画面・スプリントライフサイクル・ルールエンジン 17・見積もりポーカー・d&d 並び替えはすべて稼働。残るは AI Integrity Panel のリアル配線 (Phase 2) のみ。**次は Phase 1-D (MCP Cloud Run)** — ただし MCP HTTP の OAuth 設定等ユーザー操作を含む。
+> **2026-06-17 現在地**: Phase 1-C 実質完了 (test 284 緑 / typecheck 緑) + **Phase 1-D (MCP ドッグフード) も前倒し完了** — MCP を本人認証 (per-user API キー) で本番接続し、`belvedere-ticket-cycle` skill + 毎時 /loop で「web 起票→MCP→修正→review」を自動化 (done はユーザー受け入れ)。**残るクリティカルパス = Phase 3-A (Gemini + ADK 本実装 / A-2 要件・B-1 キラー)** + 提出物 (Phase 3-C)。AI Integrity Panel のリアル配線 (Phase 2) は Phase 3-A の後。**次の着手対象 = Phase 3-A**。
 
-### Phase 1-D MCP Cloud Run + ドッグフード開始 / 6/20 〜 6/24 (5 日)
-- [ ] **MCP server を Cloud Run にデプロイ** (HTTP / Streamable HTTP transport 追加、stdio と両対応)
-- [ ] OAuth 2.1 認証 (個人 Google アカウント) で MCP HTTP を保護
-- [ ] Claude Code から本番 Belvedere の MCP に接続
-- [ ] **「Belvedere 自身の開発を Belvedere + MCP + Claude Code で管理する」ドッグフード開始**
+### Phase 1-D MCP HTTP クライアント化 + ドッグフード開始 / 2026-06-17 ✅ 実質完了 (前倒し / 縮退ライン通り stdio)
+- [x] **MCP server を Belvedere API の HTTPS クライアントに刷新** (stdio のまま。Cloud Run への MCP デプロイは縮退ライン 6/24 通り見送り = ローカル Claude Code 経由)。デプロイ済み dev Firestore を実データで読み書き
+- [x] **3 認証モード**: サービストークン (`svc:mcp` / po 最小権限) / Firebase refresh token / **per-user API キー (`blv_...` / sha256 ハッシュ保管 / 発行・失効 UI を設定画面に追加)**。OAuth 2.1 でなく per-user API キーで簡素化
+- [x] Claude Code から本番 Belvedere の MCP に **本人認証で接続** (ws-belvedere-dev)
+- [x] **ドッグフード開始**: 「web で起票 → MCP 取得 → ローカル修正 → デプロイ → review」が実データで稼働。`belvedere-ticket-cycle` skill + `/loop 1h` で毎時自動巡回 (明確は実装→review / 曖昧は相談、done はユーザー受け入れ)。初回: SP ポーカー化 (WC-9460f690) / スプリント名表示 (WC-c6d339fb)
 
 ### Phase 1-E マルチテナント完成 (招待 UI 最小実装) / 6/25 〜 6/26 (2 日)
 (2026-06-12 前倒し完了 — Phase 1-C 中に実装。Workspace 作成 + 切替 UI も追加)
