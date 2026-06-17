@@ -17,6 +17,7 @@ import type {
   Ticket,
   Sprint,
   Member,
+  ApiKey,
   Ceremony,
   AgentRun,
   CeremonyHealthScore,
@@ -36,6 +37,7 @@ import {
   EpicSchema,
   UserStorySchema,
   MemberSchema,
+  ApiKeySchema,
   CeremonySchema,
   AgentRunSchema,
   CeremonyHealthScoreSchema,
@@ -53,6 +55,7 @@ import type {
   EpicRepository,
   UserStoryRepository,
   MemberRepository,
+  ApiKeyRepository,
   CeremonyRepository,
   AgentRunRepository,
   CeremonyHealthRepository,
@@ -136,6 +139,7 @@ const COL = {
   epics: 'epics',
   stories: 'stories',
   members: 'members',
+  apiKeys: 'apiKeys',
   ceremonies: 'ceremonies',
   agentRuns: 'agentRuns',
   ceremonyHealth: 'ceremonyHealth',
@@ -295,6 +299,35 @@ class FsMemberRepo implements MemberRepository {
   }
 }
 
+class FsApiKeyRepo implements ApiKeyRepository {
+  // doc id = key.id (apikey-xxxx)。memory.ts (MemApiKeyRepo) と完全一致の挙動。
+  async list(opts: { workspaceId: string; userId?: string }): Promise<ApiKey[]> {
+    // workspaceId のみ where (equality)。userId はクライアント側で絞り (composite index 回避)。
+    const snap = await db().collection(COL.apiKeys).where('workspaceId', '==', opts.workspaceId).get();
+    const keys = parseList<ApiKey>(COL.apiKeys, snap.docs, ApiKeySchema);
+    return opts.userId === undefined ? keys : keys.filter((k) => k.userId === opts.userId);
+  }
+  async get(id: string): Promise<ApiKey | null> {
+    const doc = await db().collection(COL.apiKeys).doc(id).get();
+    return doc.exists ? parseOne<ApiKey>(COL.apiKeys, id, doc.data(), ApiKeySchema) : null;
+  }
+  /**
+   * tokenHash で全 workspace 横断検索 (認証経路用)。tokenHash は sha256 hex の高エントロピー値
+   * なので equality where の先頭 1 件で一意。doc id 非依存。
+   */
+  async getByHash(tokenHash: string): Promise<ApiKey | null> {
+    const snap = await db().collection(COL.apiKeys).where('tokenHash', '==', tokenHash).limit(1).get();
+    const first = snap.docs[0];
+    return first ? parseOne<ApiKey>(COL.apiKeys, first.id, first.data(), ApiKeySchema) : null;
+  }
+  async upsert(k: ApiKey): Promise<void> {
+    await db().collection(COL.apiKeys).doc(k.id).set(k);
+  }
+  async delete(id: string): Promise<void> {
+    await db().collection(COL.apiKeys).doc(id).delete();
+  }
+}
+
 class FsCeremonyRepo implements CeremonyRepository {
   async list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]> {
     const snap = await db()
@@ -421,6 +454,7 @@ export function createFirestoreRepoContainer(): RepoContainer {
     epics: new FsEpicRepo(),
     stories: new FsUserStoryRepo(),
     members: new FsMemberRepo(),
+    apiKeys: new FsApiKeyRepo(),
     ceremonies: new FsCeremonyRepo(),
     agentRuns: new FsAgentRunRepo(),
     ceremonyHealth: new FsCeremonyHealthRepo(),

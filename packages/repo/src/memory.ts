@@ -6,6 +6,7 @@ import type {
   Ticket,
   Sprint,
   Member,
+  ApiKey,
   Ceremony,
   AgentRun,
   CeremonyHealthScore,
@@ -27,6 +28,7 @@ import type {
   EpicRepository,
   UserStoryRepository,
   MemberRepository,
+  ApiKeyRepository,
   CeremonyRepository,
   AgentRunRepository,
   CeremonyHealthRepository,
@@ -153,6 +155,22 @@ class MemMemberRepo implements MemberRepository {
   }
 }
 
+class MemApiKeyRepo implements ApiKeyRepository {
+  // キーは id (= apikey-xxxx)。getByHash は tokenHash の線形走査 (firestore は where equality)。
+  private store = new Map<string, ApiKey>();
+  async list(opts: { workspaceId: string; userId?: string }): Promise<ApiKey[]> {
+    return [...this.store.values()].filter(
+      (k) => k.workspaceId === opts.workspaceId && (opts.userId === undefined || k.userId === opts.userId),
+    );
+  }
+  async get(id: string): Promise<ApiKey | null> { return this.store.get(id) ?? null; }
+  async getByHash(tokenHash: string): Promise<ApiKey | null> {
+    return [...this.store.values()].find((k) => k.tokenHash === tokenHash) ?? null;
+  }
+  async upsert(k: ApiKey): Promise<void> { this.store.set(k.id, stripUndefined({ ...k })); }
+  async delete(id: string): Promise<void> { this.store.delete(id); }
+}
+
 class MemCeremonyRepo implements CeremonyRepository {
   private store = new Map<string, Ceremony>();
   async list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]> {
@@ -237,6 +255,7 @@ export function createMemoryRepoContainer(): RepoContainer {
     epics: new MemEpicRepo(seedEpics),
     stories: new MemUserStoryRepo(),
     members: new MemMemberRepo(seedMembers),
+    apiKeys: new MemApiKeyRepo(),
     ceremonies: new MemCeremonyRepo(),
     agentRuns: new MemAgentRunRepo(),
     ceremonyHealth: new MemCeremonyHealthRepo(),

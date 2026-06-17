@@ -27,6 +27,7 @@ import {
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
+import { listApiKeys, createApiKey, revokeApiKey } from './handlers/api-key-handlers';
 import {
   createWorkspace,
   listMyWorkspaces,
@@ -130,7 +131,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider }): ApiA
   // ------- /api/* は認証必須 (Phase 1-B / 2026-06-10) -------
   // authMiddleware: Authorization: Bearer <ID token | MCP service token> を検証 → c.user
   // workspaceMiddleware: members から user の所属 Workspace を解決 → c.workspaceId / c.role
-  app.use('/api/*', authMiddleware);
+  app.use('/api/*', authMiddleware(repo));
   app.use('/api/*', workspaceMiddleware(repo));
 
   /**
@@ -317,6 +318,18 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider }): ApiA
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await patchMember(repo, buildCtx(c), c.req.param('userId'), body));
   });
+
+  // ------- per-user API キー (programmatic アクセス用トークン / 2026-06-17) -------
+  // authMiddleware + workspaceMiddleware 配下 = current workspace スコープ。
+  // 平文 token は POST のレスポンスでのみ 1 回返る (config/api-key.ts / api-key-handlers.ts)。
+  app.get('/api/api-keys', async (c) => respond(c, await listApiKeys(repo, buildCtx(c))));
+  app.post('/api/api-keys', async (c) => {
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return respond(c, await createApiKey(repo, buildCtx(c), body, new Date().toISOString()));
+  });
+  app.delete('/api/api-keys/:id', async (c) =>
+    respond(c, await revokeApiKey(repo, buildCtx(c), c.req.param('id'))),
+  );
 
   // ------- Workspace 管理 (Phase 1-E 前倒し / 2026-06-12) -------
   // GET/POST /api/workspaces は workspaceMiddleware が skip する (所属ゼロでも呼べる)。

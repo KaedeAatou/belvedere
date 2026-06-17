@@ -52,7 +52,7 @@ fi
 echo "[dev-local-noauth] env ゲート (default OFF / 実行時のみ) を差し込み…"
 
 # 1) API authMiddleware: DEV_NO_AUTH=1 のとき seed owner (kagayayuuki / ws-belvedere) として通す
-perl -0pi -e 's/(export const authMiddleware: MiddlewareHandler = async \(c, next\) => \{\n)/$1  if (process.env.DEV_NO_AUTH === '"'"'1'"'"') { c.set('"'"'user'"'"', { userId: '"'"'kagayayuuki'"'"', email: '"'"'kagayayuuki\@example.com'"'"' }); await next(); return; }\n/ unless /DEV_NO_AUTH/' "$AUTH"
+perl -0pi -e 's/(  return async \(c, next\) => \{\n)/$1    if (process.env.DEV_NO_AUTH === '"'"'1'"'"') { c.set('"'"'user'"'"', { userId: '"'"'kagayayuuki'"'"', email: '"'"'kagayayuuki\@example.com'"'"' }); await next(); return; }\n/ unless /DEV_NO_AUTH/' "$AUTH"
 
 # 2) web auth.global: NUXT_PUBLIC_DEV_NO_AUTH=1 のとき login gate を外す
 perl -0pi -e 's/(export default defineNuxtRouteMiddleware\(\(to\) => \{\n)/$1  if (useRuntimeConfig().public.devNoAuth === '"'"'1'"'"') return;\n/ unless /devNoAuth/' "$MW"
