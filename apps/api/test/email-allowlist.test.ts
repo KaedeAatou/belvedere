@@ -21,14 +21,26 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
   });
 
   it('会社メアドは allowlist に絶対入れない (PII / 個人参加要件)', () => {
-    // ハッカソンは個人参加要件があるので、会社ドメインは絶対 owner にしない。
+    // ハッカソンは個人参加要件があるので、会社ドメインは絶対入れない。
     // 実在の会社メアドを公開 repo に書くこと自体が個人↔会社の紐付け露出になるため、
-    // ダミードメインで「個人 Gmail 以外が入っていない」を検証する。
+    // 「許可ドメイン以外が入っていない」を検証する。
+    // 許可: 個人 Gmail / e2e robot (@belvedere.test) / MCP サービスプリンシパル (@belvedere.svc)。
+    // いずれも会社ドメインではない (.svc は内部サービス用の擬似ドメイン)。
     expect(emailAllowlist['someone@company.example']).toBeUndefined();
-    const gmailOnly = Object.keys(emailAllowlist).every(
-      (e) => e.endsWith('@gmail.com') || e.endsWith('@belvedere.test'),
+    const allowedDomains = ['@gmail.com', '@belvedere.test', '@belvedere.svc'];
+    const cleanDomains = Object.keys(emailAllowlist).every((e) =>
+      allowedDomains.some((d) => e.endsWith(d)),
     );
-    expect(gmailOnly).toBe(true);
+    expect(cleanDomains).toBe(true);
+  });
+
+  it('MCP サービスプリンシパルは ws-belvedere の po (最小権限 / owner ではない)', () => {
+    // 機械認証パス (config/service-token.ts) で認証された MCP は、この allowlist 経由で
+    // ws-belvedere の po member に bootstrap される。owner ではない (member 招待 / workspace 削除不可)。
+    const m = buildMemberFromAllowlist('svc:mcp', 'mcp@belvedere.svc');
+    expect(m).not.toBeNull();
+    expect(m?.workspaceId).toBe('ws-belvedere');
+    expect(m?.role).toBe('po');
   });
 
   it('robot-e2e@belvedere.test は ws-e2e-test owner として登録される (Stage 2)', () => {
