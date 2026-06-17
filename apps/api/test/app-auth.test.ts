@@ -9,10 +9,28 @@
 //  - 認証 (missing / invalid / valid service token / env 未設定で無効)
 //  - 新エンドポイント (GET /api/tickets/:id, /quality, type フィルタ, /api/refinement)
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createApp, type ApiApp } from '../src/app';
 import { createMemoryRepoContainer } from '@belvedere/repo';
 import { createLLMProvider } from '@belvedere/llm';
+
+// Firebase Admin SDK をモックする。CI には ADC (Application Default Credentials) が無く、
+// 実 verifyIdToken は project 検出 (metadata server) でハングしてテストがタイムアウトするため。
+// サービストークン経路は Firebase を一切呼ばない (matchesServiceToken で短絡) ので、このモックは
+// サービストークンのテストには無影響。非サービストークン (garbage / env 未設定) は即時 reject させ、
+// 「401 invalid_token に落ちる」ことだけを高速・決定的に検証する。
+vi.mock('firebase-admin/app', () => ({
+  initializeApp: () => ({}),
+  applicationDefault: () => ({}),
+  getApps: () => [],
+}));
+vi.mock('firebase-admin/auth', () => ({
+  getAuth: () => ({
+    verifyIdToken: async () => {
+      throw new Error('mock: firebase not available in test');
+    },
+  }),
+}));
 
 const TOKEN = 'test-service-token';
 
