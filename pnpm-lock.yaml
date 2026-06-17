@@ -112,27 +112,25 @@ importers:
 
   apps/mcp-server:
     dependencies:
-      '@belvedere/agent':
+      '@belvedere/shared':
         specifier: workspace:*
-        version: link:../../packages/agent
+        version: link:../../packages/shared
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.0.4
+        version: 1.29.0(zod@4.4.3)
+    devDependencies:
+      '@belvedere/api':
+        specifier: workspace:*
+        version: link:../api
       '@belvedere/llm':
         specifier: workspace:*
         version: link:../../packages/llm
       '@belvedere/repo':
         specifier: workspace:*
         version: link:../../packages/repo
-      '@belvedere/seed':
-        specifier: workspace:*
-        version: link:../../packages/seed
-      '@belvedere/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@belvedere/tools':
-        specifier: workspace:*
-        version: link:../../packages/tools
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.0.4
-        version: 1.29.0(zod@4.4.3)
+      vitest:
+        specifier: ^4.1.0
+        version: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@22.19.17)(vite@7.3.2(@types/node@22.19.17)(jiti@2.6.1)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
 
   apps/web:
     dependencies:
