@@ -316,11 +316,19 @@ async function save(): Promise<void> {
 </template>
 
 <style scoped>
+/* body は 5 階アプリ用に overflow:hidden + height:100% なので、設定ページは
+   自前でスクロール領域にしないと縦に長い内容 (4 カード) が切れて到達できない。
+   ページ自体を 100vh のスクロールコンテナにし、中身は 720px で中央寄せする。 */
 .profile-page {
-  max-width: 720px;
-  margin: 0 auto;
+  height: 100vh;
+  overflow-y: auto;
   padding: 48px 32px;
   font-family: var(--sans);
+}
+.profile-page > * {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .page-header {
