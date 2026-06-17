@@ -64,6 +64,46 @@ async function revokeInvite(userId: string): Promise<void> {
   }
 }
 
+// ===== API キー (per-user / MCP・programmatic) =====
+const {
+  keys: apiKeys,
+  error: apiKeysError,
+  newToken: newApiKey,
+  fetchKeys: fetchApiKeys,
+  createKey,
+  revokeKey: revokeApiKey,
+  dismissNewToken,
+} = useApiKeys();
+const keyName = ref('');
+const keyBusy = ref(false);
+const keyCopied = ref(false);
+
+async function submitCreateKey(): Promise<void> {
+  if (!keyName.value.trim()) return;
+  keyBusy.value = true;
+  try {
+    const ok = await createKey(keyName.value.trim());
+    if (ok) keyName.value = '';
+  } finally {
+    keyBusy.value = false;
+  }
+}
+
+async function copyApiKey(): Promise<void> {
+  if (!newApiKey.value) return;
+  try {
+    await navigator.clipboard.writeText(newApiKey.value);
+    keyCopied.value = true;
+    setTimeout(() => { keyCopied.value = false; }, 2000);
+  } catch {
+    /* clipboard 非対応環境は無視 (手動コピー可) */
+  }
+}
+
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('ja-JP');
+}
+
 function errText(e: unknown): string {
   const err = e as { data?: { error?: string }; message?: string };
   return err.data?.error ?? err.message ?? 'unknown error';
@@ -73,7 +113,7 @@ onMounted(async () => {
   syncCurrentFromStorage();
   if (!me.value) await fetchMe();
   editName.value = me.value?.displayName ?? '';
-  await Promise.all([fetchWorkspaces(), fetchMembers()]);
+  await Promise.all([fetchWorkspaces(), fetchMembers(), fetchApiKeys()]);
 });
 
 watch(me, (m) => {
@@ -219,6 +259,56 @@ async function save(): Promise<void> {
         </div>
         <p v-if="inviteSuccess" class="msg success">招待しました ✓ (相手の初回ログインで自動加入します)</p>
         <p v-if="inviteError" class="msg error" data-testid="invite-error">{{ inviteError }}</p>
+      </div>
+    </section>
+
+    <!-- ===== API キー (per-user / MCP・programmatic アクセス) ===== -->
+    <section class="card">
+      <h2 class="section-title">API キー (MCP / programmatic)</h2>
+      <p class="muted" style="margin-bottom: 16px">
+        CI・スクリプト・個人の MCP から<strong>あなた本人として</strong> API を叩くためのキー。
+        発行時に平文を<strong>1 回だけ</strong>表示します (再表示不可・保存はハッシュのみ)。
+        MCP では <code>BELVEDERE_MCP_TOKEN</code> にこのキーを設定します。
+      </p>
+
+      <!-- 発行直後のキー (今だけ表示) -->
+      <div v-if="newApiKey" class="token-reveal" data-testid="api-key-reveal">
+        <p class="label">新しいキー — 今だけ表示されます。今すぐコピーしてください</p>
+        <code class="token-value">{{ newApiKey }}</code>
+        <div class="edit-row" style="margin-top: 10px">
+          <button class="save-btn" data-testid="api-key-copy" @click="copyApiKey">
+            {{ keyCopied ? 'コピーしました ✓' : 'コピー' }}
+          </button>
+          <button class="revoke-btn" @click="dismissNewToken">閉じる</button>
+        </div>
+      </div>
+
+      <!-- キー一覧 -->
+      <div class="member-list">
+        <div v-for="k in apiKeys" :key="k.id" :data-testid="`api-key-row-${k.id}`" class="member-row">
+          <span class="member-name">{{ k.name }}</span>
+          <code class="member-email">{{ k.tokenPrefix }}…</code>
+          <span class="muted">
+            {{ fmtDate(k.createdAt) }}{{ k.lastUsedAt ? ` / 最終 ${fmtDate(k.lastUsedAt)}` : ' / 未使用' }}
+          </span>
+          <button class="revoke-btn" style="margin-left: auto"
+                  :data-testid="`api-key-revoke-${k.id}`" @click="revokeApiKey(k.id)">失効</button>
+        </div>
+        <p v-if="apiKeys.length === 0" class="muted">キーがありません。下で発行できます。</p>
+      </div>
+
+      <!-- 発行フォーム -->
+      <div class="field editable" style="margin-top: 20px">
+        <label class="label" for="keyName">キーを発行</label>
+        <div class="edit-row">
+          <input id="keyName" v-model="keyName" type="text" class="text-input"
+                 data-testid="api-key-name" maxlength="80" placeholder="例: mcp-local" :disabled="keyBusy" />
+          <button class="save-btn" data-testid="api-key-create"
+                  :disabled="keyBusy || keyName.trim().length === 0" @click="submitCreateKey">
+            {{ keyBusy ? '発行中…' : '発行' }}
+          </button>
+        </div>
+        <p v-if="apiKeysError" class="msg error" data-testid="api-key-error">{{ apiKeysError }}</p>
       </div>
     </section>
 
@@ -459,5 +549,32 @@ async function save(): Promise<void> {
 .role-select {
   flex: 0 0 auto;
   width: 90px;
+}
+
+/* ===== API キー: 発行直後の「今だけ表示」バナー ===== */
+.token-reveal {
+  border: var(--hairline) solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.token-value {
+  display: block;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg-0);
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-0);
+  word-break: break-all;
+  user-select: all;
+}
+
+.member-row code.member-email {
+  flex-shrink: 0;
 }
 </style>
