@@ -274,7 +274,7 @@ onMounted(() => {
       </div>
       <div class="dialog-body" style="padding-bottom: 8px">
         <p style="font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6">
-          Sprint {{ nextPlanned?.number }} (計画中) に追加するチケットを選択してください。
+          {{ nextLabel }} に追加するチケットを選択してください。
         </p>
         <div class="pull-list">
           <p v-if="pullableBacklog.length === 0"

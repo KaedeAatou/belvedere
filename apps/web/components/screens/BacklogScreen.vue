@@ -7,7 +7,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 
-const { activeSprint, nextPlanned, sprints } = useSprints();
+const { activeSprint, nextPlanned, sprints, currentLabel, nextLabel } = useSprints();
 const { findingsFor } = useFindings();
 const { members } = useMembers();
 
@@ -67,8 +67,7 @@ const noSP = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((
 const noAcc = computed(() => props.tickets.filter((t) => findingsFor(t.id).some((f) => f.ruleId === 'STORY_DOD_MISSING')).length);
 const totalSP = computed(() => props.tickets.reduce((n, t) => n + (t.estimatePt ?? 0), 0));
 
-const currentLabel = computed(() => (activeSprint.value ? `Sprint ${activeSprint.value.number}` : 'Current Sprint'));
-const nextLabel = computed(() => (nextPlanned.value ? `Sprint ${nextPlanned.value.number} (planned)` : 'Next Sprint'));
+// currentLabel / nextLabel は useSprints に集約 (name があれば name、無ければ役割ラベル / 番号は出さない / WC-c6d339fb)。
 
 // 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
 // (旧 @move-to-section emit 経路は撤去済)。本画面はフィルタ中だけ並び替えを止める責務を持つ。

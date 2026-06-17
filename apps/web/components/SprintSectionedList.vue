@@ -168,8 +168,8 @@ const newSection = ref<CreateSection>('backlog');
 // 実在する区画だけ選べるようにする (active/planned スプリントが無ければ Backlog のみ)。
 const sectionOptions = computed<{ value: CreateSection; label: string }[]>(() => {
   const opts: { value: CreateSection; label: string }[] = [{ value: 'backlog', label: 'Backlog (未スケジュール)' }];
-  if (nextPlanned.value) opts.push({ value: 'next', label: `Next — Sprint ${nextPlanned.value.number}` });
-  if (activeSprint.value) opts.push({ value: 'current', label: `Current — Sprint ${activeSprint.value.number}` });
+  if (nextPlanned.value) opts.push({ value: 'next', label: props.nextLabel ?? 'Next Sprint' });
+  if (activeSprint.value) opts.push({ value: 'current', label: props.currentLabel ?? 'Current Sprint' });
   return opts;
 });
 function sprintIdForSection(s: CreateSection): string | undefined {

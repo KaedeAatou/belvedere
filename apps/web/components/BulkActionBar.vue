@@ -137,7 +137,7 @@ function confirmRemove(): void {
               BACKLOG (未割当)
             </button>
             <button v-for="sp in sprints" :key="sp.id" class="bulk-subitem"
-                    :data-testid="`bulk-sprint-${sp.id}`" @click="pickSprint(sp.id)">S{{ sp.number }}</button>
+                    :data-testid="`bulk-sprint-${sp.id}`" @click="pickSprint(sp.id)">{{ sp.name?.trim() || `S${sp.number}` }}</button>
             <p v-if="sprints.length === 0" class="bulk-empty">スプリントなし</p>
           </div>
         </div>
