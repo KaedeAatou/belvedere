@@ -65,6 +65,9 @@ export async function runAgent(
       });
 
       if (resp.stop.type === 'tool_calls') {
+        // 実 LLM (Gemini 等) は functionCall(model ターン) → functionResponse の対応を要求するため、
+        // tool 結果を積む前に assistant の tool_call ターンを履歴へ記録する (Mock は無視するので無害)。
+        messages.push({ role: 'assistant', content: resp.text, toolCalls: resp.stop.calls });
         // tool呼び出し
         for (const call of resp.stop.calls) {
           const tool = opts.tools.get(call.name);
