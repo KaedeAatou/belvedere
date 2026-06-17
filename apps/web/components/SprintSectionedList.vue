@@ -159,7 +159,6 @@ const showCreateDialog = ref(false);
 const newTitle = ref('');
 const newType = ref<TicketType>(props.allowedTypes[0] ?? 'task');
 const newPriority = ref<Priority>('medium');
-const newEstimatePt = ref<number | null>(null);
 const newTimebox = ref<number | null>(null);
 const createError = ref<string | null>(null);
 
@@ -217,7 +216,6 @@ function openCreate(): void {
   newTitle.value = '';
   newType.value = props.allowedTypes[0] ?? 'task';
   newPriority.value = 'medium';
-  newEstimatePt.value = null;
   newTimebox.value = null;
   createError.value = null;
   usAsA.value = '';
@@ -267,9 +265,9 @@ async function submitCreate(): Promise<void> {
     input.description = composeStoryDescription();
   } else if (newType.value === 'spike') {
     if (newTimebox.value !== null) input.timeboxHours = newTimebox.value;
-  } else if (newType.value !== 'task') {
-    if (newEstimatePt.value !== null) input.estimatePt = newEstimatePt.value;
   }
+  // bug / incident / task は作成時に Story Point を設定しない。
+  // story と同様、見積もりは見積もりポーカー (EstimationPanel) で全員で決める (WC-9460f690)。
   // 起票先区画 → sprintId/status。Current/Next はスプリント内なので todo、Backlog は未スケジュール。
   const sid = sprintIdForSection(newSection.value);
   if (sid !== undefined) {
@@ -577,17 +575,6 @@ async function submitSplit(): Promise<void> {
               min="0"
               max="80"
               placeholder="4"
-            />
-          </div>
-          <div v-else-if="!isStory && newType !== 'task'" class="field">
-            <label class="label" for="ssl-new-sp">Story Point (任意)</label>
-            <input
-              id="ssl-new-sp"
-              v-model.number="newEstimatePt"
-              type="number"
-              class="text-input"
-              min="0"
-              max="100"
             />
           </div>
         </div>
