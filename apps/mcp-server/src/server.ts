@@ -25,13 +25,24 @@ export type FetchLike = (req: Request) => Response | Promise<Response>;
 export interface McpClientConfig {
   /** API のベース URL (例: https://belvedere-api-dev-cpszmcqmuq-an.a.run.app)。末尾スラッシュ不要 */
   baseUrl: string;
-  /** API の MCP サービストークン (MCP_SERVICE_TOKEN と一致させる)。空なら未設定エラーを返す */
+  /** API の MCP サービストークン (MCP_SERVICE_TOKEN と一致させる)。refreshToken 優先、無ければこちら */
   token: string;
   /** X-Workspace-Id ヘッダに載せる workspace */
   workspaceId: string;
-  /** 省略時は globalThis.fetch。テストは in-process app.fetch を注入する */
+  /**
+   * ユーザー本人認証モード: Firebase refresh token。設定時はこちらを優先し、リクエスト毎に
+   * securetoken API で ID token を発行 (キャッシュ) して Bearer に使う = MCP が「あなた本人」として
+   * 動き、所属する全ワークスペースにアクセスできる (サービストークンの単一 workspace 制約を超える)。
+   */
+  refreshToken?: string;
+  /** refresh token モードで使う Firebase Web API key (公開鍵)。省略時は dev のデフォルトを使う */
+  firebaseApiKey?: string;
+  /** 省略時は globalThis.fetch。テストは in-process app.fetch / 交換用 fetch を注入する */
   fetch?: FetchLike;
 }
+
+/** Firebase secure token endpoint (refresh_token → id_token 交換)。 */
+const SECURE_TOKEN_URL = 'https://securetoken.googleapis.com/v1/token';
 
 export interface BelvedereMcp {
   listTools(): typeof MCP_TOOLS;
@@ -47,6 +58,44 @@ interface ApiResponse {
 export function createBelvedereMcp(config: McpClientConfig): BelvedereMcp {
   const doFetch: FetchLike = config.fetch ?? ((req) => globalThis.fetch(req));
 
+  // refresh token モードの ID token キャッシュ (有効期限の 60s 手前まで再利用)。
+  let cachedIdToken: { token: string; expiresAt: number } | null = null;
+
+  // refresh token → id token を securetoken API で交換する。doFetch を使うのでテストで注入差し替え可。
+  async function exchangeRefreshToken(): Promise<{ idToken: string; expiresIn: number }> {
+    const apiKey = config.firebaseApiKey;
+    if (!apiKey) throw new Error('firebaseApiKey が未設定です (refresh token 認証に必要)');
+    const url = new URL(SECURE_TOKEN_URL);
+    url.searchParams.set('key', apiKey);
+    const body = `grant_type=refresh_token&refresh_token=${encodeURIComponent(config.refreshToken!)}`;
+    const req = new Request(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+    const res = await doFetch(req);
+    const text = await res.text();
+    if (!res.ok) {
+      throw new Error(`refresh token 交換失敗 (${res.status}): ${text.slice(0, 200)}`);
+    }
+    const json = JSON.parse(text) as { id_token?: string; expires_in?: string | number };
+    if (!json.id_token) throw new Error('refresh token 交換: id_token が返りませんでした');
+    return { idToken: json.id_token, expiresIn: Number(json.expires_in ?? 3600) };
+  }
+
+  // リクエストに載せる Bearer を決める。refreshToken があれば「あなた本人」の ID token、無ければ
+  // サービストークン。ID token は有効期限内ならキャッシュを使う。
+  async function resolveBearer(): Promise<string> {
+    if (config.refreshToken) {
+      const now = Date.now();
+      if (cachedIdToken && now < cachedIdToken.expiresAt) return cachedIdToken.token;
+      const { idToken, expiresIn } = await exchangeRefreshToken();
+      cachedIdToken = { token: idToken, expiresAt: now + (expiresIn - 60) * 1000 };
+      return idToken;
+    }
+    return config.token;
+  }
+
   async function api(
     method: string,
     path: string,
@@ -59,7 +108,7 @@ export function createBelvedereMcp(config: McpClientConfig): BelvedereMcp {
       }
     }
     const headers: Record<string, string> = {
-      Authorization: `Bearer ${config.token}`,
+      Authorization: `Bearer ${await resolveBearer()}`,
       'X-Workspace-Id': config.workspaceId,
     };
     let body: string | undefined;
@@ -89,11 +138,11 @@ export function createBelvedereMcp(config: McpClientConfig): BelvedereMcp {
     name: string,
     args: Record<string, unknown>,
   ): Promise<CallToolResult> {
-    // サービストークン未設定の早期ガード (HTTP を投げる前に分かりやすく案内する)。
-    if (!config.token) {
+    // 認証情報未設定の早期ガード (HTTP を投げる前に分かりやすく案内する)。
+    if (!config.token && !config.refreshToken) {
       return errorResult(
-        'BELVEDERE_MCP_TOKEN (サービストークン) が未設定です。docs/setup-mcp.md の手順で ' +
-          'Claude Code の mcp 設定に env BELVEDERE_MCP_TOKEN を渡してください。',
+        'BELVEDERE_MCP_TOKEN (サービストークン) または BELVEDERE_REFRESH_TOKEN (本人認証) が未設定です。' +
+          'docs/setup-mcp.md の手順で Claude Code の mcp 設定に env を渡してください。',
       );
     }
     try {
