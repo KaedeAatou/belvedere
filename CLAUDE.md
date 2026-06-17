@@ -36,8 +36,8 @@ pnpm demo                                                   # Planner Mock LLM �
 pnpm --filter @belvedere/cli dev <ritual> "..."             # plan / daily / refinement / review / retro
 pnpm --filter @belvedere/web dev                            # Nuxt 3 :3000
 pnpm --filter @belvedere/api dev                            # Hono :8080
-pnpm --filter @belvedere/mcp-server smoke                   # MCP server 14 ケース動作確認
-pnpm --filter @belvedere/mcp-server dev                     # stdio MCP server (Claude Code 接続用)
+pnpm --filter @belvedere/mcp-server smoke                   # MCP server 19 ケース (in-process API 駆動)
+pnpm --filter @belvedere/mcp-server dev                     # stdio MCP server (API HTTP クライアント / Claude Code 接続用)
 cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 8081
 ```
 
@@ -69,7 +69,7 @@ apps/
   api/             ← Hono on Cloud Run
   web/             ← Nuxt 3 + Vue 3 SSR (nitro=node-server, Cloud Run 想定)
   orchestrator-py/ ← FastAPI + ADK 雛形 (Python 3.11)
-  mcp-server/      ← MCP server (stdio Phase 0 完成 / HTTP Phase 1-D で Cloud Run)
+  mcp-server/      ← MCP server (stdio / Belvedere API の HTTP クライアント / サービストークン認証。Firestore 直結しない)
 ```
 
 **未実装プロバイダは silent fallback せず throw する** = GCP セットアップ前提のサインポスト:
