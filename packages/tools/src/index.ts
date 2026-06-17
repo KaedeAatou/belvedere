@@ -2,6 +2,8 @@ import type { AgentTool } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
 import type { Ritual } from '@belvedere/shared';
 import { runTicketRules, buildRuleContext } from './ticket-rules';
+import { checkTicketQuality } from './quality';
+import { checkBacklogRefinement } from './refinement';
 
 // ルールエンジンを外部 (apps/api の finding-handlers 等) からも使えるよう re-export
 export {
@@ -12,6 +14,16 @@ export {
   type TicketRule,
   type RuleContext,
 } from './ticket-rules';
+
+// チケット品質診断の純粋関数も外部 (apps/api GET /api/tickets/:id/quality) から使えるよう re-export
+export { checkTicketQuality, type TicketQualityResult } from './quality';
+// バックログリファインメント 6 観点診断の純粋関数 (apps/api GET /api/refinement) も re-export
+export {
+  checkBacklogRefinement,
+  type BacklogRefinementInput,
+  type BacklogRefinementResult,
+  type RefinementSignal,
+} from './refinement';
 
 /**
  * Tool ファクトリ。RepoContainer + workspaceId を closure cap し、各 Tool の
@@ -125,20 +137,8 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
       if (!t) return { error: `ticket not found: ${ticketId}` };
       // IDOR ガード: 他 workspace の ticket を get した時は「存在しない」と同じレスポンスを返す。
       if (t.workspaceId !== workspaceId) return { error: `ticket not found: ${ticketId}` };
-      const issues: string[] = [];
-      if (!t.acceptanceCriteria || t.acceptanceCriteria.length === 0) issues.push('DoD (acceptanceCriteria) が空');
-      if (t.estimatePt === undefined) issues.push('Story Point (estimatePt) 未定');
-      // User Story 紐付けは parentTicketId が US-* で始まるかで判定 (将来は専用フィールド)
-      const hasStoryLink = (t.parentTicketId ?? '').startsWith('US-');
-      if (!hasStoryLink) issues.push('User Story 紐付けなし');
-      const qualityRate = (4 - issues.length - (t.title ? 0 : 1)) / 4;
-      return {
-        ticketId,
-        title: t.title,
-        issues,
-        qualityRate: Math.max(0, qualityRate),
-        ok: issues.length === 0,
-      };
+      // 診断ロジックは純粋関数 checkTicketQuality に集約 (API endpoint と単一ソース)。
+      return checkTicketQuality(t);
     },
   };
 
@@ -169,111 +169,21 @@ export function buildTools(repo: RepoContainer, workspaceId: string): AgentTool[
       },
     },
     async invoke({ sprintId, projectId }) {
-      const tickets = await repo.tickets.list({
-        workspaceId,
-        ...(sprintId !== undefined && { sprintId }),
-        ...(projectId !== undefined && { projectId }),
-      });
-      const findings: Array<{ ticketId: string; signal: string; detail: string }> = [];
-
-      for (const t of tickets) {
-        if ((t.estimatePt ?? 0) > 8) {
-          findings.push({
-            ticketId: t.id,
-            signal: 'oversize_story',
-            detail: `Story Point ${t.estimatePt} (>8)。1スプリントに収まらない可能性、分割推奨。`,
-          });
-        }
-        const hasBlockedBy = (t.blockedBy?.length ?? 0) > 0;
-        const hasStoryLink = (t.parentTicketId ?? '').startsWith('US-');
-        if (!hasBlockedBy && !hasStoryLink) {
-          findings.push({
-            ticketId: t.id,
-            signal: 'unstructured_dependency',
-            detail: 'blockedBy / parentTicketId (US-紐付け) のいずれも未設定。依存関係を整理してください。',
-          });
-        }
-        if (t.valueImpact === undefined) {
-          findings.push({
-            ticketId: t.id,
-            signal: 'value_impact_missing',
-            detail: 'valueImpact (プロダクトゴール貢献度) が未設定。PO に確認推奨。',
-          });
-        }
-        if (t.priority === 'urgent' && t.valueImpact === 'low') {
-          findings.push({
-            ticketId: t.id,
-            signal: 'priority_value_mismatch',
-            detail: 'priority=urgent だが valueImpact=low。緊急度の根拠を確認。',
-          });
-        }
-        if (t.priority === 'low' && t.valueImpact === 'high') {
-          findings.push({
-            ticketId: t.id,
-            signal: 'priority_value_mismatch',
-            detail: 'priority=low だが valueImpact=high。プロダクトゴール直結なので priority 引き上げ推奨。',
-          });
-        }
-        if (t.priority === 'medium' && t.valueImpact === 'high') {
-          findings.push({
-            ticketId: t.id,
-            signal: 'priority_value_mismatch_soft',
-            detail: 'priority=medium だが valueImpact=high。プロダクトゴール貢献度の高さに比して優先度が低い可能性。',
-          });
-        }
-      }
-
-      // SP 分散異常 (sprintId 単位)
-      if (tickets.length >= 3) {
-        const pts = tickets.map((t) => t.estimatePt ?? 0).filter((p) => p > 0);
-        if (pts.length >= 3) {
-          const mean = pts.reduce((a, b) => a + b, 0) / pts.length;
-          const variance = pts.reduce((a, b) => a + (b - mean) ** 2, 0) / pts.length;
-          const stddev = Math.sqrt(variance);
-          const cv = mean > 0 ? stddev / mean : 0;
-          if (cv > 0.6) {
-            findings.push({
-              ticketId: '*',
-              signal: 'sp_variance_high',
-              detail: `Story Point の分散が大きい (CV=${cv.toFixed(2)})。粒度差を再見積推奨。`,
-            });
-          }
-        }
-      }
-
-      // 第6観点: 戦略整合性 — Epic.rationale (戦略意図 / Why) が空のものを警告
-      const epics = await repo.epics.list({
-        workspaceId,
-        ...(projectId !== undefined && { projectId }),
-      });
-      for (const e of epics) {
-        if (!e.rationale || e.rationale.trim().length === 0) {
-          findings.push({
-            ticketId: e.id,
-            signal: 'strategic_intent_missing',
-            detail: `Epic ${e.id} (${e.name}) に rationale (戦略意図 / Why) が未設定。配下のチケットが「何のために?」を見失う形骸化サイン。`,
-          });
-        }
-      }
-
-      // 種別ルールエンジン (ticket-rules.ts) の refinement findings を additive に合成する。
-      // 既存 6 観点はそのまま、type/Spike/Bug/Incident 系の新観点を上乗せ (T4 / 2026-06-11)。
-      const [allTickets, sprints, estimations] = await Promise.all([
+      // 6 観点 + 種別ルールの診断ロジックは純粋関数 checkBacklogRefinement に集約
+      // (API endpoint GET /api/refinement と単一ソース)。
+      const [tickets, epics, sprints, estimations] = await Promise.all([
         repo.tickets.list({ workspaceId }),
+        repo.epics.list({ workspaceId }),
         repo.sprints.list({ workspaceId }),
         repo.estimations.list({ workspaceId }),
       ]);
-      const ruleCtx = buildRuleContext(new Date().toISOString(), allTickets, sprints, estimations);
-      const ruleFindings = runTicketRules('refinement', ruleCtx);
-
-      return {
-        scanned: tickets.length,
-        scannedEpics: epics.length,
-        findingCount: findings.length,
-        findings,
-        // 種別ルール由来 (ruleId / severity / action 付き)
-        ruleFindings,
-      };
+      return checkBacklogRefinement(
+        { tickets, epics, sprints, estimations, now: new Date().toISOString() },
+        {
+          ...(sprintId !== undefined && { sprintId }),
+          ...(projectId !== undefined && { projectId }),
+        },
+      );
     },
   };
 
