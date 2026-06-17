@@ -8,7 +8,7 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
-import { buildTools, checkTicketQuality, checkBacklogRefinement } from '@belvedere/tools';
+import { buildTools, checkTicketQuality, checkBacklogRefinement, type KnowledgeSearcher } from '@belvedere/tools';
 import type { LLMProvider } from '@belvedere/llm';
 import type { RepoContainer, TicketQuery } from '@belvedere/repo';
 import type { AgentName } from '@belvedere/shared';
@@ -98,8 +98,8 @@ function respond<T>(c: Context, r: HandlerResult<T>): Response {
  * Belvedere API の Hono app を組み立てて返す。serve() はしない (呼び出し側の責務)。
  * repo / llm を引数で受けることで、テストは memory repo + mock llm を注入できる。
  */
-export function createApp(deps: { repo: RepoContainer; llm: LLMProvider }): ApiApp {
-  const { repo, llm } = deps;
+export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowledge?: KnowledgeSearcher }): ApiApp {
+  const { repo, llm, knowledge } = deps;
   const app = new Hono<{ Variables: ApiVariables }>();
 
   // ------- Health / Root (認証不要) -------
@@ -107,7 +107,12 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider }): ApiA
   // factory.ts は REPO_BACKEND が undefined / null / '' の場合 memory backend を返すので、
   // /health の表示も同じ規約に揃える (?? は null/undefined しか coalesce しないため `||` を使う)。
   app.get('/health', (c) =>
-    c.json({ status: 'ok', llm: llm.name, repo: process.env.REPO_BACKEND || 'memory' }),
+    c.json({
+      status: 'ok',
+      llm: llm.name,
+      repo: process.env.REPO_BACKEND || 'memory',
+      knowledge: knowledge?.name ?? 'disabled',
+    }),
   );
 
   // ------- CORS (Phase 1-C / 2026-06-11) -------
@@ -409,7 +414,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider }): ApiA
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
     // workspaceId を closure cap した tools を毎リクエストで作成 (request-scoped)。
-    const tools = buildRegistry(buildTools(repo, workspaceId));
+    const tools = buildRegistry(buildTools(repo, workspaceId, knowledge ? { knowledge } : undefined));
 
     const run = await runAgent(
       {
