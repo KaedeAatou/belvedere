@@ -334,3 +334,24 @@ export interface Member {
   slackUserId?: string;
   githubUsername?: string;
 }
+
+// === ApiKey ===
+// per-user API キー (programmatic アクセス用トークン)。Firebase ID token / MCP サービストークンに
+// 次ぐ第3の認証経路。発行ユーザー本人として振る舞い (userId/email を解決)、workspace は
+// 既存どおり X-Workspace-Id で選択する。平文トークンは保存せず sha256 ハッシュだけ持つ
+// (発行時 1 回だけ平文を返す)。
+export interface ApiKey {
+  id: string;          // 'apikey-xxxxxxxx' (generateId('apikey'))
+  workspaceId: string; // 発行時の workspace (管理一覧のスコープ)
+  userId: string;      // 所有者 = 発行ユーザー
+  ownerEmail: string;  // AuthenticatedUser.email 復元用 (lowercase)
+  name: string;        // ラベル
+  tokenHash: string;   // sha256(token) hex。平文は保存しない
+  tokenPrefix: string; // 表示用先頭 (例 'blv_a1b2c3')
+  createdAt: string;   // ISO8601
+  createdBy: string;   // userId (audit)
+  lastUsedAt?: string; // 認証成功時に best-effort 更新
+}
+
+/** list/get で返す安全ビュー (tokenHash を絶対に外へ出さない)。 */
+export type ApiKeyView = Omit<ApiKey, 'tokenHash'>;

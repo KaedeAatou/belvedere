@@ -23,6 +23,7 @@ import type {
   Epic,
   UserStory,
   Member,
+  ApiKey,
   Ceremony,
   AgentRun,
   CeremonyHealthScore,
@@ -156,6 +157,20 @@ export const MemberSchema = z.object({
   role: z.enum(['owner', 'sm', 'po', 'dev', 'guest']),
   slackUserId: z.string().optional(),
   githubUsername: z.string().optional(),
+});
+
+// === ApiKey ===
+export const ApiKeySchema = z.object({
+  id: z.string(),
+  workspaceId: z.string(),
+  userId: z.string(),
+  ownerEmail: z.string(),
+  name: z.string(),
+  tokenHash: z.string(),
+  tokenPrefix: z.string(),
+  createdAt: z.string(),
+  createdBy: z.string(),
+  lastUsedAt: z.string().optional(),
 });
 
 // === Ceremony ===
@@ -318,6 +333,7 @@ const _check_Project: Equal<z.infer<typeof ProjectSchema>, Project> = true;
 const _check_Epic: Equal<z.infer<typeof EpicSchema>, Epic> = true;
 const _check_UserStory: Equal<z.infer<typeof UserStorySchema>, UserStory> = true;
 const _check_Member: Equal<z.infer<typeof MemberSchema>, Member> = true;
+const _check_ApiKey: Equal<z.infer<typeof ApiKeySchema>, ApiKey> = true;
 const _check_Ceremony: Equal<z.infer<typeof CeremonySchema>, Ceremony> = true;
 const _check_AgentRun: Equal<z.infer<typeof AgentRunSchema>, AgentRun> = true;
 const _check_CeremonyHealth: Equal<z.infer<typeof CeremonyHealthScoreSchema>, CeremonyHealthScore> = true;
@@ -333,6 +349,7 @@ void _check_Project;
 void _check_Epic;
 void _check_UserStory;
 void _check_Member;
+void _check_ApiKey;
 void _check_Ceremony;
 void _check_AgentRun;
 void _check_CeremonyHealth;
