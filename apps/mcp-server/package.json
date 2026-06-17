@@ -11,15 +11,17 @@
     "smoke": "tsx src/smoke.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
-    "@belvedere/shared": "workspace:*",
-    "@belvedere/seed": "workspace:*",
+    "@belvedere/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@belvedere/api": "workspace:*",
     "@belvedere/repo": "workspace:*",
     "@belvedere/llm": "workspace:*",
-    "@belvedere/agent": "workspace:*",
-    "@belvedere/tools": "workspace:*"
+    "vitest": "^4.1.0"
   }
 }

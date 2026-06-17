@@ -135,11 +135,20 @@ export const MCP_TOOLS: Tool[] = [
       properties: {
         title: { type: 'string' },
         description: { type: 'string' },
+        type: {
+          type: 'string',
+          enum: ['story', 'task', 'spike', 'bug', 'incident'],
+          description: 'チケット種別。bug を起票する時は "bug" を指定する (bugfix ループの起点)。',
+        },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         valueImpact: { type: 'string', enum: ['low', 'medium', 'high'] },
         ritual: {
           type: 'string',
           enum: ['planning', 'daily', 'refinement', 'review', 'retrospective'],
+        },
+        status: {
+          type: 'string',
+          enum: ['backlog', 'todo', 'in-progress', 'review', 'done'],
         },
         sprintId: { type: 'string' },
         assigneeId: { type: 'string' },
@@ -147,6 +156,8 @@ export const MCP_TOOLS: Tool[] = [
         acceptanceCriteria: { type: 'array', items: { type: 'string' } },
         parentTicketId: { type: 'string' },
         projectId: { type: 'string' },
+        labels: { type: 'array', items: { type: 'string' } },
+        blockedBy: { type: 'array', items: { type: 'string' } },
       },
       required: ['title'],
     },
