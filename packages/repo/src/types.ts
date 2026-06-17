@@ -10,6 +10,7 @@ import type {
   Ticket,
   Sprint,
   Member,
+  ApiKey,
   Ceremony,
   AgentRun,
   CeremonyHealthScore,
@@ -114,6 +115,20 @@ export interface MemberRepository {
   delete(workspaceId: string, userId: string): Promise<void>;
 }
 
+export interface ApiKeyRepository {
+  /** 管理一覧: 発行 workspace スコープ + 任意で userId 絞り込み (本人のキーだけ見せる用)。 */
+  list(opts: { workspaceId: string; userId?: string }): Promise<ApiKey[]>;
+  get(id: string): Promise<ApiKey | null>;
+  /**
+   * 認証経路用。authMiddleware が Bearer トークンの sha256 ハッシュで本人を解決する。
+   * workspaceMiddleware より前に呼ばれるため workspace 縛り無しの横断 equality 検索
+   * (members.listByUserId と同じ位置づけ)。tokenHash は高エントロピーなので衝突は実質ゼロ。
+   */
+  getByHash(tokenHash: string): Promise<ApiKey | null>;
+  upsert(k: ApiKey): Promise<void>;
+  delete(id: string): Promise<void>;
+}
+
 export interface CeremonyRepository {
   list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]>;
   get(id: string): Promise<Ceremony | null>;
@@ -163,6 +178,7 @@ export interface RepoContainer {
   epics: EpicRepository;
   stories: UserStoryRepository;
   members: MemberRepository;
+  apiKeys: ApiKeyRepository;
   ceremonies: CeremonyRepository;
   agentRuns: AgentRunRepository;
   ceremonyHealth: CeremonyHealthRepository;
