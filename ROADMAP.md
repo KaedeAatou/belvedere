@@ -115,7 +115,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 
 ### Phase 1-D MCP HTTP クライアント化 + ドッグフード開始 / 2026-06-17 ✅ 実質完了 (前倒し / 縮退ライン通り stdio)
 - [x] **MCP server を Belvedere API の HTTPS クライアントに刷新** (stdio のまま。Cloud Run への MCP デプロイは縮退ライン 6/24 通り見送り = ローカル Claude Code 経由)。デプロイ済み dev Firestore を実データで読み書き
-- [x] **3 認証モード**: サービストークン (`svc:mcp` / po 最小権限) / Firebase refresh token / **per-user API キー (`blv_...` / sha256 ハッシュ保管 / 発行・失効 UI を設定画面に追加)**。OAuth 2.1 でなく per-user API キーで簡素化
+- [x] **2 認証モード**: サービストークン (`svc:mcp` / po 最小権限 / 機械用) / **per-user API キー (`blv_...` / sha256 ハッシュ保管 / 発行・失効 UI を設定画面に追加 / 本人用)**。OAuth 2.1 でなく per-user API キーで簡素化。Firebase refresh token 経路は attack surface 削減のため 2026-06-17 廃止 (① で代替可・取得 UI 無し)
 - [x] Claude Code から本番 Belvedere の MCP に **本人認証で接続** (ws-belvedere-dev)
 - [x] **ドッグフード開始**: 「web で起票 → MCP 取得 → ローカル修正 → デプロイ → review」が実データで稼働。`belvedere-ticket-cycle` skill + `/loop 1h` で毎時自動巡回 (明確は実装→review / 曖昧は相談、done はユーザー受け入れ)。初回: SP ポーカー化 (WC-9460f690) / スプリント名表示 (WC-c6d339fb)
 
