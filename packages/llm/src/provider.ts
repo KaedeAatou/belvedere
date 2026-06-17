@@ -5,6 +5,13 @@ export interface LLMMessage {
   content: string;
   toolCallId?: string;
   toolName?: string;
+  /**
+   * assistant ロールが tool を呼んだターンの記録 (実 LLM の履歴整合に必要)。
+   * Gemini 等は functionCall(model ターン) → functionResponse の対応を要求するため、
+   * runtime は tool 実行前にこのフィールド付き assistant メッセージを履歴へ積む。
+   * Mock はこのフィールドを参照しない (system prompt と最後のメッセージで判定するため無害)。
+   */
+  toolCalls?: LLMToolCall[];
 }
 
 export interface LLMToolSpec {
