@@ -170,3 +170,56 @@ describe('vote / reveal / adopt フロー', () => {
     expect(res.status).toBe(400);
   });
 });
+
+// adopt は ticket.estimatePt を書き換える副作用を持つため、二重採用・無効値・割れ票での
+// 挙動が崩れると見積もりが静かに化ける。既存実装の「正しい挙動」を回帰ガードとして固定する
+// (赤を踏むバグ修正ではなく、現挙動の凍結 / T3b・2026-06-18)。
+describe('adopt 回帰ガード (副作用の凍結)', () => {
+  let repo: RepoContainer;
+  beforeEach(async () => { repo = createMemoryRepoContainer(); await seedTicket(repo); await startEstimation(repo, owner, 'WC-EST', NOW); });
+
+  it('採用済セッションへの再 adopt は 409 (activeSession が adopted を除外) で estimatePt を二重更新しない', async () => {
+    await voteEstimation(repo, dev, 'WC-EST', { value: 5 }, NOW);
+    await voteEstimation(repo, dev2, 'WC-EST', { value: 5 }, NOW);
+    await revealEstimation(repo, owner, 'WC-EST', NOW);
+    const first = await adoptEstimation(repo, owner, 'WC-EST', { value: 5 }, NOW);
+    expect(first.ok).toBe(true);
+    // 二度目: ACTIVE_STATUS=['voting','revealed'] が adopted を除外 → activeSession=null → not_revealed 409。
+    const second = await adoptEstimation(repo, owner, 'WC-EST', { value: 13 }, '2026-06-11T10:00:00Z');
+    expect(second.ok).toBe(false);
+    if (second.ok) return;
+    expect(second.status).toBe(409);
+    // 二度目の 13 で estimatePt が二重更新されていない (最初の 5 のまま)。
+    const t = await repo.tickets.get('WC-EST');
+    expect(t?.estimatePt).toBe(5);
+  });
+
+  it('非 fibonacci 値の adopt は 400 (revealed チェックの後・mutation の前) → revealed のまま後続 adopt 可', async () => {
+    await voteEstimation(repo, dev, 'WC-EST', { value: 3 }, NOW);
+    await voteEstimation(repo, dev2, 'WC-EST', { value: 5 }, NOW);
+    await revealEstimation(repo, owner, 'WC-EST', NOW);
+    // 4 は fibonacci ポイントでない。revealed なので 409 ではなく、schema で 400 になる (順序の固定)。
+    const bad = await adoptEstimation(repo, owner, 'WC-EST', { value: 4 }, NOW);
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.status).toBe(400);
+    // mutation 前に弾かれるので estimatePt 未更新 + session は revealed のまま。
+    expect((await repo.tickets.get('WC-EST'))?.estimatePt).toBeUndefined();
+    const ok = await adoptEstimation(repo, owner, 'WC-EST', { value: 5 }, NOW);
+    expect(ok.ok).toBe(true);
+    expect((await repo.tickets.get('WC-EST'))?.estimatePt).toBe(5);
+  });
+
+  it('割れ票でも投票集合に縛られず合意値 (どの票でもない fibonacci) を採用できる', async () => {
+    // 投票は 3 と 13 に割れる。中央値 8 はどちらの票でもないが採用できる
+    // (合意値の算出は UI/composable 層、handler は fibonacci である限り値を強制しない)。
+    await voteEstimation(repo, dev, 'WC-EST', { value: 3 }, NOW);
+    await voteEstimation(repo, dev2, 'WC-EST', { value: 13 }, NOW);
+    await revealEstimation(repo, owner, 'WC-EST', NOW);
+    const res = await adoptEstimation(repo, owner, 'WC-EST', { value: 8 }, NOW);
+    expect(res.ok).toBe(true);
+    if (!res.ok || res.body.status === 'voting') return;
+    expect(res.body.adoptedValue).toBe(8);
+    expect((await repo.tickets.get('WC-EST'))?.estimatePt).toBe(8);
+  });
+});
