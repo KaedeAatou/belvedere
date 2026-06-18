@@ -14,7 +14,7 @@
 
 import type { ComputedRef } from 'vue';
 import type { Ticket } from '@belvedere/shared';
-import { compareTicketOrder } from '@belvedere/shared';
+import { partitionTicketsBySections } from '@belvedere/shared';
 
 export interface SprintSections {
   /** active sprint のチケット (compareTicketOrder 昇順)。 */
@@ -26,37 +26,25 @@ export interface SprintSections {
 }
 
 /**
+ * 3 区画への振り分けは純粋関数 partitionTicketsBySections (@belvedere/shared) に委譲し、
+ * 本 composable は active / next sprint の id を解決して渡す薄いラッパに徹する。
+ * 分類ロジックの退化入力テストは packages/shared/test/sections.test.ts が直接担保する。
+ *
  * @param tickets 全チケット配列 (ComputedRef)。フィルタ済みでも未フィルタでも可。
  */
 export function useSprintSections(tickets: ComputedRef<Ticket[]>): SprintSections {
   const { activeSprint, nextPlanned } = useSprints();
 
-  const current = computed<Ticket[]>(() => {
-    const id = activeSprint.value?.id;
-    if (!id) return [];
-    return [...tickets.value.filter((t) => t.sprintId === id)].sort(compareTicketOrder);
-  });
+  const sections = computed(() =>
+    partitionTicketsBySections(tickets.value, {
+      activeId: activeSprint.value?.id,
+      nextPlannedId: nextPlanned.value?.id,
+    }),
+  );
 
-  const next = computed<Ticket[]>(() => {
-    const id = nextPlanned.value?.id;
-    if (!id) return [];
-    return [...tickets.value.filter((t) => t.sprintId === id)].sort(compareTicketOrder);
-  });
-
-  const backlog = computed<Ticket[]>(() => {
-    const activeId = activeSprint.value?.id;
-    const nextId = nextPlanned.value?.id;
-    // sprintId が active / next のどちらにも一致しないものが BACKLOG。
-    // sprintId 無し (undefined) は当然 BACKLOG。完了済 sprint に属す古いチケットも BACKLOG に出す
-    // (CURRENT/NEXT のみが特別区画で、それ以外は全部「未スケジュール」扱い)。
-    return [...tickets.value.filter((t) => {
-      const sid = t.sprintId;
-      if (sid === undefined) return true;
-      if (activeId !== undefined && sid === activeId) return false;
-      if (nextId !== undefined && sid === nextId) return false;
-      return true;
-    })].sort(compareTicketOrder);
-  });
-
-  return { current, next, backlog };
+  return {
+    current: computed(() => sections.value.current),
+    next: computed(() => sections.value.next),
+    backlog: computed(() => sections.value.backlog),
+  };
 }

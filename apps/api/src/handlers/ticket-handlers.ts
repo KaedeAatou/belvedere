@@ -19,7 +19,7 @@ import {
   stripUndefinedPartial,
   generateId,
   applyStatusTransition,
-  ORDER_STEP,
+  computeReorderUpdates,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 
@@ -215,24 +215,10 @@ export async function reorderTickets(
     survivors.push(existing);
   }
   // 生存分を 1..N で密再採番 (skip した穴は詰める)。movedId が生存していれば sprintId も変更。
-  // **実際に orderIndex/sprintId が変わる行だけ** upsert する: 1 件移動では隣接帯しか index が
-  // ずれないので、動かしていない無関係チケットへの write 増幅 + updatedAt 汚染を避けられる。
+  // **実際に orderIndex/sprintId が変わる行だけ** を返す算術は純粋関数 computeReorderUpdates
+  // (@belvedere/shared) に委譲する (退化入力テストは packages/shared/test/order.test.ts が担保)。
   const now = new Date().toISOString();
-  const updates: Ticket[] = [];
-  for (let i = 0; i < survivors.length; i++) {
-    const existing = survivors[i]!;
-    const newOrder = (i + 1) * ORDER_STEP;
-    const isMoved = movedId !== undefined && existing.id === movedId && sprintId !== undefined;
-    const clearSprint = isMoved && (sprintId === null || sprintId === '');
-    const setSprint = isMoved && !clearSprint ? (sprintId as string) : undefined;
-    const orderChanged = existing.orderIndex !== newOrder;
-    const sprintChanged = isMoved && (clearSprint ? existing.sprintId !== undefined : existing.sprintId !== setSprint);
-    if (!orderChanged && !sprintChanged) continue; // 変化なし — 触らない (write/updatedAt を温存)
-    let next: Ticket = { ...existing, orderIndex: newOrder, updatedAt: now };
-    if (clearSprint) delete next.sprintId; // 未割当 (BACKLOG) へ。optional string なので key ごと削除。
-    else if (setSprint !== undefined) next = { ...next, sprintId: setSprint };
-    updates.push(next);
-  }
+  const updates = computeReorderUpdates(survivors, { movedId, sprintId, now });
   // 変わった行だけ書込 + 返す (frontend は id でマージし未変更行は現状維持)。
   await Promise.all(updates.map((t) => repo.tickets.upsert(t)));
   return { ok: true, status: 200, body: updates };
