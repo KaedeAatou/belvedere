@@ -14,6 +14,7 @@ import type { RetroTry } from '@belvedere/shared';
 import { stripUndefinedPartial, generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
+import { loadOwned, deleteOwned } from './crud-factory';
 
 // ------- リクエスト body schema -------
 
@@ -71,11 +72,9 @@ export async function patchRetroTry(
   id: string,
   body: unknown,
 ): Promise<HandlerResult<RetroTry>> {
-  const existing = await repo.retroTries.get(id);
-  // IDOR: 別 workspace のものは「存在しない」扱い (情報漏えい防止)
-  if (!existing || existing.workspaceId !== ctx.workspaceId) {
-    return { ok: false, status: 404, body: { error: 'not_found' } };
-  }
+  const loaded = await loadOwned(repo.retroTries, ctx, id);
+  if (!loaded.ok) return loaded.response;
+  const existing = loaded.entity;
   const parsed = RetroTryPatchBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
@@ -97,10 +96,5 @@ export async function deleteRetroTry(
   ctx: HandlerContext,
   id: string,
 ): Promise<HandlerResult<{ deleted: string }>> {
-  const existing = await repo.retroTries.get(id);
-  if (!existing || existing.workspaceId !== ctx.workspaceId) {
-    return { ok: false, status: 404, body: { error: 'not_found' } };
-  }
-  await repo.retroTries.delete(id);
-  return { ok: true, status: 200, body: { deleted: id } };
+  return deleteOwned(repo.retroTries, ctx, id);
 }

@@ -6,6 +6,7 @@ import type { Epic } from '@belvedere/shared';
 import { ValueImpactSchema, stripUndefinedPartial, generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
+import { loadOwned } from './crud-factory';
 
 export const EpicCreateBodySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -54,10 +55,9 @@ export async function patchEpic(
   id: string,
   body: unknown,
 ): Promise<HandlerResult<Epic>> {
-  const existing = await repo.epics.get(id);
-  if (!existing || existing.workspaceId !== ctx.workspaceId) {
-    return { ok: false, status: 404, body: { error: 'not_found' } };
-  }
+  const loaded = await loadOwned(repo.epics, ctx, id);
+  if (!loaded.ok) return loaded.response;
+  const existing = loaded.entity;
   const parsed = EpicPatchBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
