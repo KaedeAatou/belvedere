@@ -15,6 +15,7 @@ import { z } from 'zod';
 import type { LLMProvider, LLMRequest } from '@belvedere/llm';
 import { buildStoryQualityPrompt } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
+import { modelForAgent } from '@belvedere/shared';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
 
 // ------- 契約型 (TicketFinding の流儀: 生成元 package 近傍にローカル定義。frontend は同形をミラー) -------
@@ -90,7 +91,7 @@ export async function checkStoryQuality(
   const sprintGoal = active?.goal && active.goal.trim().length > 0 ? active.goal.trim() : null;
 
   const req: LLMRequest = {
-    model: 'gemini-2.5-pro',
+    model: modelForAgent('refinement'),
     messages: [
       { role: 'system', content: buildStoryQualityPrompt(sprintGoal) },
       {
