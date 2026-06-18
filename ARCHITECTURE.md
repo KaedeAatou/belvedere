@@ -30,7 +30,6 @@
 graph TB
     subgraph User["👤 ユーザー / チーム"]
         U1[Web Browser]
-        U2[Slack]
         U3[GitHub]
     end
 
@@ -52,13 +51,13 @@ graph TB
 
     subgraph Backend["Backend Services (Cloud Run)"]
         API["apps/api<br/>Hono CRUD<br/>belvedere-api-dev"]
-        ORC["orchestrator<br/>(gemini-2.5-flash)"]
+        ORC["orchestrator = SM/単一窓口<br/>(gemini-2.5-flash)"]
         AG_P["agent-planner<br/>FLOOR 01"]
         AG_D["agent-daily<br/>FLOOR 02"]
         AG_F["agent-refinement<br/>FLOOR 03 (6観点 + 種別ルール)"]
         AG_R["agent-reviewer<br/>FLOOR 04"]
         AG_X["agent-retrospective<br/>FLOOR 05"]
-        TOOL["tool-server<br/>Slack/GitHub/Calendar"]
+        TOOL["tool-server<br/>GitHub/Calendar"]
         MCP["mcp-server (FLOOR M)<br/>stdio / API HTTP クライアント / 14 Tools"]
     end
 
@@ -106,17 +105,15 @@ graph TB
     CC & CUR --> MCP
     MCP -->|HTTPS Bearer service token| API
 
-    %% --- Agent オーケストレーション ---
-    WEB -.Phase 3 以降.-> ORC
+    %% --- Agent オーケストレーション (画面操作 = 単一窓口。スケジュール/Pub-Sub トリガは不採用) ---
+    WEB -->|画面操作 = 単一窓口| ORC
     ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
     AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
     AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
-    TOOL --> U2 & U3
+    TOOL --> U3
     AG_P & AG_D & AG_F & AG_R & AG_X --> FS
     AG_P & AG_D & AG_F & AG_R & AG_X --> VS
-    SCHED -.儀式30分前.-> ORC
-    PUBSUB --> ORC
-    ORC -.fan-out.-> AG_P & AG_D & AG_F & AG_R & AG_X
+    AG_P & AG_D & AG_F & AG_R & AG_X -.協議.-> ORC
 
     %% --- 共通インフラ ---
     Backend --> LOG & TR & ER
@@ -132,10 +129,10 @@ graph TB
     class API,GH,WIF,CB,AR,LOG deployed
 
     %% 🟡 Implemented (コードあり / ローカル動作 / 空 instance)
-    class WEB,MCP,ORC,AG_P,AG_D,AG_F,AG_R,AG_X,FS,GCS implemented
+    class WEB,MCP,ORC,AG_P,AG_D,AG_F,AG_R,AG_X,FS,GCS,GEM implemented
 
     %% ⚪ Planned (Phase 1-B 以降に実装)
-    class LB,IAP,TOOL,GEM,ADK,VS,SM,PUBSUB,SCHED,TR,ER planned
+    class LB,IAP,TOOL,ADK,VS,SM,PUBSUB,SCHED,TR,ER planned
 ```
 
 ### 実装ステータス対応表 (2026-05-06 時点)
@@ -147,16 +144,16 @@ graph TB
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
 | 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | MCP | stdio / API HTTP クライアント (14 Tools) / サービストークン認証で API の workspace-scope・IDOR ガードを通る / smoke 19 + 統合テスト緑 / Firestore 直結しない |
-| 🟡 implemented | ORC + 5 Agent | TS `runAgent` で 5 Agent 動作 (Mock LLM)。Orchestrator は **ハイブリッド方針** (TS scheduler 実行 + ADK 編成デモ / `AGENT_DESIGN.md §2-0`)。`orchestrator-py` は FastAPI + ADK 雛形 (`USE_REAL_ADK=true` は未実装)。**Gemini provider は実装済** (下記 GEM)、接続検証は Phase A |
+| 🟡 implemented | ORC + 5 Agent | TS `runAgent` で 5 Agent 動作 (Mock LLM)。Orchestrator は **スクラムマスター＝全画面操作の単一窓口** で、達人の協議を統括 (`AGENT_DESIGN.md §2-0`)。実行は **TS 実行ランナー**（**画面操作トリガのみ・スケジューラ無し**）+ ピッチ用 ADK 編成デモ。`orchestrator-py` は FastAPI + ADK 雛形 (`USE_REAL_ADK=true` は未実装)。**Gemini provider は実装済** (下記 GEM)、接続検証は Phase A |
 | 🟢 deployed | FS | Firestore (default) instance 作成済 / 実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
-| ⚪ planned | TOOL | Slack / GitHub Tool server (Phase 3) |
+| ⚪ planned | TOOL | GitHub / Calendar Tool server (Phase 3)。**Slack は不採用**（agent 出力は AI パネル / `AGENT_DESIGN.md §6`）|
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
 | ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
 | 🟡 implemented | GEM | Gemini provider 実装済 (`packages/llm/src/gemini.ts` / REST 直叩き / functionCall マッピング済)。`LLM_PROVIDER=gemini` 切替だけで Mock→Gemini 成立。残: API キー注入 + 疎通検証 (Phase A) |
 | ⚪ planned | ADK / VS | ADK = Orchestrator 編成デモ (Phase C) / Vector Search (RAG) は Phase E |
 | ⚪ planned | SM | Phase 3 (Gemini API key) |
-| ⚪ planned | PUBSUB / SCHED | Phase 2 (儀式トリガ) |
+| ⚪ 不採用 | PUBSUB / SCHED | **儀式トリガに使わない**（全 agent は画面操作で同期起動 / `AGENT_DESIGN.md §6`）|
 | ⚪ planned | TR / ER | Phase 4 (本番監視) |
 
 ---
@@ -188,30 +185,31 @@ graph TB
 
 ---
 
-## 3. データフロー (Belvedere の1スプリント)
+## 3. データフロー (画面操作 → 単一窓口 → 協議 → AI パネル提案)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Sched as Cloud Scheduler
-    participant Orc as Orchestrator
+    participant U as ユーザー(画面操作)
+    participant Orc as Orchestrator (SM/単一窓口)
+    participant Rf as Refinement Agent
     participant Pl as Planner Agent
-    participant Tool as Tool Server
-    participant Slack
     participant FS as Firestore
     participant Gem as Gemini API
 
-    Note over Sched: 月曜 08:30 (プランニング30分前)
-    Sched->>Orc: 「Sprint 13 計画準備」
-    Note over Orc: Orchestrator(flash) は起動順を判定するだけ。<br/>実行は TS scheduler が /api/agents/:name を起動 (ハイブリッド / AGENT_DESIGN.md §2-0)
-    Orc->>Pl: invoke(context=last_sprint)
-    Pl->>FS: read 前スプリント Try / バックログ品質スコア
-    Pl->>Tool: GitHub PR 直近1週 / Slack #voc
-    Tool-->>Pl: events
-    Pl->>Gem: prompt(議題候補生成)
-    Gem-->>Pl: 議題ドラフト
-    Pl->>FS: 議題保存 / 関連チケット紐付け
-    Pl->>Slack: 「30分後のプランニング、議題はこちら」
+    Note over U: Refinement 画面で「この候補を診断」(スケジュールなし)
+    U->>Orc: 画面操作 = 単一窓口
+    Note over Orc: Orchestrator(flash) は窓口。どの達人を呼ぶか判定し協議を仲介 (AGENT_DESIGN.md §2-0)
+    Orc->>Rf: invoke(US-210 を診断)
+    Rf->>FS: read Story / Epic / 6観点
+    Rf->>Orc: 協議「この分割、velocity に入る?」
+    Orc->>Pl: consult(計画 ΣSP vs velocity)
+    Pl-->>Orc: 「過剰計画。NEXT 推奨」
+    Orc-->>Rf: Planner の回答を中継
+    Rf->>Gem: prompt(最小価値分割の提案)
+    Gem-->>Rf: 分割案ドラフト
+    Rf-->>Orc: 提案
+    Orc-->>U: AI パネルに提案表示 (人が Apply = L2)
 ```
 
 ---
@@ -248,7 +246,7 @@ ai-agent-hackathon/
 │   ├── web/              # Nuxt 3 (Vue 3 SSR / Nitro=node-server) — Cloud Run
 │   ├── api/              # Hono on Cloud Run (TS) — Phase 1 で deploy
 │   ├── cli/              # Mock LLM CLI demo (5 + Orchestrator ロール)
-│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — ADK 編成デモ担当 (Orchestrator が 5 子 agent を編成 / Phase C)。実運用の起動は TS scheduler が担う (AGENT_DESIGN.md §2-0)
+│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — ADK 編成デモ担当 (Orchestrator が 5 子 agent を編成 / Phase C)。実運用の起動は TS 実行ランナー (画面操作トリガ・スケジューラ無し / AGENT_DESIGN.md §2-0)
 │   └── mcp-server/       # MCP server (stdio / Belvedere API の HTTP クライアント / サービストークン認証)
 │       └── 14 Tools: read 8 (sprint 含む) + invoke_agent 1 + CRUD 5
 ├── packages/
@@ -305,7 +303,7 @@ ai-agent-hackathon/
 
 ## 8. セキュリティ (審査基準⑤ + WC-110対応)
 
-- Secret Manager で API key / Slack token 管理 (リポジトリには絶対置かない)
+- Secret Manager で Gemini API key 管理 (リポジトリには絶対置かない)
 - **Firebase Auth (個人 Google) で Web / API / MCP HTTP 認証** (`ROADMAP.md` Phase 1-B、6/9-14 着手予定 — Firestore データ層は 6/9 実装完了、認証は残作業) — IAP は本番ドメイン取得後に検討 (Phase 4)
 - Firestore セキュリティルールで個人 Google アカウントだけが read/write できるよう制限 (個人参加要件のエビデンス)
 - **MCP は API の HTTP クライアント**として動き、**サービストークン (Secret Manager 管理) で認証**する (`apps/api/src/config/service-token.ts`)。Firestore を直接触る裏口にせず、人間ユーザーと同じ authMiddleware → workspaceMiddleware → IDOR ガードを通す。トークンは定数時間比較・env 未設定で無効・最小権限 (ws-belvedere の po) にスコープ。詳細は `docs/setup-mcp.md`
@@ -323,6 +321,6 @@ ai-agent-hackathon/
 ## 9. Open Questions (ユーザーに後で確認)
 
 1. ドメイン名: belvedere.app / belvedere.dev / 取らないか
-2. Slack App は本物を作るか、当面はモックのままか
+2. ~~Slack App~~ → **Slack は不採用** (2026-06-18 改訂(2) / agent 出力は AI パネル)
 3. チーム化する場合、フロントorバックどちらを任せたいか
 4. ハッカソン提出時にリポジトリPublicが必須か (応募方法 Coming Soon)
