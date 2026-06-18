@@ -18,9 +18,16 @@ export {
 
 // チケット品質診断の純粋関数も外部 (apps/api GET /api/tickets/:id/quality) から使えるよう re-export
 export { checkTicketQuality, type TicketQualityResult } from './quality';
-// バックログリファインメント 6 観点診断の純粋関数 (apps/api GET /api/refinement) も re-export
+// バックログリファインメント 6 観点診断の純粋関数 (apps/api GET /api/refinement) も re-export。
+// 観点ごとの detect* も公開し、観点単位の再利用・直接テストを可能にする (R2-F)。
 export {
   checkBacklogRefinement,
+  detectOversizeStory,
+  detectUnstructuredDependency,
+  detectValueImpactMissing,
+  detectPriorityValueMismatch,
+  detectSpVariance,
+  detectStrategicIntentMissing,
   type BacklogRefinementInput,
   type BacklogRefinementResult,
   type RefinementSignal,

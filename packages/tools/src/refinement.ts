@@ -42,9 +42,114 @@ export interface BacklogRefinementResult {
   ruleFindings: TicketFinding[];
 }
 
+// ===== 観点ごとの純粋関数 (退化入力を最安レイヤで直接テストできるよう分離 / R2-F・2026-06-18) =====
+//
+// per-ticket 観点 (1〜4) は単一 Ticket を受けて 0/1 件の signal を返す。checkBacklogRefinement が
+// 候補チケットをループしながら順に呼ぶことで「ticket ごとにグループ化された」元の出力順を保つ。
+// SP 分散 (5) は候補集合全体、戦略意図 (6) は単一 Epic を受ける。各関数は self-contained で互いに
+// 結果を参照しない (additive 合成可能)。detail 文言は外部契約 (API/MCP/Mock 応答) のため不変。
+
+/** 観点1: 粒度過大 (Story Point > 8)。 */
+export function detectOversizeStory(t: Ticket): RefinementSignal[] {
+  if ((t.estimatePt ?? 0) > 8) {
+    return [{
+      ticketId: t.id,
+      signal: 'oversize_story',
+      detail: `Story Point ${t.estimatePt} (>8)。1スプリントに収まらない可能性、分割推奨。`,
+    }];
+  }
+  return [];
+}
+
+/** 観点2: 依存未整理 (blockedBy / US- 親紐付け のいずれも無い)。 */
+export function detectUnstructuredDependency(t: Ticket): RefinementSignal[] {
+  const hasBlockedBy = (t.blockedBy?.length ?? 0) > 0;
+  const hasStoryLink = (t.parentTicketId ?? '').startsWith('US-');
+  if (!hasBlockedBy && !hasStoryLink) {
+    return [{
+      ticketId: t.id,
+      signal: 'unstructured_dependency',
+      detail: 'blockedBy / parentTicketId (US-紐付け) のいずれも未設定。依存関係を整理してください。',
+    }];
+  }
+  return [];
+}
+
+/** 観点3: valueImpact 未設定。 */
+export function detectValueImpactMissing(t: Ticket): RefinementSignal[] {
+  if (t.valueImpact === undefined) {
+    return [{
+      ticketId: t.id,
+      signal: 'value_impact_missing',
+      detail: 'valueImpact (プロダクトゴール貢献度) が未設定。PO に確認推奨。',
+    }];
+  }
+  return [];
+}
+
+/** 観点4: priority × valueImpact ミスマッチ (priority は排他なので 0/1 件)。 */
+export function detectPriorityValueMismatch(t: Ticket): RefinementSignal[] {
+  if (t.priority === 'urgent' && t.valueImpact === 'low') {
+    return [{
+      ticketId: t.id,
+      signal: 'priority_value_mismatch',
+      detail: 'priority=urgent だが valueImpact=low。緊急度の根拠を確認。',
+    }];
+  }
+  if (t.priority === 'low' && t.valueImpact === 'high') {
+    return [{
+      ticketId: t.id,
+      signal: 'priority_value_mismatch',
+      detail: 'priority=low だが valueImpact=high。プロダクトゴール直結なので priority 引き上げ推奨。',
+    }];
+  }
+  if (t.priority === 'medium' && t.valueImpact === 'high') {
+    return [{
+      ticketId: t.id,
+      signal: 'priority_value_mismatch_soft',
+      detail: 'priority=medium だが valueImpact=high。プロダクトゴール貢献度の高さに比して優先度が低い可能性。',
+    }];
+  }
+  return [];
+}
+
+/** 観点5: SP 分散異常 (候補集合全体の変動係数 CV>0.6)。SP>0 が 3 件未満なら判定不能で空。 */
+export function detectSpVariance(candidateTickets: Ticket[]): RefinementSignal[] {
+  if (candidateTickets.length < 3) return [];
+  const pts = candidateTickets.map((t) => t.estimatePt ?? 0).filter((p) => p > 0);
+  if (pts.length < 3) return [];
+  const mean = pts.reduce((a, b) => a + b, 0) / pts.length;
+  const variance = pts.reduce((a, b) => a + (b - mean) ** 2, 0) / pts.length;
+  const stddev = Math.sqrt(variance);
+  const cv = mean > 0 ? stddev / mean : 0;
+  if (cv > 0.6) {
+    return [{
+      ticketId: '*',
+      signal: 'sp_variance_high',
+      detail: `Story Point の分散が大きい (CV=${cv.toFixed(2)})。粒度差を再見積推奨。`,
+    }];
+  }
+  return [];
+}
+
+/** 観点6: 戦略整合性 — Epic.rationale (戦略意図 / Why) が空。 */
+export function detectStrategicIntentMissing(e: Epic): RefinementSignal[] {
+  if (!e.rationale || e.rationale.trim().length === 0) {
+    return [{
+      ticketId: e.id,
+      signal: 'strategic_intent_missing',
+      detail: `Epic ${e.id} (${e.name}) に rationale (戦略意図 / Why) が未設定。配下のチケットが「何のために?」を見失う形骸化サイン。`,
+    }];
+  }
+  return [];
+}
+
 /**
  * バックログを 6 観点 (粒度過大 / 依存未整理 / valueImpact 未設定 / priority↔valueImpact /
  * SP 分散異常 / Epic.rationale 欠落) で診断し、種別ルールエンジンの findings も合成して返す。
+ *
+ * 6 観点は上の detect* 純粋関数を **元の出力順どおり** に additive 合成するだけ:
+ * 候補チケットを 1 件ずつ観点1→4 の順に診断 (ticket グループ化) → SP 分散 → 候補 Epic の戦略意図。
  *
  * @param filter 候補チケット/Epic の絞り込み (sprintId / projectId)。省略時は workspace 全件。
  *               ※ ruleFindings は filter に関係なく workspace 全 ticket を対象にする (元の tool と同じ)。
@@ -63,81 +168,19 @@ export function checkBacklogRefinement(
   );
 
   const findings: RefinementSignal[] = [];
-
+  // per-ticket 観点 (1〜4) を ticket ごとにまとめて push (元の出力順を保持)。
   for (const t of candidateTickets) {
-    if ((t.estimatePt ?? 0) > 8) {
-      findings.push({
-        ticketId: t.id,
-        signal: 'oversize_story',
-        detail: `Story Point ${t.estimatePt} (>8)。1スプリントに収まらない可能性、分割推奨。`,
-      });
-    }
-    const hasBlockedBy = (t.blockedBy?.length ?? 0) > 0;
-    const hasStoryLink = (t.parentTicketId ?? '').startsWith('US-');
-    if (!hasBlockedBy && !hasStoryLink) {
-      findings.push({
-        ticketId: t.id,
-        signal: 'unstructured_dependency',
-        detail: 'blockedBy / parentTicketId (US-紐付け) のいずれも未設定。依存関係を整理してください。',
-      });
-    }
-    if (t.valueImpact === undefined) {
-      findings.push({
-        ticketId: t.id,
-        signal: 'value_impact_missing',
-        detail: 'valueImpact (プロダクトゴール貢献度) が未設定。PO に確認推奨。',
-      });
-    }
-    if (t.priority === 'urgent' && t.valueImpact === 'low') {
-      findings.push({
-        ticketId: t.id,
-        signal: 'priority_value_mismatch',
-        detail: 'priority=urgent だが valueImpact=low。緊急度の根拠を確認。',
-      });
-    }
-    if (t.priority === 'low' && t.valueImpact === 'high') {
-      findings.push({
-        ticketId: t.id,
-        signal: 'priority_value_mismatch',
-        detail: 'priority=low だが valueImpact=high。プロダクトゴール直結なので priority 引き上げ推奨。',
-      });
-    }
-    if (t.priority === 'medium' && t.valueImpact === 'high') {
-      findings.push({
-        ticketId: t.id,
-        signal: 'priority_value_mismatch_soft',
-        detail: 'priority=medium だが valueImpact=high。プロダクトゴール貢献度の高さに比して優先度が低い可能性。',
-      });
-    }
+    findings.push(
+      ...detectOversizeStory(t),
+      ...detectUnstructuredDependency(t),
+      ...detectValueImpactMissing(t),
+      ...detectPriorityValueMismatch(t),
+    );
   }
-
-  // SP 分散異常 (候補チケット単位)
-  if (candidateTickets.length >= 3) {
-    const pts = candidateTickets.map((t) => t.estimatePt ?? 0).filter((p) => p > 0);
-    if (pts.length >= 3) {
-      const mean = pts.reduce((a, b) => a + b, 0) / pts.length;
-      const variance = pts.reduce((a, b) => a + (b - mean) ** 2, 0) / pts.length;
-      const stddev = Math.sqrt(variance);
-      const cv = mean > 0 ? stddev / mean : 0;
-      if (cv > 0.6) {
-        findings.push({
-          ticketId: '*',
-          signal: 'sp_variance_high',
-          detail: `Story Point の分散が大きい (CV=${cv.toFixed(2)})。粒度差を再見積推奨。`,
-        });
-      }
-    }
-  }
-
-  // 第6観点: 戦略整合性 — Epic.rationale (戦略意図 / Why) が空のものを警告
+  // 観点5: SP 分散 (候補集合単位) → 観点6: 戦略意図 (Epic 単位)。
+  findings.push(...detectSpVariance(candidateTickets));
   for (const e of candidateEpics) {
-    if (!e.rationale || e.rationale.trim().length === 0) {
-      findings.push({
-        ticketId: e.id,
-        signal: 'strategic_intent_missing',
-        detail: `Epic ${e.id} (${e.name}) に rationale (戦略意図 / Why) が未設定。配下のチケットが「何のために?」を見失う形骸化サイン。`,
-      });
-    }
+    findings.push(...detectStrategicIntentMissing(e));
   }
 
   // 種別ルールエンジン (refinement) は workspace 全 ticket を対象に実行して additive に合成する。
