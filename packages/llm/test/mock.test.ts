@@ -65,6 +65,30 @@ describe('MockLLMProvider role detection (system prompt → role)', () => {
   });
 });
 
+describe('MockLLMProvider Agent-Id anchor (一次 anchor / R1 二段化 / 2026-06-18)', () => {
+  // buildSystemPrompt は 1 行目に機械可読 `Agent-Id: <name>` を埋める。Gemini フェーズで
+  // 人間向け `Your role:` 文を編集しても役割判定が壊れないことを固定する (1 段目を直接踏む)。
+  it('routes via Agent-Id alone even when no Your role: line exists', async () => {
+    // `Your role:` 行が存在しなくても Agent-Id だけで refinement に到達する。
+    const text = await callMock('Agent-Id: refinement\n<responsibility>Backlog Refinement 支援。</responsibility>');
+    expect(text).toContain('【バックログリファインメント診断 (Refinement / Mock)】');
+  });
+
+  it('Agent-Id wins over a conflicting Your role: line (一次 anchor 優先)', async () => {
+    // 機械可読 anchor を一次ソースにするので、矛盾時は Agent-Id (planner) が Your role (Daily) に勝つ。
+    const text = await callMock('Agent-Id: planner\nYour role: Daily Agent\n責務...');
+    expect(text).toContain('【プランニング補助 (Planner / Mock)】');
+    expect(text).not.toContain('【デイリースクラム要約 (Daily / Mock)】');
+  });
+
+  it('Agent-Id mid-line (行頭でない) は誤検出しない → Your role: fallback に落ちる', async () => {
+    // 行頭限定 (^...m flag) なので、散文中の "Agent-Id:" では 1 段目をスキップし 2 段目で判定する。
+    const text = await callMock('Note: the Agent-Id: daily field is set elsewhere.\nYour role: Reviewer Agent');
+    expect(text).toContain('【スプリントレビュー支援 (Reviewer / Mock)】');
+    expect(text).not.toContain('【デイリースクラム要約 (Daily / Mock)】');
+  });
+});
+
 describe('MockLLMProvider tool-call decision tree (C3: deferred branches)', () => {
   const fakeTools = [
     { name: 'ticket.list', description: '', parameters: {} },
