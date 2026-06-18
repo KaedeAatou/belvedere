@@ -1,8 +1,11 @@
 import type { AgentName } from '@belvedere/shared';
 
 // XML 構造化 prompt (2026-06-09 / prompt-quality-reviewer 指摘の Anthropic Prompting 101 準拠)。
-// 注: 1 行目の `Your role: <X>` 表記は packages/llm/src/mock.ts の detectRole が
-// 役割判定の anchor として使うため絶対に変更しない (mock.test.ts も依存)。
+// 注: 1 行目の `Agent-Id: <name>` は packages/llm/src/mock.ts の detectRole が役割判定に使う
+// **機械可読 anchor** (AgentName リテラル / 2026-06-18 追加)。Gemini フェーズで以降の人間向け文
+// (`Your role:` / responsibility) を自由に編集しても Mock の役割判定が静かに壊れないための一次 anchor。
+// 2 行目の `Your role: <X>` は人間向け表記 + detectRole の fallback anchor として残す。
+// どちらも detectRole / mock.test.ts / prompt-routing.test.ts が依存するため形式を保つこと。
 
 const COMMON_CONTEXT = `
 <context>
@@ -193,8 +196,10 @@ Retrospective 進行支援。
 
 export function buildSystemPrompt(name: AgentName): string {
   const a = PER_AGENT[name];
-  // 1 行目の `Your role: <X>` は detectRole の anchor (mock.ts L139-145)。削除禁止。
+  // 1 行目 `Agent-Id: <name>` (AgentName リテラル) は detectRole の一次 anchor。
+  // 2 行目 `Your role: <X>` は人間向け + fallback anchor。どちらも mock.ts の detectRole が依存。削除禁止。
   return [
+    `Agent-Id: ${name}`,
     `Your role: ${a.role}`,
     '',
     a.responsibility,
