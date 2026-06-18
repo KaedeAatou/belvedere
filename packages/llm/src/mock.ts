@@ -169,10 +169,29 @@ type AgentRole =
   | 'orchestrator'
   | 'unknown';
 
+function isRoutableRole(s: string): s is Exclude<AgentRole, 'unknown'> {
+  return (
+    s === 'planner' ||
+    s === 'daily' ||
+    s === 'refinement' ||
+    s === 'reviewer' ||
+    s === 'retrospective' ||
+    s === 'orchestrator'
+  );
+}
+
 function detectRole(messages: LLMMessage[]): AgentRole {
   const sys = messages.find((m) => m.role === 'system')?.content ?? '';
-  // buildSystemPrompt (packages/agent/src/prompts.ts) は `Your role: <Role>` 形式で
-  // role を埋め込むので、それを anchor に判定する。
+  // 1段目 (最優先): 機械可読 anchor `Agent-Id: <name>`。buildSystemPrompt
+  // (packages/agent/src/prompts.ts) が先頭行に埋める AgentName リテラル (2026-06-18)。
+  // Gemini フェーズで人間向け `Your role:` 文や responsibility を編集しても役割判定が
+  // 静かに壊れないよう、AgentName リテラルを一次 anchor にする (行頭限定で誤検出を防ぐ)。
+  const idMatch = sys.match(/^Agent-Id:[^\S\n]*([a-z]+)/im);
+  if (idMatch) {
+    const id = idMatch[1]!.toLowerCase();
+    if (isRoutableRole(id)) return id;
+  }
+  // 2段目 (fallback): 人間向け `Your role: <Role>` 文を anchor に判定する。
   // 文中の incidental mention (例: Reviewer が「Daily Agent との連携を取りつつ」と
   // 書いた箇所) で誤ルーティングしないよう、'Your role: ' 直後に限定する。
   if (/Your role: Planner Agent/i.test(sys)) return 'planner';
