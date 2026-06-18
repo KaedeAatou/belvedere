@@ -1,6 +1,18 @@
 # テスト規律 (must)
 
-> 由来: d&d 並び替えバグ (区画密再採番で根治 / 2026-06-16) が **単体・e2e 全緑なのに本番で発症**した反省。緑のテストが「核の純粋関数を直接テストしていない」「実データ状態を踏まない」と、この種のバグを構造的に見逃す。
+> 由来: d&d 並び替えバグ (区画密再採番で根治 / 2026-06-16) が **単体・e2e 全緑なのに本番で発症**した反省。緑のテストが「核の純粋関数を直接テストしていない」「実データ状態を踏まない」と、この種のバグを構造的に見逃す。根本原因は **テストピラミッドの中間層 (component unit) が物理的に欠落** していたこと。各層で何を捕まえるかを下表で固定し、層を取り違えない。
+
+## テスト層の責務 (どの層で何を捕まえるか)
+
+| 層 | 捕まえる対象 | ツール | 例 |
+|---|---|---|---|
+| **純粋関数 unit** | 比較 / 算術 / 分類 / 診断の corner case (退化入力) | vitest | `compareTicketOrder` / `computeReorderUpdates` / `partitionTicketsBySections` / `ticketRules` / 6観点 detect |
+| **component unit** (新設 / T1b) | Vue の state / emit / 配線 (drag→API 引数, dirty→保存 enable) | vitest + @vue/test-utils | `SprintSectionedList` の onDragEnd→reorderTickets 引数、`DetailSheet` の二重送信防止 |
+| **統合** | handler + memory repo の HTTP 契約 (status / body / IDOR) | vitest + `app.fetch` | `apps/api/test/*-handlers.test.ts` |
+| **e2e** | 実ブラウザ flow + 永続 + 応答経路 (2xx を待つ) | Playwright | `apps/e2e/tests/reorder.spec.ts` |
+| **実機** | drag の物理 / native 選択 / hit-test / 見た目 | local-ui-verify (`dev-local-noauth.sh` + Chrome DevTools) | 区画間 d&d の実操作・リロード保持 |
+
+ロジックは純粋関数 unit に追い出して退化入力で固め、配線は薄い component unit、物理 (d&d) は実機で見る。**「緑 = ユーザーに対して動く」** にするには、編集した層に対応するテストを必ず書く (機械判定できる範囲は `pure-fn-test-guard` hook が nudge、できない「赤→緑を踏んだか」は skill 運用)。
 
 ## 1. 共有の純粋関数は直接の単体テストを持つ (必須)
 
