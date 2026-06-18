@@ -9,6 +9,7 @@
 > 2026-06-12 改訂: RetroTry (carry-forward 積み上げ) + retro.tries.list Tool 追加。Workspace 管理 (作成/招待/切替) を Phase 1-E 前倒しで実装。
 > 2026-06-13 改訂: **儀式モデル確定**。チケットライフサイクルを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike に分割し CURRENT 確定)** の一方向フローに整理。Backlog / Refinement / Planning の 3 画面を **CURRENT SPRINT / NEXT SPRINT / BACKLOG の 3 区画ビュー (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)** に統一し、画面差は「起票できる種別」と目的のみ。Refinement の **「ルール別グループ表示 (ワークキュー)」を廃止** — 品質指摘は行内 finding ピルで見せる。Planning は 2 週間スプリント初日に CURRENT の中身 (タスク/スパイク分割・スコープ) を確定する儀式と位置づけ直し。
 > 2026-06-18 改訂: **Gemini 接続フェーズに着手**。(1) 要件を「画面 × 操作 × AI 応答」で可視化する **§0.6 要件マトリクス + 具体ケース①〜⑥** を新設。(2) 設計をコード実態に補正: `gemini.ts` は **実装済** (§8 修正 / throw は `vertex` のみ)、`/api/agents/:name` は **model `gemini-2.5-pro` 固定** (§2.6 agent→model マップ新設で解消予定)、Orchestrator は **TS scheduler 実行 + ADK 編成デモのハイブリッド** (§2-0 / 論点 A)、Reviewer の `cloudrun.previewUrl` は **未実装** (§2-4 注記)。実装フェーズ Phase A〜E は別計画。
+> 2026-06-18 改訂(2): **Agent 運用モデル確定**（ユーザー決定）。(a) Orchestrator を「ルーター」→ **スクラムマスター＝全ユーザー操作の単一窓口**に。どの達人 agent を呼ぶか判定し、**agent↔agent 協議**を仲介・統括する。(b) **トリガーは画面操作のみ**（Cloud Scheduler / Pub-Sub による時間・イベント自動起動は**廃止**）。(c) **自律性は L1/L2 のみ**（L3/L4 自律実行は不採用）。(d) **Slack 連携を全除去**（agent 出力は **AI パネル**、retro 議事は手動ペースト）。
 
 ---
 
@@ -30,11 +31,11 @@
 | Agent | 担当画面 | 主なユーザー操作 (トリガー) | 反応する系統 | AI 出力の型 | 自律性 |
 |---|---|---|---|---|---|
 | **Planner** | Planning (Floor 01) | BACKLOG→CURRENT へ d&d で詰める / 「スプリントを開始」/ AI パネルで質問 | (A) `SPRINT_OVER_VELOCITY`・`STORY_DOD_MISSING` 等 + (B) 議題・分割提案 | 議題候補 / Task・Spike 分割候補 / 計画ΣSP vs velocity 超過アラート / 品質要修正リスト | L2 |
-| **Daily** | Daily (Floor 02) | 毎営業日の自動起動 / カンバン列間 d&d で status 変更 / AI パネルで質問 | (A) `TASK_STALL`(2日)・`STORY_STALL`(3日)・`SPIKE_TIMEBOX_OVER`・`INCIDENT_ACTIVE` + (B) 要約 | 進捗 digest (自動 Slack) / 停滞=「血のつまり」警告 / メンション候補 | **L3** 要約 + L2 メンション |
+| **Daily** | Daily (Floor 02) | Daily 画面を開く / カンバン列間 d&d で status 変更 / AI パネルで質問 | (A) `TASK_STALL`(2日)・`STORY_STALL`(3日)・`SPIKE_TIMEBOX_OVER`・`INCIDENT_ACTIVE` + (B) 要約 | 進捗 digest (AI パネル) / 停滞=「血のつまり」警告 / メンション候補 | L2 |
 | **Refinement** | Refinement (Floor 03) | NEXT/BACKLOG に Story を d&d / 「ポーカー開始」/ AI パネルで質問 | (A) 6 観点 + 種別ルール (`STORY_SP_MISSING` 等) + (B) 分割案・戦略整合判定 | 最小価値ストーリー分割候補 / 6 観点 finding / 形骸化シグナル | L2 |
 | **Reviewer** | Review (Floor 04) | 「デモ台本を生成」/ done・review チケット確認 / Carry-over d&d | (A) `BUG_NO_REGRESSION_DOD` + (B) デモシナリオ生成 | デモ順 + preview URL 集 / ステークホルダ通知文 / 受け入れ条件未充足リスク | L2 |
 | **Retrospective** | Retro (Floor 05) | Try ノートを「積み上げ」へ d&d / KPT 記入 / AI パネルで質問 | (B) Try 抽出・分類 + CeremonyHealthScore 推移 | Try 一覧 + owner / 儀式健全性スコア / 翌スプリント転記候補 | L2 |
-| **Orchestrator** | (専用画面なし / 裏方) | Cloud Scheduler の定時 / Pub-Sub イベント / 手動 | — (LLM 判定のみ) | 起動すべき agent 名 + 順序 + 並列度 | — |
+| **Orchestrator** | (専用画面なし / 裏方) | 全画面操作の**単一窓口** | — (どの達人を呼ぶか判定 + 協議統括) | 呼ぶ agent 名 + 順序 + 並列度 + 協議の取り回し | — |
 
 ### 具体ケース①〜⑥ (アジャイル 1 スプリントの流れ)
 
@@ -53,13 +54,13 @@ PO が来週分の Story `US-210「ダッシュボードで売上を見たい」
 - ※ 計画は **velocity 基準**。時間稼働ベースの「容量/capacity」は使わない (プロジェクト規約)。
 
 **ケース③ Daily — 「血のつまり」(停滞) 検出**
-スプリント中盤、朝に Daily が自動起動 (Orchestrator が平日朝と判定)。
+スプリント中盤、**ユーザーが Daily 画面を開く**（＝起動。スケジュールはない）。
 - (A) 🟡 `TASK_STALL`(2日) / 🔴 `STORY_STALL`(3日) / `SPIKE_TIMEBOX_OVER` / `INCIDENT_ACTIVE`。
-- (B) **L3 自動 Slack**「本日の進捗: 残 42SP、in-progress 5 件」。**L2 承認後メンション**「WC-106 が 3 日進捗なし。担当へブロッカー確認しますか?」。Try 適用「Try『BLOCKED 時は理由記入』に対し WC-108 が理由なし」。
+- (B) **AI パネル**「本日の進捗: 残 42SP、in-progress 5 件。WC-106 が 3 日進捗なし、担当へブロッカー確認を推奨」（提案のみ＝L2 / **Slack へは出さない**）。Try 適用「Try『BLOCKED 時は理由記入』に対し WC-108 が理由なし」。
 
 **ケース④ Review — デモ台本と preview URL (会前準備)**
-レビュー前日、「デモ台本を生成」を押下。
-- (B) Reviewer「デモ順: ① US-201 (売上表示) → preview `https://…run.app` ② US-205…。受け入れ条件未充足 1 件 (WC-110)。ステークホルダ通知文を草稿」。
+**Review 画面で「デモ台本を生成」を押下**。
+- (B) Reviewer「デモ順: ① US-201 (売上表示) → preview `https://…run.app` ② US-205…。受け入れ条件未充足 1 件 (WC-110)。ステークホルダ通知文を草稿（AI パネルに表示・Slack 送信しない）」。
 - ※ 録画→指摘抽出 (Multimodal) は 2026-06-10 縮退削除。Reviewer は会**前**準備に専念。`cloudrun.previewUrl` Tool は未実装 (§2-4)。
 
 **ケース⑤ Retro — Try を「次スプリントの検出ルール」化 (横串の肝)**
@@ -67,8 +68,8 @@ PO が来週分の Story `US-210「ダッシュボードで売上を見たい」
 - (B) Retrospective「Try 3 件抽出: 『AC に期日を入れる』(owner: PO) 等。**Daily の儀式健全性 -8%**。前回 Try『再現手順を必ず書く』達成率 70%」。
 - 積み上げた Try は次スプリントで Planner/Daily/Refinement が `retro.tries.list` 経由で**検出ルールとして自動適用** (ケース①③に還流)。
 
-**ケース⑥ Orchestrator — 起動順の裁定 (裏方)**
-時刻・曜日・スプリント状態から「今どの AI を動かすか」を gemini-flash 級で判定 (スプリント初日→Planner、平日朝→Daily、会前日→Reviewer)。専用画面なし。実行は TS scheduler が `/api/agents/:name` を順次起動 (§2-0 / 論点 A)。
+**ケース⑥ Orchestrator — 単一窓口としての裁定 (裏方)**
+ユーザーが画面を操作するたびに、Orchestrator(flash) が**窓口**として受け、「どの達人を呼ぶか・どの順で・並列か」を判定し、必要なら**達人同士の協議を仲介**する（例: Refinement の分割案を Planner に velocity 照会）。専用画面なし。実行は TS 実行ランナーが `/api/agents/:name` を順次/並列起動 (§2-0 / 論点 A)。**スケジュールによる自動起動はしない**。
 
 ---
 
@@ -76,8 +77,8 @@ PO が来週分の Story `US-210「ダッシュボードで売上を見たい」
 
 1. **マルチエージェント**: 5儀式に対応する5エージェント (Refinement含む) + Orchestrator
 2. **AI は脇役、人が主役**: チケット起票・最終決定は人。Agent は補助・提案 (L2)
-3. **自律トリガ**: ユーザー操作だけでなく、時間 / イベント / 閾値 から起動
-4. **ツール越しに世界と接続**: Slack / GitHub / Calendar / Sentry / Firestore は全部 Tool として抽象化
+3. **画面操作トリガ**: ユーザーが該当儀式画面を操作した時に同期起動する（時間 / イベント / スケジュール起動は持たない）
+4. **ツール越しに世界と接続**: GitHub / Calendar / Sentry / Firestore は全部 Tool として抽象化（Slack は不採用 / §6）
 5. **記憶と学習**: 過去スプリントの議事・Try をベクトル検索 (RAG) でエージェントに渡す
 6. **可観測性**: 全 thought / tool_call / tool_result を `AgentRun` に記録
 
@@ -130,7 +131,7 @@ Backlog でユーザーストーリー起票
 
 ```
                        ┌───────────────────────┐
-                       │  Orchestrator (中心ハブ)│  ← 軽量ルーティング (gemini-2.5-flash)
+                       │  Orchestrator (中心ハブ)│  ← スクラムマスター / 単一窓口 / 協議統括 (gemini-2.5-flash)
                        └───────────┬───────────┘
                                    │
         ┌────────────┬─────────────┼─────────────┬─────────────┐
@@ -145,7 +146,7 @@ Backlog でユーザーストーリー起票
                                    │
                 ┌──────────────────┼──────────────────┐
                 ▼                  ▼                  ▼
-            Slack             GitHub             Calendar
+            GitHub            Calendar
            Firestore          Sentry             Cloud Run
 ```
 
@@ -157,22 +158,22 @@ Backlog でユーザーストーリー起票
 
 | 項目 | 内容 |
 |---|---|
-| 役割 | 5儀式エージェント (Planner / Daily / Refinement / Reviewer / Retrospective) の起動順・並列度を判定するルーティング |
-| 起動 | Cloud Scheduler / Pub/Sub / 人間の手動操作 |
-| LLM | gemini-2.5-flash (軽量) — 判定のみ (§2.6 agent→model マップ) |
-| Tool | sub-agent invocation, ceremony scheduler |
-| 実行方式 (2026-06-18 確定 / 論点 A) | **ハイブリッド**。実運用のオーケストレーション実行は **TS scheduler** が Orchestrator(flash) の判定を受けて `POST /api/agents/:name` を順次/並列に起動する (tool 実体が TS 側 `packages/tools` にあるため確実)。ピッチ差別化用に **Python ADK** (`apps/orchestrator-py`) で「Orchestrator が 5 子 agent を宣言的に編成」する最小デモを 1 本成立させ、PITCH §5「Gemini である必然性 = ADK 編成」を満たす。**ADK への全乗せ替えはしない** (回帰リスク大 / 単一 agent ループは TS runAgent で足りる)。`USE_REAL_ADK=false` の間はスタブ、デモ経路のみ `true` で実体化 |
+| 役割 | **スクラムマスター**。全ユーザー操作の**単一窓口**。画面操作を受けて (a) どの達人 agent (Planner / Daily / Refinement / Reviewer / Retrospective) を呼ぶか判定し、(b) **達人同士の協議 (agent↔agent の相互呼び出し)** を仲介・統括する |
+| 起動 | **ユーザーの画面操作のみ**（時間・イベント・スケジュール起動は持たない）|
+| LLM | gemini-2.5-flash (軽量) — 判断・取り回しのみ。深い推論は各達人(pro)が担う (§2.6 agent→model マップ) |
+| Tool | sub-agent invocation（子 agent 呼び出し + 協議の仲介）|
+| 実行方式 (2026-06-18 確定 / 論点 A) | **ハイブリッド**。トリガーは**画面操作のみ**（スケジューラは使わない）。ユーザーの操作を受けて **TS 実行ランナー** が Orchestrator(flash) の判定どおりに `POST /api/agents/:name` を順次/並列に起動し、**達人間の協議（agent↔agent 呼び出し）を中継**する (tool 実体が TS 側 `packages/tools` にあるため確実)。ピッチ差別化用に **Python ADK** (`apps/orchestrator-py`) で「Orchestrator が 5 子 agent を宣言的に編成」する最小デモを 1 本成立させ、PITCH §5「Gemini である必然性 = ADK 編成」を満たす。**ADK への全乗せ替えはしない** (回帰リスク大 / 単一 agent ループは TS runAgent で足りる)。`USE_REAL_ADK=false` の間はスタブ、デモ経路のみ `true` で実体化 |
 
 ### 2-1. Planner Agent
 
 | 項目 | 内容 |
 |---|---|
 | 役割 | スプリント初日のプランニング支援。CURRENT スプリントの中身を確定する補助 — Story → Task/Spike 分割の提案 (parentTicketId で親 Story に紐付け)、計画 ΣSP vs velocity 実績の超過診断、議題ドラフト、Task のチケット品質診断 |
-| 起動 | スプリント初日のプランニング 30分前 (Cloud Scheduler) / 手動 |
+| 起動 | Planning 画面を操作した時（Pull from backlog / Story 分割 / スプリント開始 / AI パネル質問）|
 | 入力 | CURRENT `Sprint`, CURRENT/NEXT/BACKLOG の `Ticket[]`, RetroTry 積み上げ (retro.tries.list), Epic 進捗, velocity 実績 |
 | 出力 | 議題候補 / Task・Spike 分割候補 / 品質要修正リスト (DoD/SP/親 Story 紐付け不足) / 計画 ΣSP vs velocity 超過アラート / 候補値 |
 | LLM | gemini-2.5-pro (推論重め) |
-| 主な Tool | `firestore.query`, `ticket.list`, `ticket.quality.check`, `epic.list`, `slack.message.post` |
+| 主な Tool | `firestore.query`, `ticket.list`, `ticket.quality.check`, `epic.list` |
 | 自律性 | L2 (提案 → 人が承認) |
 
 ### 2-2. Daily Agent
@@ -180,19 +181,19 @@ Backlog でユーザーストーリー起票
 | 項目 | 内容 |
 |---|---|
 | 役割 | デイリースクラム運営支援。進捗・障害・血のつまり (3日停滞) 検出 |
-| 起動 | 毎営業日 09:55 |
-| 入力 | 現スプリントの `Ticket[]`, 各メンバの直近 Slack 活動 (+ Phase 3 で GitHub commit/PR 活動を追加予定) |
-| 出力 | 短い要約 (Slack), 障害候補, 進捗ずれ, 品質警告 |
+| 起動 | Daily 画面を操作した時（カンバン d&d / AI パネル質問）|
+| 入力 | 現スプリントの `Ticket[]` (+ Phase 3 で各メンバの GitHub commit/PR 活動を追加予定) |
+| 出力 | 短い要約 (AI パネル), 障害候補, 進捗ずれ, 品質警告 |
 | LLM | gemini-flash (頻度高い、短い処理) |
-| 主な Tool | `slack.thread.fetch`, `firestore.update`, `ticket.quality.check`, `github.activity` (Phase 3) |
-| 自律性 | L3 (要約は自動投稿、メンションは L2) |
+| 主な Tool | `firestore.update`, `ticket.quality.check`, `github.activity` (Phase 3) |
+| 自律性 | L2 (提案 → 人が承認。Slack 自動投稿はしない) |
 
 ### 2-3. Refinement Agent (2026-05-03 追加 / 2026-05-05 第6観点追加)
 
 | 項目 | 内容 |
 |---|---|
 | 役割 | 週 1 回の Backlog Refinement 運営支援。BACKLOG / NEXT の候補 US を **最小価値ストーリーに分割** する補助が主役務。分割した子 Story は親 US に `parentTicketId` で紐付ける。品質面はルールエンジン (17 ルール / 6観点) を **AI 診断のバックエンド**として呼び、結果は画面上の行内 finding ピル (赤/黄) で見せる (ルール別グループ表示は廃止 → §0.5) |
-| 起動 | Refinement 30分前 / 手動 / `topic.ticket.created` (新規 Story 起票時) |
+| 起動 | Refinement 画面を操作した時（Story d&d / 分割 / ポーカー開始 / AI パネル質問）|
 | 入力 | NEXT/BACKLOG 区画の候補 `Ticket[]` (sprintId 指定 or projectId 指定), `Workspace.productGoal`, 過去 Velocity, 同 Epic 配下の既存 Story, **`Epic.rationale` / `successMetric`** |
 | 出力 | 最小価値ストーリーへの分割候補 + 形骸化シグナル一覧 (6観点 / 行内 finding ピルとして UI 表示) + 修正提案 |
 | LLM | gemini-2.5-pro |
@@ -218,11 +219,11 @@ Backlog でユーザーストーリー起票
 | 項目 | 内容 |
 |---|---|
 | 役割 | レビュー会用デモ準備 (デモシナリオ / preview URL 集 / ステークホルダ通知) — レビュー会 *前* |
-| 起動 | レビュー 1営業日前 |
+| 起動 | Review 画面を操作した時（デモ台本生成 / carry-over 整理 / AI パネル質問）|
 | 入力 | 完了/レビュー中チケット, デプロイ履歴 (+ Phase 3 で関連 PR 差分を追加予定), 参加メンバ一覧, Sprint Goal |
-| 出力 | デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知 |
+| 出力 | デモシナリオ草稿 / Cloud Run preview URL集 / ステークホルダ通知文の草稿（AI パネル表示・Slack 送信しない）|
 | LLM | gemini-2.5-pro |
-| 主な Tool | `cloudrun.previewUrl` (⚠️ **buildTools に未実装** / Phase B で本実装。現状は mock 文字列), `slack.notify`, `github.pr.diff` (Phase 3) |
+| 主な Tool | `cloudrun.previewUrl` (⚠️ **buildTools に未実装** / Phase B で本実装), `github.pr.diff` (Phase 3) |
 | 自律性 | L2 (デモシナリオは人間確認後に確定) |
 
 > 2026-06-10 縮退: Sprint Review 録画 → 指摘抽出 (Multimodal) 機能は削除。差別化の中心は
@@ -235,11 +236,11 @@ Backlog でユーザーストーリー起票
 | 項目 | 内容 |
 |---|---|
 | 役割 | ふりかえり進行支援。Try抽出 + 翌スプリントWIP転記候補。**スプリントを締める儀式** (velocity 確定 + 次スプリントを active 化 = §0.5 の運用) の進行も支える |
-| 起動 | ふりかえり開始時 / 終了時 |
-| 入力 | 議事テキスト (Slack スレッド or 手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
+| 起動 | Retro 画面を操作した時（Try 積み上げ d&d / KPT 記入 / AI パネル質問）|
+| 入力 | 議事テキスト (手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
 | 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新。carry-forward 積み上げ (RetroTry / Firestore 永続) への蓄積は人間の d&d 操作 (L2 原則) |
 | LLM | gemini-2.5-pro |
-| 主な Tool | `slack.thread.fetch`, `retro.tries.list`, `vector.search`, `firestore.write` |
+| 主な Tool | `retro.tries.list`, `vector.search`, `firestore.write` |
 | 自律性 | L2 (Try 転記は人間確認後) |
 
 > (prompt への参照誘導は Phase 3-A の Gemini 接続時に実装)
@@ -264,9 +265,9 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 
 | 論点 | 確定 |
 |---|---|
-| **A. Orchestrator を TS か ADK か** | **ハイブリッド** (§2-0 参照)。TS scheduler 実行 + ADK 編成デモ 1 本 |
+| **A. Orchestrator を TS か ADK か** | **ハイブリッド** (§2-0 参照)。TS 実行ランナー（画面操作トリガ）+ ADK 編成デモ 1 本 |
 | **B. Try のルール化** | **二層**。定型 Try (「AC に期日」「BLOCKED 理由必須」) は `ticket-rules.ts` の pure fn に昇格 (確定的・テスト可能) / 非定型 Try は LLM 判断。新規は LLM → 定着で pure fn 昇格 |
-| **C. 画面トリガー** | **同期を基本** (チャットと同じ `/api/agents/:name` 即応答)。Daily の L3 自動 Slack のみ非同期 (Cloud Scheduler / Pub-Sub) |
+| **C. 画面トリガー** | **全 agent は画面操作で同期起動**（チャットと同じ `/api/agents/:name` 即応答、出力は AI パネル）。**スケジュール / Pub-Sub による自動起動・自動 Slack は持たない**（2026-06-18 改訂(2)）|
 | **D. agent 別 model** | §2.6 のマップに集約。`app.ts` のハードコード除去 |
 | **E. prompt 二重管理** (`prompts.ts` ↔ `agents.py`) | 当面は二重管理 + `agent-prompt-sync` skill 監視を維持。ADK が Python を本当に使う段階で「TS を正・Python を生成物」へ寄せる |
 
@@ -283,8 +284,6 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 | `project.list` | Project 一覧取得 | SA |
 | `epic.list` | Epic 一覧取得 (projectId 絞り込み可) | SA |
 | `member.list` | チームメンバ一覧 | SA |
-| `slack.message.post` | Slack 投稿 | Bot token |
-| `slack.thread.fetch` | スレッド取得 | Bot token |
 | `github.pr.diff` | PR 差分取得 (Reviewer Agent / Phase 3 実装予定) | App / OAuth |
 | `github.activity` | ユーザのコミット/PR活動 (Daily Agent / Phase 3 実装予定) | App / OAuth |
 | `calendar.events.list` | 儀式の予定取得 | OAuth |
@@ -294,7 +293,7 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 | `ticket.rules.check` | チケット種別ルール (17 観点) を儀式単位で実行 | SA |
 | `retro.tries.list` | レトロ carry-forward 積み上げ一覧 (儀式 Agent のコンテキスト) | SA |
 | `vector.search` | Vector Search クエリ | SA |
-| `human.ask` | (HITL) 不確実な時に人間に投げる | Slack |
+| `human.ask` | (HITL) 不確実な時に人間に投げる | AI パネル |
 
 ---
 
@@ -304,13 +303,13 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 |---|---|---|---|
 | L0 | 補助 | ユーザー操作の補助のみ | チャットUIでのQA |
 | L1 | 提案 | 案を出す。実行は人間 | チケット品質提案 (DoD/SP) |
-| L2 | 確認後実行 | 案を出して人間が承認したら実行 | Try のWIP転記、Slackメンション |
-| L3 | 自律実行 + 通知 | 勝手に実行し、結果を通知 | デイリーBot要約、デモ環境生成 |
-| L4 | 自律実行 + ロールバック可能 | 勝手にやるが取り消せる | 健全性スコア更新 |
+| L2 | 確認後実行 | 案を出して人間が承認したら実行 | Try の WIP 転記、AI パネルでのメンション提案 |
+| L3 | 自律実行 + 通知 | 勝手に実行し、結果を通知 | **不採用**（スケジュール起動を持たないため）|
+| L4 | 自律実行 + ロールバック可能 | 勝手にやるが取り消せる | **不採用** |
 
-デフォルト: **Daily=L3, Planner=L2, Refinement=L2, Reviewer=L2, Retrospective=L2** (5 ロール分)。
+デフォルト: **全 5 ロール L2**（提案 → 人が承認/適用）。**L3/L4（人が居ない自律実行・自動通知）は不採用** — スケジュール起動を持たず、全 agent はユーザーが画面を操作した時に同期で動き、人が見ている前で提案するため。
 
-> 2026-06-18: このデフォルトは **Gemini 接続後も維持**する。Daily の L3 自動 Slack 投稿には安全弁を付ける (投稿は要約のみ / メンション・書込は L2 確認 / コスト上限は §7)。画面ボタンからの起動は同期呼び出し、Daily の定時自動投稿のみ非同期 (§2.7 論点 C)。
+> 2026-06-18 改訂(2): スケジュール起動を廃止したため **L3/L4 は不採用**。全 agent は **L1/L2**（画面操作で同期起動 → 提案 → 人が承認/適用）、出力は AI パネル。**Slack 等への自動通知はしない**。コスト上限は §7。
 
 ---
 
@@ -347,13 +346,9 @@ TASK:
 
 ---
 
-## 6. メッセージング (Pub/Sub)
+## 6. メッセージング (Pub/Sub) — 2026-06-18 改訂(2) で不採用
 
-トピック例:
-- `topic.ticket.created` → Planner Agent が拾って品質診断
-- `topic.ticket.updated` → Daily Agent が品質再評価
-- `topic.ceremony.upcoming` → 該当エージェントを起動
-- `topic.try.persisted` → Planner Agent が翌スプリント計画に取り込み
+**スケジュール / イベントによる自動起動は採用しない**。全 agent は**ユーザーの画面操作で同期起動**する（§2.7 論点 C / §0 柱 3）。Pub/Sub による `topic.ceremony.upcoming` / `topic.ticket.created` 等の自動トリガーは設計から外した。チケット起票・更新時の品質診断は、ユーザーが Backlog / Refinement 画面を見た時に**行内 finding ピル（ルールエンジン）として即時表示**される（AI 呼び出し不要）。
 
 ---
 
@@ -386,12 +381,11 @@ mock provider は spec通りの構造化レスポンスを返す。これで GCP
 
 ## 9. デモシナリオ (ピッチ用)
 
-1. ユーザー: Web画面で「Slack要約Botの起動安定化」とタイトルだけ書いてチケット保存
-2. Pub/Sub に `ticket.created` イベント
-3. Planner Agent が起動 → ticket.quality.check で診断
-4. AI 提案: DoD候補3件 / US-201紐付け / SP=5pt
-5. UI 右パネルに提案表示、ユーザー Apply で確定
-6. Quality 100% 緑バッジ表示
-7. (別フロー) 月曜朝、Planner Agent が議題4件と品質要修正3件をSlackに
+1. ユーザー: Refinement 画面で Story `US-210「ダッシュボードで売上を見たい」` をタイトルだけ書いて起票 → 行に 🔴`STORY_SP_MISSING` / 🟡 粒度過大 のピルが即時表示（ルールエンジン＝AI 不要）
+2. AI パネルで「この候補を診断して」を送信 → **Orchestrator(単一窓口) が Refinement を呼ぶ**
+3. Refinement が分割案を出す前に **Planner へ velocity 照会（協議）** → 「今は過剰計画なので NEXT へ」
+4. AI 提案（パネル）: 「『売上サマリ(5pt)』『期間フィルタ(8pt)』へ分割し親 US に紐付け。NEXT 推奨。EP-3 の戦略意図が空＝形骸化サイン」
+5. ユーザーが Apply で分割を確定 → Quality ピルが解消（人が最終決定＝L2）
+6. Planning 画面へ移動し「スプリントを開始」 → 計画 ΣSP vs velocity を Planner が点検
 
-90秒でこの流れを見せられれば、審査基準①「AIエージェントが価値の中心」に答えたことになる。
+90秒でこの流れ（**画面操作 → 単一窓口 → 達人の協議 → パネル提案 → 人が確定**）を見せられれば、審査基準①「AIエージェントが価値の中心」に答えたことになる。
