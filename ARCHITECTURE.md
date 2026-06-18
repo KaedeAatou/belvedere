@@ -147,13 +147,14 @@ graph TB
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
 | 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | MCP | stdio / API HTTP クライアント (14 Tools) / サービストークン認証で API の workspace-scope・IDOR ガードを通る / smoke 19 + 統合テスト緑 / Firestore 直結しない |
-| 🟡 implemented | ORC + 5 Agent | Python (FastAPI + ADK 雛形) / Mock LLM で動作 / Gemini 接続は Phase 3 |
+| 🟡 implemented | ORC + 5 Agent | TS `runAgent` で 5 Agent 動作 (Mock LLM)。Orchestrator は **ハイブリッド方針** (TS scheduler 実行 + ADK 編成デモ / `AGENT_DESIGN.md §2-0`)。`orchestrator-py` は FastAPI + ADK 雛形 (`USE_REAL_ADK=true` は未実装)。**Gemini provider は実装済** (下記 GEM)、接続検証は Phase A |
 | 🟢 deployed | FS | Firestore (default) instance 作成済 / 実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
 | ⚪ planned | TOOL | Slack / GitHub Tool server (Phase 3) |
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
 | ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
-| ⚪ planned | GEM / ADK / VS | Phase 3 (Vertex AI 接続) |
+| 🟡 implemented | GEM | Gemini provider 実装済 (`packages/llm/src/gemini.ts` / REST 直叩き / functionCall マッピング済)。`LLM_PROVIDER=gemini` 切替だけで Mock→Gemini 成立。残: API キー注入 + 疎通検証 (Phase A) |
+| ⚪ planned | ADK / VS | ADK = Orchestrator 編成デモ (Phase C) / Vector Search (RAG) は Phase E |
 | ⚪ planned | SM | Phase 3 (Gemini API key) |
 | ⚪ planned | PUBSUB / SCHED | Phase 2 (儀式トリガ) |
 | ⚪ planned | TR / ER | Phase 4 (本番監視) |
@@ -202,6 +203,7 @@ sequenceDiagram
 
     Note over Sched: 月曜 08:30 (プランニング30分前)
     Sched->>Orc: 「Sprint 13 計画準備」
+    Note over Orc: Orchestrator(flash) は起動順を判定するだけ。<br/>実行は TS scheduler が /api/agents/:name を起動 (ハイブリッド / AGENT_DESIGN.md §2-0)
     Orc->>Pl: invoke(context=last_sprint)
     Pl->>FS: read 前スプリント Try / バックログ品質スコア
     Pl->>Tool: GitHub PR 直近1週 / Slack #voc
@@ -246,14 +248,14 @@ ai-agent-hackathon/
 │   ├── web/              # Nuxt 3 (Vue 3 SSR / Nitro=node-server) — Cloud Run
 │   ├── api/              # Hono on Cloud Run (TS) — Phase 1 で deploy
 │   ├── cli/              # Mock LLM CLI demo (5 + Orchestrator ロール)
-│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — Phase 3 で実 Gemini 接続
+│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — ADK 編成デモ担当 (Orchestrator が 5 子 agent を編成 / Phase C)。実運用の起動は TS scheduler が担う (AGENT_DESIGN.md §2-0)
 │   └── mcp-server/       # MCP server (stdio / Belvedere API の HTTP クライアント / サービストークン認証)
 │       └── 14 Tools: read 8 (sprint 含む) + invoke_agent 1 + CRUD 5
 ├── packages/
 │   ├── shared/           # 型・スキーマ・定数 (Project / Ritual / ValueImpact / Epic.rationale 等)
 │   ├── seed/             # 不変 demo fixture (1 project + EP-1..4 / WC-101..112 / 5 members)
 │   ├── repo/             # Repository 抽象 (memory ✅ / firestore は Phase 1-B で実装)
-│   ├── llm/              # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3 で実装)
+│   ├── llm/              # LLMProvider 抽象 (mock ✅ / gemini ✅ 実装済 / vertex は throw)
 │   ├── tools/            # buildTools(repo, workspaceId) factory (11 Tools: retro.tries.list 追加) + ticket-rules.ts (17 ルール)
 │   └── agent/            # Agent runtime (Tool 呼び出しループ + 6 ロール prompts)
 ├── infra/
