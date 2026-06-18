@@ -13,7 +13,7 @@
 // データレイヤ / ビジネスロジックは API 側の単一ソースに集約され、MCP は薄い変換層に徹する。
 
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { Status, Ticket } from '@belvedere/shared';
+import { type Status, type Ticket, stripUndefined } from '@belvedere/shared';
 import { MCP_TOOLS } from './tools';
 
 /**
@@ -336,13 +336,4 @@ function mustString(v: unknown, fieldName: string): string {
 
 function optString(v: unknown): string | undefined {
   return typeof v === 'string' && v.length > 0 ? v : undefined;
-}
-
-/** undefined 値のキーを落とす (API の zod 検証で exactOptional 違反にしないため)。 */
-function stripUndefined(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(obj)) {
-    if (v !== undefined) out[k] = v;
-  }
-  return out;
 }
