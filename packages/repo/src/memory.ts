@@ -20,6 +20,7 @@ import type {
 } from '@belvedere/shared';
 import { stripUndefined, compareTicketOrder } from '@belvedere/shared';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
+import { applyEquFilters } from './query';
 import type {
   WorkspaceRepository,
   TicketRepository,
@@ -60,17 +61,18 @@ class MemTicketRepo implements TicketRepository {
     for (const t of seed) this.store.set(t.id, stripUndefined({ ...t }));
   }
   async list(q: TicketQuery): Promise<Ticket[]> {
-    let xs = [...this.store.values()];
     // workspaceId は Phase 1-B IDOR fix で必須。firestore.ts (FsTicketRepo.list) と契約一致。
-    xs = xs.filter((t) => t.workspaceId === q.workspaceId);
-    if (q.projectId) xs = xs.filter((t) => t.projectId === q.projectId);
-    if (q.sprintId) xs = xs.filter((t) => t.sprintId === q.sprintId);
-    if (q.status) xs = xs.filter((t) => t.status === q.status);
-    if (q.assigneeId) xs = xs.filter((t) => t.assigneeId === q.assigneeId);
-    if (q.ritual) xs = xs.filter((t) => t.ritual === q.ritual);
-    if (q.type) xs = xs.filter((t) => t.type === q.type);
-    // storyId は Ticket.parentTicketId へマップ (User Story → 子 Task の親子関係)。
-    if (q.storyId) xs = xs.filter((t) => t.parentTicketId === q.storyId);
+    // storyId は Ticket.parentTicketId へマップ (User Story → 子 Task の親子関係) して spec に渡す。
+    const xs = applyEquFilters([...this.store.values()], [
+      ['workspaceId', q.workspaceId],
+      ['projectId', q.projectId],
+      ['sprintId', q.sprintId],
+      ['status', q.status],
+      ['assigneeId', q.assigneeId],
+      ['ritual', q.ritual],
+      ['type', q.type],
+      ['parentTicketId', q.storyId],
+    ]);
     // 表示順を repo 層で確定する (orderIndex → フォールバック priority/createdAt)。
     // firestore.ts (FsTicketRepo.list) と同一比較関数を共有し全 consumer が同じ並びを得る。
     xs.sort(compareTicketOrder);
@@ -104,9 +106,10 @@ class MemEpicRepo implements EpicRepository {
   private store = new Map<string, Epic>();
   constructor(seed: Epic[]) { for (const e of seed) this.store.set(e.id, stripUndefined({ ...e })); }
   async list(opts: { workspaceId: string; projectId?: string }): Promise<Epic[]> {
-    let xs = [...this.store.values()].filter((e) => e.workspaceId === opts.workspaceId);
-    if (opts.projectId) xs = xs.filter((e) => e.projectId === opts.projectId);
-    return xs;
+    return applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['projectId', opts.projectId],
+    ]);
   }
   async get(id: string): Promise<Epic | null> { return this.store.get(id) ?? null; }
   async upsert(e: Epic): Promise<void> { this.store.set(e.id, stripUndefined({ ...e })); }
@@ -117,10 +120,11 @@ class MemUserStoryRepo implements UserStoryRepository {
   // 現状は空実装でリポジトリ抽象だけ確保しておく。
   private store = new Map<string, UserStory>();
   async list(opts: { workspaceId: string; projectId?: string; epicId?: string }): Promise<UserStory[]> {
-    let xs = [...this.store.values()].filter((s) => s.workspaceId === opts.workspaceId);
-    if (opts.projectId) xs = xs.filter((s) => s.projectId === opts.projectId);
-    if (opts.epicId) xs = xs.filter((s) => s.epicId === opts.epicId);
-    return xs;
+    return applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['projectId', opts.projectId],
+      ['epicId', opts.epicId],
+    ]);
   }
   async get(id: string): Promise<UserStory | null> { return this.store.get(id) ?? null; }
 }
@@ -159,9 +163,10 @@ class MemApiKeyRepo implements ApiKeyRepository {
   // キーは id (= apikey-xxxx)。getByHash は tokenHash の線形走査 (firestore は where equality)。
   private store = new Map<string, ApiKey>();
   async list(opts: { workspaceId: string; userId?: string }): Promise<ApiKey[]> {
-    return [...this.store.values()].filter(
-      (k) => k.workspaceId === opts.workspaceId && (opts.userId === undefined || k.userId === opts.userId),
-    );
+    return applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['userId', opts.userId],
+    ]);
   }
   async get(id: string): Promise<ApiKey | null> { return this.store.get(id) ?? null; }
   async getByHash(tokenHash: string): Promise<ApiKey | null> {
@@ -174,9 +179,11 @@ class MemApiKeyRepo implements ApiKeyRepository {
 class MemCeremonyRepo implements CeremonyRepository {
   private store = new Map<string, Ceremony>();
   async list(opts: { workspaceId: string; sprintId: string }): Promise<Ceremony[]> {
-    return [...this.store.values()].filter(
-      (c) => c.workspaceId === opts.workspaceId && c.sprintId === opts.sprintId,
-    );
+    // sprintId は必須 (型上 string) なので常に等値で絞る。
+    return applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['sprintId', opts.sprintId],
+    ]);
   }
   async get(id: string): Promise<Ceremony | null> { return this.store.get(id) ?? null; }
   async upsert(c: Ceremony): Promise<void> { this.store.set(c.id, stripUndefined({ ...c })); }
@@ -185,13 +192,15 @@ class MemCeremonyRepo implements CeremonyRepository {
 class MemAgentRunRepo implements AgentRunRepository {
   private store = new Map<string, AgentRun>();
   async list(opts: { workspaceId: string; agentName?: string; status?: AgentRun['status']; limit?: number }): Promise<AgentRun[]> {
-    let xs = [...this.store.values()].filter((r) => r.workspaceId === opts.workspaceId);
-    if (opts.agentName) xs = xs.filter((r) => r.agentName === opts.agentName);
-    if (opts.status) xs = xs.filter((r) => r.status === opts.status);
-    // firestore.ts と契約一致: startedAt 欠落の不正データでも crash させない
+    const xs = applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['agentName', opts.agentName],
+      ['status', opts.status],
+    ]);
+    // sort / limit は agentRun 固有なので applyEquFilters の外で掛ける。
+    // firestore.ts と契約一致: startedAt 欠落の不正データでも crash させない。
     xs.sort((a, b) => (b.startedAt ?? '').localeCompare(a.startedAt ?? ''));
-    if (opts.limit) xs = xs.slice(0, opts.limit);
-    return xs;
+    return opts.limit ? xs.slice(0, opts.limit) : xs;
   }
   async get(id: string): Promise<AgentRun | null> { return this.store.get(id) ?? null; }
   async add(r: AgentRun): Promise<void> { this.store.set(r.id, stripUndefined({ ...r })); }
@@ -200,10 +209,12 @@ class MemAgentRunRepo implements AgentRunRepository {
 class MemCeremonyHealthRepo implements CeremonyHealthRepository {
   private store: CeremonyHealthScore[] = [];
   async list(opts: { workspaceId: string; sprintId?: string; ritual?: Ritual }): Promise<CeremonyHealthScore[]> {
-    let xs = this.store.filter((s) => s.workspaceId === opts.workspaceId);
-    if (opts.sprintId) xs = xs.filter((s) => s.sprintId === opts.sprintId);
-    if (opts.ritual) xs = xs.filter((s) => s.ritual === opts.ritual);
-    return xs;
+    // store は配列だが applyEquFilters が [...rows] でコピーするため破壊しない。
+    return applyEquFilters(this.store, [
+      ['workspaceId', opts.workspaceId],
+      ['sprintId', opts.sprintId],
+      ['ritual', opts.ritual],
+    ]);
   }
   async add(s: CeremonyHealthScore): Promise<void> { this.store.push(s); }
 }
@@ -211,10 +222,11 @@ class MemCeremonyHealthRepo implements CeremonyHealthRepository {
 class MemEstimationRepo implements EstimationRepository {
   private store = new Map<string, EstimationSession>();
   async list(opts: { workspaceId: string; ticketId?: string; status?: EstimationSession['status'] }): Promise<EstimationSession[]> {
-    let xs = [...this.store.values()].filter((s) => s.workspaceId === opts.workspaceId);
-    if (opts.ticketId) xs = xs.filter((s) => s.ticketId === opts.ticketId);
-    if (opts.status) xs = xs.filter((s) => s.status === opts.status);
-    return xs;
+    return applyEquFilters([...this.store.values()], [
+      ['workspaceId', opts.workspaceId],
+      ['ticketId', opts.ticketId],
+      ['status', opts.status],
+    ]);
   }
   async get(id: string): Promise<EstimationSession | null> { return this.store.get(id) ?? null; }
   async upsert(s: EstimationSession): Promise<void> { this.store.set(s.id, stripUndefined({ ...s })); }
