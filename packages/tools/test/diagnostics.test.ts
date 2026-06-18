@@ -7,7 +7,15 @@
 import { describe, it, expect } from 'vitest';
 import type { Ticket, Epic, Sprint, EstimationSession } from '@belvedere/shared';
 import { checkTicketQuality } from '../src/quality';
-import { checkBacklogRefinement } from '../src/refinement';
+import {
+  checkBacklogRefinement,
+  detectOversizeStory,
+  detectUnstructuredDependency,
+  detectValueImpactMissing,
+  detectPriorityValueMismatch,
+  detectSpVariance,
+  detectStrategicIntentMissing,
+} from '../src/refinement';
 
 const NOW = '2026-06-17T09:00:00Z';
 
@@ -159,5 +167,94 @@ describe('checkBacklogRefinement (純粋関数 / 直接)', () => {
     expect(r.scannedEpics).toBe(1);
     expect(sig(r, 'strategic_intent_missing', 'EP-A')).toBe(true);
     expect(sig(r, 'strategic_intent_missing', 'EP-B')).toBe(false);
+  });
+
+  // R2-F: 出力順は外部契約 (API/MCP/Mock 応答) なので、観点を detect* に分離しても不変であることを固定。
+  it('出力順不変: 1 ticket が複数観点に該当 → ticket グループ化で [oversize, unstructured, value_impact] の順', () => {
+    const r = checkBacklogRefinement(
+      input({ tickets: [ticket({ id: 'WC-1', estimatePt: 13 })] }), // SP>8 + 依存無 + valueImpact 無
+    );
+    expect(r.findings.map((f) => f.signal)).toEqual([
+      'oversize_story',
+      'unstructured_dependency',
+      'value_impact_missing',
+    ]);
+  });
+
+  it('出力順不変: 2 ticket + SP分散 + Epic → ticket ごと → sp_variance → strategic_intent の順', () => {
+    const r = checkBacklogRefinement(
+      input({
+        tickets: [
+          // valueImpact='medium' + priority=medium で priority↔value ミスマッチを出さず観点を絞る。
+          ticket({ id: 'A', estimatePt: 1, parentTicketId: 'US-1', valueImpact: 'medium' }),
+          ticket({ id: 'B', estimatePt: 13, parentTicketId: 'US-1', valueImpact: 'medium' }),
+          ticket({ id: 'C', estimatePt: 21, parentTicketId: 'US-1', valueImpact: 'medium' }),
+        ],
+        epics: [epic({ id: 'EP-3', rationale: '' })],
+      }),
+    );
+    // A は無発火、B/C は oversize、集合で sp_variance、最後に Epic の strategic_intent。
+    expect(r.findings.map((f) => f.signal)).toEqual([
+      'oversize_story', // B
+      'oversize_story', // C
+      'sp_variance_high',
+      'strategic_intent_missing',
+    ]);
+  });
+});
+
+// 観点ごとの detect* 純粋関数の直接テスト (testing.md §1 / R2-F)。
+// checkBacklogRefinement 経由でなく関数自体を import し、退化入力 (端 SP=8/9・等値・空集合・空白 rationale)
+// を最安レイヤで固定する。
+describe('refinement 観点ごとの detect* (直接 / 退化入力)', () => {
+  const tk = (over: Partial<Ticket> & { id: string }): Ticket => ticket(over);
+  const ep = (over: Partial<Epic> & { id: string }): Epic => epic(over);
+
+  it('detectOversizeStory: 端 SP=8→空 / SP=9→発火 / SP undefined→空 / SP=0→空', () => {
+    expect(detectOversizeStory(tk({ id: 'A', estimatePt: 8 }))).toEqual([]);
+    expect(detectOversizeStory(tk({ id: 'A', estimatePt: 9 }))).toHaveLength(1);
+    expect(detectOversizeStory(tk({ id: 'A' }))).toEqual([]);
+    expect(detectOversizeStory(tk({ id: 'A', estimatePt: 0 }))).toEqual([]);
+  });
+
+  it('detectUnstructuredDependency: 無紐付け→発火 / US-親→空 / blockedBy 非空→空 / blockedBy 空配列→発火', () => {
+    expect(detectUnstructuredDependency(tk({ id: 'A' }))).toHaveLength(1);
+    expect(detectUnstructuredDependency(tk({ id: 'A', parentTicketId: 'US-1' }))).toEqual([]);
+    expect(detectUnstructuredDependency(tk({ id: 'A', blockedBy: ['WC-9'] }))).toEqual([]);
+    // 退化: blockedBy が空配列 (length 0) は「無し」扱い → 発火する
+    expect(detectUnstructuredDependency(tk({ id: 'A', blockedBy: [] }))).toHaveLength(1);
+  });
+
+  it('detectValueImpactMissing: undefined→発火 / 設定済→空 (low/medium/high いずれも)', () => {
+    expect(detectValueImpactMissing(tk({ id: 'A' }))).toHaveLength(1);
+    expect(detectValueImpactMissing(tk({ id: 'A', valueImpact: 'low' }))).toEqual([]);
+    expect(detectValueImpactMissing(tk({ id: 'A', valueImpact: 'high' }))).toEqual([]);
+  });
+
+  it('detectPriorityValueMismatch: 排他 (urgent+low / low+high / medium+high) 0/1 件 / 非該当→空', () => {
+    expect(detectPriorityValueMismatch(tk({ id: 'A', priority: 'urgent', valueImpact: 'low' }))[0]?.signal).toBe('priority_value_mismatch');
+    expect(detectPriorityValueMismatch(tk({ id: 'A', priority: 'low', valueImpact: 'high' }))[0]?.signal).toBe('priority_value_mismatch');
+    expect(detectPriorityValueMismatch(tk({ id: 'A', priority: 'medium', valueImpact: 'high' }))[0]?.signal).toBe('priority_value_mismatch_soft');
+    // 非該当: 整合している組み合わせは空
+    expect(detectPriorityValueMismatch(tk({ id: 'A', priority: 'urgent', valueImpact: 'high' }))).toEqual([]);
+    expect(detectPriorityValueMismatch(tk({ id: 'A', priority: 'high', valueImpact: 'high' }))).toEqual([]);
+  });
+
+  it('detectSpVariance: <3 件→空 / SP>0 が 3 件未満→空 (判定不能) / 等値 3 件→空 / 大分散→発火', () => {
+    // 退化: チケット 3 件だが SP>0 が 2 件 → 判定不能で空
+    expect(detectSpVariance([tk({ id: 'A', estimatePt: 5 }), tk({ id: 'B', estimatePt: 8 }), tk({ id: 'C' })])).toEqual([]);
+    // 等値 (CV=0) → 発火しない
+    expect(detectSpVariance([tk({ id: 'A', estimatePt: 5 }), tk({ id: 'B', estimatePt: 5 }), tk({ id: 'C', estimatePt: 5 })])).toEqual([]);
+    // 大きな分散 (1, 8, 21) → CV>0.6 で発火
+    expect(detectSpVariance([tk({ id: 'A', estimatePt: 1 }), tk({ id: 'B', estimatePt: 8 }), tk({ id: 'C', estimatePt: 21 })])).toHaveLength(1);
+    // 2 件のみ → 空
+    expect(detectSpVariance([tk({ id: 'A', estimatePt: 1 }), tk({ id: 'B', estimatePt: 13 })])).toEqual([]);
+  });
+
+  it('detectStrategicIntentMissing: 空/空白/undefined rationale→発火 / 埋まっていれば空', () => {
+    expect(detectStrategicIntentMissing(ep({ id: 'EP-1', rationale: '' }))).toHaveLength(1);
+    expect(detectStrategicIntentMissing(ep({ id: 'EP-1', rationale: '   ' }))).toHaveLength(1);
+    expect(detectStrategicIntentMissing(ep({ id: 'EP-1' }))).toHaveLength(1); // undefined
+    expect(detectStrategicIntentMissing(ep({ id: 'EP-1', rationale: 'なぜ重要か' }))).toEqual([]);
   });
 });
