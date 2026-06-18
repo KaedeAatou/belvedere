@@ -12,7 +12,7 @@ import { buildTools, checkTicketQuality, checkBacklogRefinement, type KnowledgeS
 import type { LLMProvider } from '@belvedere/llm';
 import type { RepoContainer, TicketQuery } from '@belvedere/repo';
 import type { AgentName } from '@belvedere/shared';
-import { StatusSchema, RitualSchema, TicketTypeSchema } from '@belvedere/shared';
+import { StatusSchema, RitualSchema, TicketTypeSchema, modelForAgent } from '@belvedere/shared';
 import { authMiddleware, type AuthenticatedUser } from './middleware/auth';
 import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspace';
 import {
@@ -421,7 +421,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         agentName: name,
         workspaceId,
         llm,
-        model: 'gemini-2.5-pro',
+        model: modelForAgent(name),
         systemPrompt: buildSystemPrompt(name),
         tools,
         trigger: 'human',
