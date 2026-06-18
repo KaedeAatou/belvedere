@@ -211,3 +211,25 @@ describe('儀式フィルタ', () => {
     expect(fired('daily', ctxOf([ticket({ id: 'A' })]), 'TYPE_MISSING')).toBe(false);
   });
 });
+
+describe('エッジ: 空リスト / 複数ルール同時発火', () => {
+  it('tickets/sprints/sessions すべて空 → 全儀式で findings 0 (per-ticket も aggregate も空)', () => {
+    // 空配列で例外を投げず findings 0 を返すこと (退化入力 / testing.md §1)。
+    // aggregate ルール (SPRINT_OVER_VELOCITY / ESTIMATE_DIVERGENCE) も空入力で何も足さない。
+    const empty = ctxOf([]);
+    for (const ceremony of ['planning', 'daily', 'refinement', 'review', 'retrospective'] as const) {
+      expect(runTicketRules(ceremony, empty)).toEqual([]);
+    }
+  });
+
+  it('SP も DoD も無い Story 1 枚で 2 ルールが同時発火 (同 ticket に複数 findings)', () => {
+    // 1 チケットに対し独立条件のルールが同時に立つことを固定 (additive 合成の健全性)。
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story' })]); // acceptanceCriteria / estimatePt 両方欠落
+    const onA = runTicketRules('refinement', ctx).filter((f) => f.ticketId === 'A');
+    const ruleIds = onA.map((f) => f.ruleId).sort();
+    expect(ruleIds).toContain('STORY_DOD_MISSING');
+    expect(ruleIds).toContain('STORY_SP_MISSING');
+    // type は設定済 (story) なので TYPE_MISSING は混ざらない = 同時発火が「全部入り」ではないことも担保。
+    expect(ruleIds).not.toContain('TYPE_MISSING');
+  });
+});
