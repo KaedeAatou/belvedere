@@ -34,11 +34,12 @@ esac
 trigger=0
 case "$fp" in
   */SprintSectionedList.vue|*/screens/*Screen.vue|*/primitives/TicketRow.vue) trigger=1 ;;
-  *orderIndex*|*useTickets*|*usePointerReorder*) trigger=1 ;;
-  */shared/src/utils.ts) trigger=1 ;;
+  */apps/web/components/*.vue) trigger=1 ;;
+  *orderIndex*|*useTickets*|*usePointerReorder*|*useSprintSections*) trigger=1 ;;
+  */shared/src/utils.ts|*/shared/src/sections.ts|*/shared/src/order.ts) trigger=1 ;;
 esac
 if [ "$trigger" = 0 ] && [ -f "$fp" ]; then
-  if grep -qiE 'VueDraggable|SortableJS|sortable-|trow-drag|onDragEnd|@end=|pointerdown|compareTicketOrder|orderBetween|reorderTickets' "$fp" 2>/dev/null; then
+  if grep -qiE 'VueDraggable|SortableJS|sortable-|trow-drag|onDragEnd|@end=|pointerdown|compareTicketOrder|orderBetween|reorderTickets|partitionTicketsBySections|computeReorderUpdates' "$fp" 2>/dev/null; then
     trigger=1
   fi
 fi
