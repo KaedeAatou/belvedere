@@ -1,12 +1,22 @@
-// Backlog 並び替え e2e (Wave 3 / 2026-06-12)。
+// Backlog 並び替え e2e (Wave 3 / 2026-06-12、T2 で保証力強化 / 2026-06-18)。
 // バックログ行の orderIndex が更新され、リロード後も DOM 順序が保たれることを確認する。
+//
+// 3 本の役割 (層が違う = 重複ではない):
+//   Test1 「orderIndex API PATCH …」 = **永続化テスト (d&d UI は踏まない)**。
+//     orderIndex を /api/tickets/:id へ直 PATCH し「repo ソート + UI 反映 + リロード永続」を検証。
+//     d&d の物理経路は通さない (PATCH 応答は evaluate 内の await fetch で待つ)。
+//   Test2 「実 pointer でハンドルを掴み …」 = 実マウス d&d の本命ガード。
+//     reorderDragBefore で vue-draggable-plus(SortableJS) を本物で駆動し、掴み→onDragEnd→
+//     reorder POST→UI 反映の全経路 + native テキスト選択が起きないことを検証。
+//   Test3 「未設定 orderIndex 3 枚 …」 = 先頭ジャンプの決定的ガード。
+//     未設定 orderIndex 3 枚で先頭を中段へ落とし、区画密再採番が無いと必ず赤になる機序を踏む。
 //
 // 方針:
 //   - 件数ベース assert 禁止 (並行 2 run が同一 Workspace を共有するため)
-//   - 作成した 2 枚は try/finally で必ず削除する (自己清掃)
-//   - d&d UI 操作はブラウザの dragArmed フラグとの同期が困難なため、
-//     orderIndex を API 直 PATCH で更新し「repo ソート + UI 反映 + 永続」を検証する。
-//     d&d UI 操作の実機検証は browser MCP での手動確認に委ねる (TODO)。
+//   - 作成した 2〜3 枚は try/finally で必ず削除する (自己清掃)
+//   - **Test2/Test3 は drag 後に waitForResponse('**​/api/tickets/reorder') の 2xx を待ってから**
+//     DOM 順を assert する。これにより「DOM は変わったが永続経路 (reorder POST) が実際に走った」
+//     ことを保証する (poll だけだと永続化されない楽観更新でも偶然緑になりうる = 緑の嘘を断つ)。
 //   - DOM 順序は document.querySelectorAll('[data-testid="live-ticket"]') で確認する
 
 import { test, expect } from '../fixtures/auth.fixture';
@@ -182,7 +192,15 @@ test.describe('Backlog 並び替え', () => {
 
     try {
       // B のハンドルを実マウスで掴み、A 行の上端へドロップ ('before')。
-      await backlog.reorderDragBefore(titleB, titleA);
+      // drag が引き起こす reorder POST の 2xx を待ってから順序を見る (永続経路が実際に走った保証)。
+      const [reorderResp] = await Promise.all([
+        authedPage.waitForResponse(
+          (r) => r.url().includes('/api/tickets/reorder') && r.request().method() === 'POST',
+          { timeout: 10_000 },
+        ),
+        backlog.reorderDragBefore(titleB, titleA),
+      ]);
+      expect(reorderResp.ok()).toBe(true);
 
       // 症状4 ガード: B が A より上 (小さい index) に来る = commit→orderIndex PATCH→UI 反映が走った。
       await expect
@@ -245,7 +263,15 @@ test.describe('Backlog 並び替え', () => {
 
     try {
       // 先頭 A のハンドルを掴み、C の上端へドロップ → A は B と C の間 (= B の下) へ来るのが正。
-      await backlog.reorderDragBefore(titleA, titleC);
+      // drag が引き起こす reorder POST の 2xx を待ってから順序を見る (密再採番が実際に永続した保証)。
+      const [reorderResp] = await Promise.all([
+        authedPage.waitForResponse(
+          (r) => r.url().includes('/api/tickets/reorder') && r.request().method() === 'POST',
+          { timeout: 10_000 },
+        ),
+        backlog.reorderDragBefore(titleA, titleC),
+      ]);
+      expect(reorderResp.ok()).toBe(true);
 
       // 決定的ガード: A が B より下 (大きい index)。旧バグなら A だけ orderIndex を得て先頭へ戻り index_A < index_B で赤。
       await expect
