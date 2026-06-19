@@ -140,7 +140,7 @@
     └──▶ ドッグフード開始 (Belvedere チケットで Belvedere を作る)
 
 [Phase 2 6/29-7/2]
-  Pub/Sub + Cloud Scheduler + Mock Agent 配線
+  画面操作トリガ + AI Integrity Panel 配線 (時刻/イベント自動起動は不採用)
 
 [Phase 3 7/3-9 / 提出ライン]
   本物 Gemini 接続 + Elastic RAG + ピッチ動画 + Proto Pedia 登録

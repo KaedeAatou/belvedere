@@ -45,7 +45,7 @@ Jiraを使っているチームで広く起きる症状:
 - チケット保存 → 1秒以内に右パネルに「DoD候補3件」「US-201への紐付け」「SP=5pt」のAI提案
 - ワンクリックで提案を採用、編集も可能 (L2)
 - すべて埋まったチケットには **緑の「Quality 100%」バッジ**
-- 儀式の30分前には議題ドラフトと品質要修正リストが Slack に届いている
+- 儀式画面を開くと議題ドラフトと品質要修正リストが AI パネルに提示される
 
 ## 5. なぜ "AIエージェント" である必然性 (審査基準①)
 
@@ -56,11 +56,11 @@ Jiraを使っているチームで広く起きる症状:
 | 「DoD空ですよ」と表示するだけ | 過去類似チケット・User Story・コードを参照して **DoDの中身を生成** |
 | 1機能 = 1ボタン | チケット品質チェック → User Story候補抽出 → 過去類似タスクからSP推定 を **連鎖** |
 | 静的なルール | 過去ふりかえりやチームの判断履歴から **学習** (ベクトル検索) |
-| ユーザー起点 | チケット保存 / Slack投稿 / 儀式時刻 を **トリガに自分から動く** |
-| 1 体の AI | **Orchestrator が儀式の時刻で 5 つの専門 Agent を編成** (ADK マルチエージェント) |
+| ユーザー起点 | 画面操作を **トリガに必要な Agent を協議に招集して動く** |
+| 1 体の AI | **Orchestrator が単一窓口として 5 つの専門 Agent を協議編成** (ADK マルチエージェント) |
 | 単独 SaaS に閉じる | **MCP** で Claude Code / Cursor / 他 AI Agent から直接呼べる ── 「Belvedere の開発自体を Belvedere で管理する」究極のドッグフードが可能 |
 
-ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**。各儀式に専用画面 + 専用 Agent。Orchestrator が儀式の時刻 (月曜朝 = Planner+Daily、Refinement 時刻 = Refinement…) を見て各 Agent の起動順・並列度を判定する。
+ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**。各儀式に専用画面 + 専用 Agent。Orchestrator がスクラムマスターとして単一窓口になり、必要な儀式 Agent を agent.invoke で協議に招集して統括する (深さ1。トリガは画面操作のみ)。
 
 各 Agent の査読は **チケット種別ルールエンジン (17 観点)** を共有する。Story / Task / Spike / Bug / Incident の種別ごとに「親なし Task」「価値の見えない DoD」「停滞」「再現手順なし」「見積もり割れ」等を宣言的ルール表で判定。
 
@@ -91,20 +91,20 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
 「**チケットを書くのが軽くなる**」「**儀式の前後で何かが片付いている**」という驚き。
 
 例:
-- 月曜朝、Slackに「今週のプランニング議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」が届く
+- Planning 画面を開くと AI パネルに「今週のプランニング議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」が提示される
 - ふりかえり後、「上がった Try 3件のうち 2件は翌スプリントWIPに転記済 (parentTicketId付き)、1件は要確認」が共有される
 - ダッシュボードに「**儀式健全性 Daily が -8 で要注意**」と表示される
 
 ## 8. 実装の核 (審査基準⑤)
 
 ```
-[ユーザー操作]                [AIエージェント自律動作]
+[ユーザー操作]                [AIエージェント動作]
    │                           │
-   │ Web画面 / Slack            ├─▶ チケット保存 イベント受信
-   ▼                           ├─▶ Slack 監視
-[Belvedere Orchestrator]   ──────  ├─▶ GitHub PR 監視
-   │  (gemini-2.5-flash)       ├─▶ Calendar 監視 (儀式時刻)
-   │                           └─▶ 障害観測 (Sentry)
+   │ Web 画面操作               ├─▶ チケット保存 イベント受信
+   ▼                           ├─▶ GitHub PR 監視
+[Belvedere Orchestrator]   ──────  └─▶ 障害観測 (Sentry)
+   │  (gemini-2.5-flash)       
+   │                           
    ├─▶ Planner Agent       (Sprint Planning 支援)
    ├─▶ Daily Agent         (Daily Scrum 支援)
    ├─▶ Refinement Agent    (US を最小価値 Story に分割 + 品質ピル)
@@ -124,7 +124,7 @@ GCPスタック (必須要件):
 - **実行**: Cloud Run (各エージェントを独立サービスに)
 - **AI**: Gemini API + ADK (**Orchestrator + 5 Agent の宣言的マルチエージェント構成**)
 - **データ**: Firestore (5 階層データモデル + 見積もりポーカーのセッション / エージェントログ)
-- **イベント**: Pub/Sub (チケット保存・儀式時刻のトリガ)
+- **イベント**: Pub/Sub (チケット保存などアプリ内イベントの配送。儀式時刻による自動起動は持たない)
 - **観測**: Cloud Logging + Cloud Trace
 - **CI/CD**: Cloud Build + Cloud Deploy
 - **AI Agent エコシステム連携**: MCP server (stdio + HTTP / Cloud Run) — Claude Code / Cursor から Belvedere の Agent を直接呼べる

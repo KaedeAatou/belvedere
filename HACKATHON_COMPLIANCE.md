@@ -71,9 +71,9 @@
 | 観点 | 状態 | エビデンス / リスク |
 |---|---|---|
 | 単機能ではない (複数ツール組み合わせ) | 🟢 充足 (Mock) | `packages/agent/src/runtime.ts` で `thought → tool_call → tool_result → output` の反復ループ実装。Mock LLM が儀式別に複数 tool call sequence を返す |
-| 自律的な判断と実行 | 🟡 計画 | 自律性レベル L0-L4 を `AGENT_DESIGN.md §4` で設計。デフォルト Daily=L3 / Planner=L2 / Refinement=L2 / Reviewer=L2 / Retro=L2 (Refinement Agent は 2026-05 に追加した5番目の儀式 agent) |
-| 自律トリガ (時間/イベント/閾値) | 🟡 計画 | Cloud Scheduler + Pub/Sub で「儀式30分前」「障害発生」「停滞検出」などを起動条件に設計 |
-| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済。**Orchestrator が儀式の時刻で 5 Agent を編成する ADK マルチエージェント**が「他 LLM でなく Gemini である必然性」(宣言的編成) |
+| 自律的な判断と実行 | 🟡 計画 | 自律性レベル L0-L4 を `AGENT_DESIGN.md §4` で設計。デフォルト 全 5 ロール L2 (L3/L4 不採用 / Refinement Agent は 2026-05 に追加した5番目の儀式 agent) |
+| 同期トリガ (画面操作) | 🟡 計画 | 画面操作トリガで同期起動 (時間/イベント/スケジュール起動は持たない)。Orchestrator が単一窓口として該当 Agent を agent.invoke で協議に招集する |
+| AIエージェントである必然性 | 🟢 充足 | `PRODUCT_BRIEF.md §5` の「単なる機能 vs エージェント」表で言語化済。**Orchestrator が単一窓口として 5 Agent を協議編成する ADK マルチエージェント**が「他 LLM でなく Gemini である必然性」(宣言的編成) |
 | マルチエージェント構成 | 🟢 充足 (Mock) | 5儀式エージェント (Planner / Refinement / Daily / Reviewer / Retrospective) + Orchestrator が `packages/agent/src/prompts.ts` `PER_AGENT` で定義済。各 Agent はチケット種別ルールエンジン (17 観点) を共有。Mock では役割別動作確認済。本物 ADK 連携は GCP セットアップ後 |
 | ピッチ用デモ動画 | 🔴 未撮影 | 「自律的に動いた結果」を 90秒で見せる動画素材が無い。基準①の最大リスク。**Proto Pedia 必須要件 (YouTube/Vimeo URL)** でもあり、撮影枠は Phase 3-C (7/8-10) のみ = バッファゼロ |
 | マルチエージェントへのコンテキスト供給 | 🟢 充足 (2026-06-11) | `retro.tries.list` Tool 追加で Retro 積み上げ Try (Firestore 永続) を儀式 Agent のコンテキストに供給。チケット種別ルールエンジン (17 観点) + 見積もりポーカー (サーバ側隠蔽強制) も Agent が参照する判断材料として配線済 |
@@ -121,7 +121,7 @@
 | 拡張性 | 🟢 | LLMプロバイダ抽象 (`packages/llm/`) / Repository抽象 (`packages/repo/` の RepoContainer = tickets/sprints/projects/epics/stories/members/ceremonies/agentRuns/ceremonyHealth) / Tool factory (`buildTools(repo)`) ですべて差し替え式 |
 | 実運用への配慮 | 🟡 | Secret Manager / WIF / Cloud Logging / 課金アラート / OWASP リリースゲート (WC-110) を設計 |
 | コード品質 | 🟢 | TypeScript strict + noUncheckedIndexedAccess + exactOptionalPropertyTypes / Python mypy strict + ruff / `pnpm typecheck` 全 11 ワークスペース通過 (2026-06-17 確認) / **vitest 325 件 pass** (shared 19 + llm 21 + repo 35 + tools 47 + api 182 + mcp 21 / 2026-06-17 確認 / 243→325 に増加 / Gemini provider テスト 6 + MCP↔API 統合 + tools 純粋関数抽出分) + GitHub Actions CI で `pnpm test` 自動実行 + **e2e workflow (e2e.yml) + スクリーンショット巡回 e2e + 実 pointer/SortableJS d&d e2e + layout 回帰ガード** / **zod runtime validation** (firestore.ts read 経路で safeParse + drift detection) / **prompts XML 構造化** (Anthropic Prompting 101 準拠、TS↔Python 同期) |
-| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini + ADK (Orchestrator + 5 Agent) / Firestore / Cloud Storage (エージェントログ) / Pub/Sub / Cloud Scheduler / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
+| GCPサービス活用度 | 🟡 計画 | 設計上は Cloud Run / Gemini + ADK (Orchestrator + 5 Agent) / Firestore / Cloud Storage (エージェントログ) / Pub/Sub (アプリ内イベント配送 / スケジュール起動は不採用) / Vector Search / Cloud Build / Cloud Deploy / Secret Manager / Logging / Trace |
 | 多階層モノレポ構成 | 🟢 | TS workspace 9 packages + Python uv workspace 1 (orchestrator-py)。shared / seed / repo / tools / llm / agent の依存方向が一方向 (循環なし) |
 
 ---

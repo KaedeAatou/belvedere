@@ -44,8 +44,8 @@ gantt
     招待 UI 最小実装                 :done, 2026-06-25, 2d
     section 3-A. Agent 本実装
     Gemini + ADK + Orchestrator A2A  :2026-06-27, 4d
-    section 2. Pub/Sub リアル配線
-    Pub/Sub + Cloud Scheduler + Panel:2026-07-01, 3d
+    section 2. AI Panel リアル配線
+    画面操作トリガ + AI Panel 配線    :2026-07-01, 3d
     section 3-B. RAG
     Elastic Cloud + Gemini RAG       :2026-07-04, 4d
     section 3-C. 提出準備
@@ -130,20 +130,18 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 
 - [ ] **`packages/llm/src/gemini.ts` 実装** — `LLM_PROVIDER=gemini` で Mock を置換
 - [ ] **ADK 本物実装** (`apps/orchestrator-py/src/orchestrator/agents.py:build_agents(use_real_adk=True)`)
-- [ ] **Orchestrator Multi-Agent (= スクラムマスター AI)**:
+- [ ] **Orchestrator Multi-Agent (= スクラムマスター AI / 単一窓口)**:
   - Orchestrator が SubAgent として 5 儀式 Agent を持つ ADK 構成
-  - 月曜朝 → Planner + Daily 並列起動
-  - 木曜 14:30 → Refinement 単独起動
-  - ふりかえり時刻 → Retrospective → Try 集約 → 翌スプリント Planner に引き継ぎ
+  - Orchestrator が画面操作を受けて該当 Agent を agent.invoke で協議招集・統括 (深さ1 / トリガは画面操作のみ)
+  - ふりかえりで Retrospective が Try 集約 → 翌スプリント Planner に引き継ぎ
+  - (スケジュール / 時刻ルーティングによる自動起動は不採用)
 - [ ] FastAPI `/agents/{name}/invoke` を本物 ADK 経路で動かす
 - [ ] Cloud Run に orchestrator-py をデプロイ (Phase 1-D の延長)
 
-### Phase 2 Pub/Sub + AI Integrity Panel リアル配線 / 7/1 〜 7/3 (3 日)
-- [ ] Pub/Sub Topic 4 種: `ticket.created` / `ceremony.upcoming` / `try.persisted` / `ticket.updated`
-- [ ] チケット保存 → Pub/Sub publish → Subscriber が Orchestrator 起動
-- [ ] AI Integrity Panel が本物の Agent 出力をリアルタイム表示
-- [ ] Cloud Scheduler 設定: 月曜 08:30 / 平日 09:55 / 木曜 14:30 / レビュー 17:00 / ふりかえり 16:00
-- [ ] (簡略化: Slack 通知 / Live Activity 画面は時間が許せば、ダメなら Phase 5 で後回し)
+### Phase 2 AI Integrity Panel リアル配線 / 7/1 〜 7/3 (3 日)
+- [ ] 画面操作 → `/api/agents/:name` 同期起動 → Orchestrator が該当 Agent を協議招集・統括
+- [ ] AI Integrity Panel が本物の Agent 出力を表示 (同期応答 + Web polling)
+- [ ] (スケジュール / Pub-Sub による自動起動・自律 Slack 通知は不採用)
 
 ### Phase 3-B Elastic + Gemini RAG / 7/4 〜 7/7 (4 日)
 - [ ] **U-Sub2 (👤)**: Elastic Cloud 14 日トライアル契約
@@ -183,7 +181,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 | **2026-06-24** | Phase 1-D (MCP Cloud Run) 完了見えない | MCP は stdio のまま提出、ドッグフードはローカル Claude Code 経由 |
 | **2026-06-26** | 招待 UI 完了見えない → 2026-06-12 完了済 | 「個人開発 SaaS」のまま提出、ピッチで「マルチテナント設計は完備、招待 UI は次フェーズ」と説明 |
 | **2026-06-30** | Phase 3-A (ADK Multi-Agent) 不調 | 雛形 + Gemini 1 回呼び出しまで縮退、A-2 要件は守る |
-| **2026-07-03** | Phase 2 Pub/Sub 不調 | 「API 同期実行 + Web polling」の擬似リアルタイムに縮退 (見た目はリアルタイム) |
+| **2026-07-03** | Phase 2 AI Panel 配線が不調 | finding ピル + 静的ルールチェックの提示に絞り、Agent 出力は手動更新で縮退 |
 | **2026-07-07** | Elastic RAG 完成見えない | L2 markdown を prompt 埋込で擬似 RAG (Elastic 接続なし)、協賛企業活用枠は失うが提出は守る |
 | **2026-07-10 朝** | ピッチ動画未完成 | 60 秒の短縮版を朝撮り直し、徹夜カバー |
 
