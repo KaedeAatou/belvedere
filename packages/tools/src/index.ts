@@ -119,7 +119,10 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
     },
     async invoke({ id }) {
       const s = await repo.sprints.get(id);
-      return s ?? { error: `sprint not found: ${id}` };
+      // IDOR ガード: repo.sprints.get は workspace スコープされないので、id 推測で他 workspace の
+      // Sprint を読めないよう tool 側で照合する (薄い CRUD の IDOR 方針と整合 / ticketQualityCheckTool と同型)。
+      if (!s || s.workspaceId !== workspaceId) return { error: `sprint not found: ${id}` };
+      return s;
     },
   };
 
