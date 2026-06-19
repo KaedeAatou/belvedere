@@ -3,7 +3,9 @@
 > このリポジトリの最終目的: **DevOps × AI Agent Hackathon 2026 への応募・受賞**
 > 一次情報: https://findy.notion.site/devops-ai-agent-hackathon-2026
 > 最終ピッチ: 2026-08-19 (渋谷ストリーム)
-> 最終チェック: 2026-06-19 (このファイルが古ければ Claude が再取得して更新する)
+> 最終チェック: 2026-06-20 (このファイルが古ければ Claude が再取得して更新する)
+>
+> **2026-06-20 監査ハイライト + 「まわす」戦略確定**: `hackathon-compliance-auditor` で Notion を完全再取得 → 開発要件・審査5基準・参加要件・スケジュール・応募方法・賞金とも **差分ゼロ** (お知らせ最新 5/26 のまま)。**(1) 評価コンセプト「つくる・まわす・とどける」3軸を新規反映** (出典: Google Cloud 公式ブログ。Notion の審査5基準には無い企画コンセプトで、本ファイルが取りこぼしていた。中央 **「まわす = CI/CD など DevOps フロー + AI を継続的に改善するサイクル」**)。お題が **DevOps** ゆえ一般 AI ハッカソンと異なり **CI/CD はテーマ直結 = 提出図に描くべき** (主催の採点軸)。Belvedere の「まわす」= **使うほど賢くなる (Retro Try→Agent 改善ループ [既に動作] → Elastic RAG で意味検索化)** + **後退させない (agent eval を CI ゲート化)** + CI/CD (WIF 鍵レス / 464 テスト / e2e)。設計を `docs/continuous-improvement-design.md` に確定 (実装は別セッション / ELSER vs Gemini Embeddings は要確認)。**(2) A-2 を 🟡→🟢 に昇格**: 本番 Cloud Run が `/health` で `"llm":"gemini"` を返し実推論稼働 (commit c7e148b で deploy-api.yml 既定を `gemini`/`gemini-2.5-flash` に切替 / a989a1f で secret 名を `GEMINI_API_KEY` に統一 / `POST /api/agents/refinement` end-to-end 成功 ¥0.4/run)。前回 (6/19) の最大クリティカルパス「本番 Gemini 切替 = ユーザー専権の Secret 注入」が**解消**。ADK (`agents.py`) は雛形のままだが A-2 は Gemini API 採用で充足のため任意。**(3) 提出図の方針**: 詳細図 (ARCHITECTURE.md / 既存 Eraser ~40 ノード) はリポジトリに実装力エビデンスとして残し、**Proto Pedia 提出図は「コアフロー + CI/CD 1レーン」≒ 11〜12 ノード**に簡素化 (世界・日本のハッカソン受賞作は 4〜10 ノード / IAM・SA・監視は描かないのが標準。DevOps ゆえ CI/CD レーンのみ戻す)。draft を `docs/submission-diagram.md` + `PITCH.md` 末尾に整備。**(4) 実機**: test 464 緑 / typecheck 11/11 / 会社識別子・廃止語・主LLM/デプロイ先差し替えゼロ。**残るクリティカルパスは人手のみ**: B-1 デモ動画 / Proto Pedia 登録 / Google Form 提出 (全てユーザー作業)。+ 次セッションで eval + Elastic RAG 実装 (「まわす」軸を意識)。提出 7/10 まで残り 20 日。
 >
 > **2026-06-19 監査ハイライト**: Notion を cursor 連鎖で完全再取得 (294 ブロック / スケジュールは table_row 全 9 行) → 開発要件 (実行プロダクト 4 群 / AI 技術 11 群) ・審査5基準・参加要件 (日本居住 18 歳以上 / 個人の私的活動 / 公務員等除外) ・スケジュール・応募方法 STEP①②③・賞金とも **差分ゼロ** (お知らせ最新 5/26 Elasticsearch Bootcamp のまま)。**今セッションの Agent 運用モデル確定を検証**: ① Orchestrator を「時刻ルーティング」→ **単一窓口 = 協議統括**へ実装変更 (`packages/tools/src/agent-invoke.ts` の `agent.invoke` で 5 儀式 agent を子として in-process 招集 / 深さ1固定・IDOR・コストキャップ / `app.ts` で request-scoped `childRuns` 収集 / `schemas.ts` で AgentRun.childRuns を z.lazy 自己参照)。prompts.ts / mock.ts / agents.py 同期済、detectRole anchor (`Agent-Id:` / `Your role:`) 無傷 → Mock LLM で協議が end-to-end で動く (web flag ④ `useOrchestratorWindow` 既定 OFF) ② **自律性を L1/L2 のみに統一** (L3/L4 不採用 / `AGENT_DESIGN.md §4`)。出力は AI パネル。**スケジュール / Pub-Sub 自動起動も不採用** (画面操作トリガのみ) ③ epic 必須化 (Story に親 Epic 必須 + インライン Epic 作成) / Review 指摘を reviewNotes 蓄積 / sprint.get IDOR fix。**🟡 検出 (中): Slack 連携は docs (AGENT_DESIGN/ARCHITECTURE) では「全除去」と明記済だが、コードに `slack.message.post` ツールが `buildTools` の tools 配列に push されたまま残存** (`packages/tools/src/index.ts:274,346` + `packages/shared/src/types.ts:341` `slackUserId`)。要件違反ではない (mock stdout / 提出物の主張は AI パネル) が、docs↔コード乖離 → 提出前に撤去推奨。**A-2 は 🟡 据え置き**: TS `GeminiLLMProvider` 本実装 + 無料枠キーで疎通確認済だが **本番 Cloud Run は `/health` で `"llm":"mock"`** (cloudbuild `_LLM_PROVIDER: mock` / Secret Manager にキー未注入 = ユーザー専権の残作業)、ADK は `agents.py` が `USE_REAL_ADK=true` で `NotImplementedError` の雛形のみ (実体の協議は TS runAgent)。**主 LLM (Gemini) / デプロイ先 (Cloud Run) / 自律性に縮退・差し替えゼロ** (anthropic/openai/vercel/lambda の混入は「Anthropic Prompting 101 準拠」コメントのみ)。実機: gcloud 個人アカウント + `belvedere-dev-atrium`、Cloud Run api/web 200 OK、会社識別子混入ゼロ、廃止語の実使用ゼロ (禁止リスト定義のみ)、typecheck 11/11 緑、**test 全緑 (shared 46 + llm 26 + agent 7 + tools 86 + api 201 + web 31 + repo 44 + mcp smoke 21)**。残クリティカルパス: A-2 本番 Gemini 切替 (Secret Manager 注入 = ユーザー) + ADK Runner (任意) / B-1 デモ動画 / B-4 ドッグフード数字 / Proto Pedia。提出 7/10 まで残り 21 日。
 >
@@ -34,6 +36,21 @@
 
 ---
 
+## A-0. 評価コンセプト「つくる・まわす・とどける」(公式ブログ / 2026-06-20 反映)
+
+> Notion の審査5基準とは別に、Google Cloud 公式ブログがハッカソンの企画コンセプトを 3 軸で定義している。お題が **DevOps** であることの本質はここ。**特に中央「まわす」を取りこぼさないこと**。
+> 出典: https://cloud.google.com/blog/ja/products/ai-machine-learning/devops-ai-agent-hackathon-2026?hl=ja
+
+| 軸 | 公式定義 (要約) | Belvedere の対応 | 状態 |
+|---|---|---|---|
+| **つくる** | Gemini を中核に、自律的に判断・実行する AI エージェントを設計・実装。エージェントとしての必然性まで評価 | Orchestrator 単一窓口 + 5 Ceremony Agents (ADK 宣言的編成 / `agent.invoke` 協議統括 / 種別ルールエンジン) | 🟢 |
+| **まわす** | **CI/CD など DevOps フローを構築し、AI を継続的に改善するサイクルを回す** | **CI/CD**: WIF 鍵レスデプロイ + `pnpm test` 464 件ゲート + e2e。**AI 改善**: ① Retro Try→Agent 改善ループ (使うほど賢くなる / **既に動作**) ② Elastic RAG で意味検索化 (**設計済** `docs/continuous-improvement-design.md` / 実装は次セッション) ③ agent eval を CI ゲート化 (後退防止 / 設計済) | 🟢 (CI/CD + Retro loop) / 🟡 (RAG・eval は設計済・実装次セッション) |
+| **とどける** | Google Cloud へのデプロイで本番品質のプロダクトをユーザーに届ける | Cloud Run (api/web) 200 OK + Firebase Auth + マルチテナント。MCP で AI Agent エコシステムにも開く | 🟢 |
+
+> **「まわす」の見せ方**: 提出図 (Proto Pedia) に **CI/CD を 1 レーン**描く (DevOps テーマなので妥当 / 主催の採点軸)。ストーリーは「使うほど賢くなる (Retro→RAG) + 後退させない (eval/CI) + CI/CD で届ける」の 3 文で「まわす」に直接回答。Elasticsearch は公式 AI 技術リスト (11 群) の 1 つでもあり採用は上乗せ。
+
+---
+
 ## A. 開発要件 (どちらも必須)
 
 ### A-1. GCP アプリケーション実行プロダクトを1つ以上採用
@@ -53,7 +70,7 @@
 
 | 候補 | 採用 | 状態 | 根拠 |
 |---|---|---|---|
-| **Gemini API** | ✅ 採用 | 🟡 計画 (TS provider 本実装 + 無料枠キー疎通確認済 / 2026-06-18) | **`packages/llm/src/gemini.ts` で `GeminiLLMProvider` を本実装** (commit 71e5171)。`generativelanguage.googleapis.com/v1beta` REST を直叩き (SDK 不使用 / fetch 注入でテスト可)、LLMProvider 抽象を Gemini にマップ (system→systemInstruction / assistant.toolCalls→functionCall / tool→functionResponse / req.tools→functionDeclarations / responseSchema→generationConfig / usageMetadata→概算コスト)。`factory.ts` は `LLM_PROVIDER=gemini` で `GeminiLLMProvider(GEMINI_API_KEY)`、キー未設定なら constructor throw (signpost 維持)。`vertex` は未採用で throw。**2026-06-18: 無料枠 API キーで実トークン生成の疎通成功を確認** ([[memory: project-gemini-connection-state]])。**残り (= ユーザー専権 + 配線)**: ① **本番 Cloud Run は依然 `LLM_PROVIDER=mock`** (`infra/cloudbuild.yaml` `_LLM_PROVIDER: mock` / `/health` で `"llm":"mock"`)。Secret Manager にキーを注入し本番を gemini に切替えるのがユーザー残作業 (GCP クレジットは Gemini prepay に効かず無料枠キー運用)、② デモシーン用に AI パネル経路で gemini を 1 回踏む配線・撮影 |
+| **Gemini API** | ✅ 採用 | 🟢 **充足 (本番 Cloud Run で Gemini 実推論稼働 / 2026-06-20)** | **`packages/llm/src/gemini.ts` で `GeminiLLMProvider` を本実装** (commit 71e5171)。`generativelanguage.googleapis.com/v1beta` REST を直叩き (SDK 不使用 / fetch 注入でテスト可)、LLMProvider 抽象を Gemini にマップ (system→systemInstruction / assistant.toolCalls→functionCall / tool→functionResponse / req.tools→functionDeclarations / responseSchema→generationConfig / usageMetadata→概算コスト)。`factory.ts` は `LLM_PROVIDER=gemini` で `GeminiLLMProvider(GEMINI_API_KEY)`、キー未設定なら constructor throw (signpost 維持)。`vertex` は未採用で throw。**2026-06-20: 本番 Cloud Run が `/health` で `"llm":"gemini"` を返し実推論で稼働** ([[memory: project-gemini-connection-state]])。commit c7e148b で `deploy-api.yml` 既定を `gemini` / `gemini-2.5-flash` に切替、a989a1f で secret 名を `GEMINI_API_KEY` に統一、`POST /api/agents/refinement` が end-to-end 成功 (¥0.4/run)。前回の残作業「Secret Manager 注入 + 本番切替 (ユーザー専権)」は**解消済**。無料枠は pro=limit0/flash20分・GCP クレジットは Gemini に効かず **paid は実カード入金**。`infra/cloudbuild.yaml` の substitution 既定は依然 `mock` だが deploy ワークフローが `gemini` を明示注入するため本番実害なし (整合性のため将来揃える余地は任意)。残: デモ動画で AI パネル経路の gemini を 1 回見せる撮影 (ユーザー作業) |
 | **ADK (Agents Development Kit)** | ✅ 採用 | 🟡 計画 | `apps/orchestrator-py/pyproject.toml` に `google-adk>=0.5` / `google-genai>=0.3` 依存追加済 / `agents.py` に5儀式 (planner/refinement/daily/reviewer/retrospective) + Orchestrator の INSTRUCTION 雛形完備 / `build_agents(use_real_adk=True)` で `NotImplementedError` raise (silent fallback なし)。本物実装は `USE_REAL_ADK=true` 切替待ち |
 | Gemini Enterprise Agent Platform (旧 Vertex AI) | — | ⚪ | Notion 公式リスト (2026-05-01 確認) では「旧Vertex AI」表記。Gemini API + ADK で十分。観測やデータ管理で必要なら追加 |
 | Vector Search | 🟡 検討 | ⚪ | 過去ふりかえり検索で使う案あり (`AGENT_DESIGN.md`)。Phase 2 後半で検討 |
@@ -61,8 +78,8 @@
 | Speech-to-Text / TTS | — | ⚪ 不採用 | 録画機能の縮退により用途消滅 |
 | Gemma / Imagen / Vision / NLP / Translation | — | ⚪ | 必要に応じて追加 |
 
-**充足条件**: 本物の Gemini 推論が1回でも走る (= 実 API キーで実際にトークンが生成される) こと。ADK Runner 経由なら万全だが、TS の `GeminiLLMProvider` 経由 (CLI/API) でも A-2「Gemini API」採用の実体は成立する。
-**実装期限**: **Phase 3-A (2026-06-27 〜 06-30)** が提出 (7/10) 前最後の本実装枠。縮退ライン (6/30): 雛形 + Gemini 1 回呼び出しまで縮退しても A-2 要件は死守 (`ROADMAP.md` 中止判断ライン)。**2026-06-17 時点で進展**: `gemini.ts` (TS provider) が throw → 本実装に昇格 (REST 直叩き / tool_calls 往復対応 / 単体テスト 6 件緑)。一方 `agents.py` は依然 `use_real_adk=True` で `NotImplementedError` (= ADK Runner 経由の実呼び出しは未着手)、`GEMINI_API_KEY` 未設定で実トークン生成は未検証、本番 Cloud Run は `LLM_PROVIDER=mock` のまま。**= signpost を破らず TS 側だけ前倒し実装した状態**。
+**充足条件**: 本物の Gemini 推論が1回でも走る (= 実 API キーで実際にトークンが生成される) こと。→ **✅ 2026-06-20 達成** (本番 Cloud Run `/health` `"llm":"gemini"` + `POST /api/agents/refinement` 実推論成功)。ADK Runner 経由なら万全だが、TS の `GeminiLLMProvider` 経由 (本番 API) で A-2「Gemini API」採用の実体は成立済。
+**実装期限**: **Phase 3-A (2026-06-27 〜 06-30)** が提出 (7/10) 前最後の本実装枠。縮退ライン (6/30): 雛形 + Gemini 1 回呼び出しまで縮退しても A-2 要件は死守 (`ROADMAP.md` 中止判断ライン)。**2026-06-17 時点で進展**: `gemini.ts` (TS provider) が throw → 本実装に昇格 (REST 直叩き / tool_calls 往復対応 / 単体テスト 6 件緑)。**2026-06-20 で本番切替完了**: 本番 Cloud Run は `LLM_PROVIDER=gemini` で実推論稼働 (`/health` `"llm":"gemini"`)。`agents.py` (ADK Runner) は依然 `NotImplementedError` 雛形だが、A-2 は TS `GeminiLLMProvider` 経由の本番 Gemini で**充足済**のため ADK は任意 (協議の実体は TS runAgent)。
 
 ---
 
@@ -233,6 +250,7 @@
 
 | 日付 | 変更 |
 |---|---|
+| 2026-06-20 | **「まわす」戦略確定 + A-2 🟢 昇格 + 3軸反映**: ① `hackathon-compliance-auditor` で Notion 完全再取得 → 差分ゼロ ② **評価コンセプト「つくる・まわす・とどける」3軸を新規反映** (§A-0 / 出典 Google Cloud 公式ブログ。Notion 5基準に無い企画コンセプト。中央「まわす=CI/CD+AI継続改善」を取りこぼしていた) ③ **A-2 を 🟡→🟢**: 本番 Cloud Run が `/health` `"llm":"gemini"` で実推論稼働 (deploy-api.yml 既定 gemini / secret 名 GEMINI_API_KEY / refinement end-to-end 成功)。前回の最大クリティカルパス (本番 Gemini 切替=ユーザー専権) 解消 ④ **「まわす」設計を `docs/continuous-improvement-design.md` に確定** (Retro Try 改善ループ [既に動作] / Elastic RAG 意味検索化 [配線済・本番OFF / prompts指示・indexer・provision・ELSER vs Embeddings が残] / agent eval を CI ゲート化。**実装は別セッション**・まわす軸を意識して引き継ぎ) ⑤ **提出図の方針確定**: 詳細図はリポジトリに残し、Proto Pedia 図は「コアフロー + CI/CD 1レーン」≒11〜12 ノードに簡素化 (`docs/submission-diagram.md`)。世界・日本の受賞作実例は 4〜10 ノードで IAM/SA/監視は描かない / DevOps ゆえ CI/CD レーンのみ戻す ⑥ PITCH.md 事実整合 (Vertex AI→Gemini / RAG overclaim 緩和) + Proto Pedia 提出ドラフト (つくる・まわす・とどける構成) 追加 ⑦ 実機: test 464 緑 / typecheck 11/11 / 会社識別子・廃止語・主LLM/デプロイ先差し替えゼロ。**残るクリティカルパスは人手のみ** (B-1 動画 / Proto Pedia 登録 / Google Form) + 次セッション (eval+RAG 実装)。提出 7/10 まで残り 20 日。本セッションは design+docs のみ・本番コード変更なし・commit のみ (push なし)。 |
 | 2026-04-29 | 初版作成 |
 | 2026-04-30 | UI採用案を `ui-mockups-v3/cases/13-hand-digital.html` (Hand × Digital) に確定。B-3 ユーザビリティを更新 (高密度化 + コラボ表現追加) |
 | 2026-05-04 | 大規模変更を反映: ① Belvedere 再ブランド (旧 Kazaguruma / 風車) ② Project エンティティ追加 (Workspace > Project > Epic > Story > Task / `idPrefix` 可変、default `PRJ-belvedere-core`) ③ Refinement Agent 追加 (5番目の儀式 agent、SP > 8 / valueImpact 未設定 / priority × valueImpact ミスマッチ等を診断) ④ UI を Nuxt 3 + Vue 3 に切替、Claude Designer から 5 画面 SFC を取り込み (Backlog/Planning/Daily/Review/Retro + Shell/RailPanel/AIPanel/DetailSheet + 6 primitives = 17 SFC) ⑤ `.claude/rules/` で TS/Python/Vue/FastAPI のプロジェクト固有パターンを文書化 ⑥ memory ファイル整理 (`feedback_no_neologisms.md` / `product_name.md` / `project_ceremony_scheme.md` 等) ⑦ Notion 一次情報で Google Cloud 300ドルクーポン配布告知を確認 (2026-05-01 更新)。⑧ 新規リスク発見: git 未初期化 / seed の会社メール露出。 |
