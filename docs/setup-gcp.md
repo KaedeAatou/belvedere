@@ -203,19 +203,28 @@ done
 
 ---
 
-## 9. Gemini API キー (任意 / 開発用) (3分)
+## 9. Gemini API キー (本番 Cloud Run を実 Gemini にする / 5分)
 
-ローカル開発で Vertex AI 経由ではなく直接 Gemini API を叩きたい場合だけ:
+本番 Cloud Run の API を `LLM_PROVIDER=gemini` で動かすと、`infra/cloudbuild.yaml` の deploy step が **Secret Manager の secret `GEMINI_API_KEY`** を実行時 env としてマウントする (`--set-secrets=GEMINI_API_KEY=GEMINI_API_KEY:latest`)。**secret 名は大文字スネークの `GEMINI_API_KEY` で固定** — cloudbuild が参照する名前と一字一句一致が条件 (`gemini-api-key` 等で作ると deploy が `Secret [GEMINI_API_KEY] not found` で失敗する)。
 
-[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey) で発行 → Secret Manager に保存:
+> **コスト**: [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey) の **無料枠キー (課金未有効のプロジェクトで発行)** を使う限り Gemini 呼び出しは課金ゼロ・レート制限のみ。無料枠は `gemini-2.5-pro` が limit0 のため、cloudbuild は `_GEMINI_MODEL_OVERRIDE=gemini-2.5-flash` を既定で注入し全 agent を flash に倒す (有料キーにしたら pro / per-agent mix に切替可)。Secret Manager 自体は version 1本 $0.06/月 + アクセス1万回 $0.03 の微小コスト (GCP クレジット充当対象 = 体感ゼロ)。GCP クレジットは Gemini の prepay には効かない。
 
 ```bash
-echo -n "YOUR_API_KEY_HERE" | gcloud secrets create gemini-api-key \
-  --data-file=- \
-  --project=belvedere-dev-atrium
+PROJECT=belvedere-dev-atrium
+RUNTIME_SA=belvedere-runtime@${PROJECT}.iam.gserviceaccount.com
+
+# 1. secret 'GEMINI_API_KEY' を作成 (キーを履歴/画面に残さない)
+read -rs -p 'Gemini API key を貼り付けて Enter: ' GEMINI_KEY; echo
+printf '%s' "$GEMINI_KEY" | gcloud secrets create GEMINI_API_KEY --data-file=- --project="$PROJECT"
+unset GEMINI_KEY
+
+# 2. ランタイム SA に この secret の読み取り権限 (無いと Cloud Run 起動失敗)
+gcloud secrets add-iam-policy-binding GEMINI_API_KEY --project="$PROJECT" \
+  --member="serviceAccount:${RUNTIME_SA}" \
+  --role="roles/secretmanager.secretAccessor"
 ```
 
-> 本番は Vertex AI 経由が推奨 (キー不要、SAだけで叩ける)。
+> secret を作ってから `_LLM_PROVIDER=gemini` で deploy する (順序厳守)。ローテーションは `gcloud secrets versions add GEMINI_API_KEY --data-file=-`。ローカル開発は Secret Manager を使わず `.env` の `GEMINI_API_KEY` + `LLM_PROVIDER=gemini ./scripts/dev-local-noauth.sh`。
 
 ---
 
