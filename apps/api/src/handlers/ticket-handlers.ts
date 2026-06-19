@@ -61,6 +61,9 @@ export const TicketCreateBodySchema = z.object({
   epicId: z.string().optional(),
   type: TicketTypeSchema.optional(),
   timeboxHours: z.number().min(0).optional(),
+  // Review 儀式の指摘ノート。create で渡すことは基本無いが、.partial() 派生の TicketPatchBodySchema で
+  // PATCH が reviewNotes を受けられるようにするため create body にも optional で置く (配列まるごと replace 契約)。
+  reviewNotes: z.array(z.string().min(1)).optional(),
   // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
   orderIndex: z.number().optional(),
 });
@@ -133,6 +136,7 @@ export async function createTicket(
     ...(parsed.data.epicId !== undefined && { epicId: parsed.data.epicId }),
     ...(parsed.data.type !== undefined && { type: parsed.data.type }),
     ...(parsed.data.timeboxHours !== undefined && { timeboxHours: parsed.data.timeboxHours }),
+    ...(parsed.data.reviewNotes !== undefined && { reviewNotes: parsed.data.reviewNotes }),
     ...(parsed.data.orderIndex !== undefined && { orderIndex: parsed.data.orderIndex }),
     createdAt: now,
     updatedAt: now,
