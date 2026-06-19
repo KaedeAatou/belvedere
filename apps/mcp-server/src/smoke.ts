@@ -266,6 +266,27 @@ const cases: SmokeCase[] = [
     },
   },
   {
+    // 案A: type=story は親 Epic 必須。同一 workspace に実在する EP-1 を渡せば 201。
+    label: 'belvedere_ticket_create(type=story, epicId=EP-1) が起票できる',
+    run: () =>
+      callTool('belvedere_ticket_create', {
+        title: 'smoke story with epic',
+        type: 'story',
+        epicId: 'EP-1',
+      }),
+    expect: (r) => {
+      const { parsed, isError } = parse(r);
+      if (isError) return false;
+      return parsed.created?.type === 'story' && parsed.created?.epicId === 'EP-1';
+    },
+  },
+  {
+    // 案A: epicId 無しの story は API が 400 (epic_required) を返す。
+    label: 'belvedere_ticket_create(type=story) は epicId 無しだとエラー',
+    run: () => callTool('belvedere_ticket_create', { title: 'smoke story no epic', type: 'story' }),
+    expect: (r) => parse(r).isError,
+  },
+  {
     label: 'belvedere_ticket_update returns error for unknown ticket (404)',
     run: () => callTool('belvedere_ticket_update', { id: 'WC-NONEXISTENT', patch: { title: 'x' } }),
     expect: (r) => parse(r).isError,

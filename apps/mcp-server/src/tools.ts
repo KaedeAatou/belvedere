@@ -155,6 +155,11 @@ export const MCP_TOOLS: Tool[] = [
         estimatePt: { type: 'number' },
         acceptanceCriteria: { type: 'array', items: { type: 'string' } },
         parentTicketId: { type: 'string' },
+        epicId: {
+          type: 'string',
+          description:
+            '親 Epic の ID (例: "EP-1")。type === "story" を新規起票する時は必須。同一 workspace に実在する Epic を指定する (実在しない id は API が 400)。',
+        },
         projectId: { type: 'string' },
         labels: { type: 'array', items: { type: 'string' } },
         blockedBy: { type: 'array', items: { type: 'string' } },

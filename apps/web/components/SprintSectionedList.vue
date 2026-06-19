@@ -66,6 +66,7 @@ const { createTicket, reorderTickets, isLoading: createLoading, error: liveError
 const { findingsFor } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
+const { selectableEpics, fetchEpics } = useEpics();
 
 // 複数選択 (全区画跨ぎ選択可)。BulkActionBar は上部に 1 つ。
 const sel = useTicketSelection();
@@ -189,6 +190,8 @@ const usAsA = ref('');
 const usIWant = ref('');
 const usSoThat = ref('');
 const storyVerdict = ref<StoryQualityVerdict | null>(null);
+// story の親 Epic (案A: story 作成時は必須)。selectableEpics から選ぶ。
+const newEpicId = ref<string>('');
 
 const isStory = computed(() => newType.value === 'story');
 // US の title は 3 欄から自動生成 (空欄時)。手入力 title があればそれを優先。
@@ -222,7 +225,10 @@ function openCreate(): void {
   usIWant.value = '';
   usSoThat.value = '';
   storyVerdict.value = null;
+  newEpicId.value = '';
   newSection.value = 'backlog';
+  // story 作成時の親 Epic セレクタ用に Epic 一覧を確実に読み込む (単体マウント経路でも空にしない)。
+  void fetchEpics();
   showCreateDialog.value = true;
 }
 
@@ -244,6 +250,13 @@ onMounted(() => {
   onUnmounted(() => document.removeEventListener('keydown', onKeydown));
 });
 
+// サーバの epic 関連エラーコードを日本語に翻訳 (それ以外は素通し)。案A の 400 を原因が伝わる文言にする。
+function translateTicketError(code: string | null): string | null {
+  if (code === 'epic_required') return '親 Epic が未設定です。親 Epic を選択してください';
+  if (code === 'epic_not_found') return '指定した親 Epic が見つかりません';
+  return code;
+}
+
 async function submitCreate(): Promise<void> {
   createError.value = null;
   // US は title を手入力 or 3 欄から自動生成。それ以外は title 必須。
@@ -252,10 +265,15 @@ async function submitCreate(): Promise<void> {
     createError.value = isStory.value ? '「誰が」と「何をしたい」を入力してください' : 'タイトルは必須です';
     return;
   }
+  // story は親 Epic 必須 (案A)。サーバ 400 に頼らず UI で弾く。
+  if (isStory.value && !newEpicId.value) {
+    createError.value = '親 Epic を選択してください';
+    return;
+  }
   const input: {
     title: string; priority: Priority; type: TicketType;
     estimatePt?: number; timeboxHours?: number; description?: string;
-    sprintId?: string; status?: 'backlog' | 'todo';
+    sprintId?: string; status?: 'backlog' | 'todo'; epicId?: string;
   } = {
     title: effectiveTitle,
     priority: newPriority.value,
@@ -263,6 +281,7 @@ async function submitCreate(): Promise<void> {
   };
   if (isStory.value) {
     input.description = composeStoryDescription();
+    input.epicId = newEpicId.value;
   } else if (newType.value === 'spike') {
     if (newTimebox.value !== null) input.timeboxHours = newTimebox.value;
   }
@@ -279,7 +298,7 @@ async function submitCreate(): Promise<void> {
     showCreateDialog.value = false;
     emit('created');
   } else {
-    createError.value = liveError.value ?? 'API 呼出失敗';
+    createError.value = translateTicketError(liveError.value) ?? 'API 呼出失敗';
   }
 }
 
@@ -289,6 +308,14 @@ const splitParent = ref<Ticket | null>(null);
 const splitRows = ref<{ title: string; type: TicketType }[]>([]);
 const splitBusy = ref(false);
 const splitError = ref<string | null>(null);
+// child-story 分割で親に epicId が無いとき、子 Story に付ける親 Epic (案A: 分割子も親 Epic 必須)。
+// seed の story は epicId を持たない (grandfather) ため、それを分割する時はここで選ばせる。
+const splitEpicId = ref<string>('');
+
+// child-story モードかつ親に epicId が無い → 子 Story の親 Epic を分割ダイアログで選ばせる。
+const splitNeedsEpic = computed(
+  () => props.splitMode !== 'task-spike' && splitParent.value?.epicId === undefined,
+);
 
 // task-spike モードの子種別候補。child-story モードは常に story。
 const splitChildTypes: TicketType[] = ['task', 'spike'];
@@ -305,6 +332,9 @@ function openSplit(t: Ticket): void {
     { title: '', type: defaultChildType() },
   ];
   splitError.value = null;
+  splitEpicId.value = '';
+  // child-story 分割で親に epicId が無いとき、子 Story の親 Epic を選ばせるため Epic 一覧を読み込む。
+  if (props.splitMode !== 'task-spike' && t.epicId === undefined) void fetchEpics();
   showSplitDialog.value = true;
 }
 
@@ -323,13 +353,21 @@ async function submitSplit(): Promise<void> {
     splitError.value = '子チケットのタイトルを 1 件以上入力してください';
     return;
   }
+  // child-story モードの子 Story は親 Epic が必須 (案A)。親の epicId を継承し、親に無ければ
+  // (seed story 等) ダイアログで選んだ splitEpicId を使う。どちらも無ければ UI で弾く (サーバ 400 前)。
+  const isChildStory = props.splitMode !== 'task-spike';
+  const childEpicId = isChildStory ? (parent.epicId ?? splitEpicId.value) : '';
+  if (isChildStory && !childEpicId) {
+    splitError.value = '子 Story の親 Epic を選択してください';
+    return;
+  }
   splitBusy.value = true;
   splitError.value = null;
   try {
     for (const r of rows) {
       const input: {
         title: string; type: TicketType; priority: Priority; parentTicketId: string;
-        sprintId?: string; status?: 'backlog' | 'todo';
+        sprintId?: string; status?: 'backlog' | 'todo'; epicId?: string;
       } = {
         title: r.title.trim(),
         type: props.splitMode === 'task-spike' ? r.type : 'story',
@@ -337,10 +375,13 @@ async function submitSplit(): Promise<void> {
         parentTicketId: parent.id,
         // 子は親のスプリントを継承 (CURRENT story → Task は CURRENT、Backlog US → 子 Story は未割当)。
         ...(parent.sprintId !== undefined && { sprintId: parent.sprintId }),
+        // child-story モード (子 type=story) は親 Epic 必須: 親の epicId を継承、無ければ選択値を使う。
+        // task-spike モード (子 Task/Spike) は epicId 不要なので付けない。
+        ...(isChildStory && childEpicId !== '' && { epicId: childEpicId }),
         status: parent.sprintId ? 'todo' : 'backlog',
       };
       const created = await createTicket(input);
-      if (!created) throw new Error(liveError.value ?? `「${r.title}」の作成に失敗しました`);
+      if (!created) throw new Error(translateTicketError(liveError.value) ?? `「${r.title}」の作成に失敗しました`);
     }
     showSplitDialog.value = false;
     emit('created');
@@ -502,6 +543,17 @@ async function submitSplit(): Promise<void> {
             <input id="ssl-us-sothat" v-model="usSoThat" data-testid="us-sothat" type="text" class="text-input"
                    maxlength="160" placeholder="例: 測定可能なゴールを定義でき、レビュー時の判定が割れない" />
           </div>
+          <!-- 親 Epic は story 作成時に必須 (案A)。実在 Epic から選ぶ。 -->
+          <div class="field">
+            <label class="label" for="ssl-us-epic">親 Epic <span class="req">*</span></label>
+            <select id="ssl-us-epic" v-model="newEpicId" data-testid="us-epic" class="select-input">
+              <option value="" disabled>親 Epic を選択</option>
+              <option v-for="e in selectableEpics" :key="e.id" :value="e.id">{{ e.name }}</option>
+            </select>
+            <p v-if="selectableEpics.length === 0" class="us-epic-empty" data-testid="us-epic-empty">
+              選択できる Epic がありません。先に Epic を作成してください。
+            </p>
+          </div>
           <p v-if="composedStoryTitle" class="us-preview">
             プレビュー: <b>{{ newTitle.trim() || composedStoryTitle }}</b>
           </p>
@@ -600,6 +652,18 @@ async function submitSplit(): Promise<void> {
         <p v-if="splitParent" class="split-parent">
           親: <span class="t-mono">{{ splitParent.id }}</span> {{ splitParent.title }}
         </p>
+        <!-- child-story 分割で親に epicId が無い場合の親 Epic セレクタ (案A: 子 Story も親 Epic 必須) -->
+        <div v-if="splitNeedsEpic" class="field">
+          <label class="label" for="ssl-split-epic">子 Story の親 Epic <span class="req">*</span></label>
+          <select id="ssl-split-epic" v-model="splitEpicId" data-testid="split-epic" class="select-input">
+            <option value="" disabled>親 Epic を選択</option>
+            <option v-for="e in selectableEpics" :key="e.id" :value="e.id">{{ e.name }}</option>
+          </select>
+          <p v-if="selectableEpics.length === 0" class="us-epic-empty" data-testid="split-epic-empty">
+            選択できる Epic がありません。先に Epic を作成してください。
+          </p>
+          <p v-else class="us-epic-empty">この Story は親 Epic 未設定です。分割で作る子 Story の親 Epic を選んでください。</p>
+        </div>
         <div class="split-rows">
           <div v-for="(row, i) in splitRows" :key="i" class="split-row">
             <input v-model="row.title" :data-testid="`split-row-${i}`" type="text" class="text-input"
@@ -698,6 +762,8 @@ async function submitSplit(): Promise<void> {
 }
 .us-issue.info .us-issue-kind { background: var(--ink-3); }
 .us-suggestion { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
+/* 親 Epic セレクタ補助文 (create / split 共通): 候補ゼロ or 継承不能時の案内 */
+.us-epic-empty { margin: 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 
 /* 分割ダイアログ */
 .split-dialog { max-width: 560px; }
