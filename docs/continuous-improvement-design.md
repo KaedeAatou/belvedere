@@ -19,7 +19,7 @@
 
 > **重要な区別**: eval は「改善」ではなく「劣化防止」。真に AI を賢くするのは A の知識ループ。両方そろって初めて「安心して回せる改善サイクル」になる。
 
-「まわす」前半 (CI/CD フロー) の実体は既存: **WIF 鍵レスデプロイ / `pnpm test` 464 件を push でゲート / e2e (Playwright) / deploy-api・deploy-web 分離**。本ドキュメントは後半 (AI を改善するサイクル) を扱う。
+「まわす」前半 (CI/CD フロー) の実体は既存: **WIF 鍵レスデプロイ / `pnpm test` 462 件を push でゲート / e2e (Playwright) / deploy-api・deploy-web 分離**。本ドキュメントは後半 (AI を改善するサイクル) を扱う。
 
 ---
 
@@ -33,7 +33,7 @@
 - 保存先: `RetroTryRepository.list({workspaceId})` → Firestore collection `retroTries` (`packages/repo/src/firestore.ts`)。`RetroTry` 型 = `{id, workspaceId, text, sprintNumber, sprintId?, done, createdAt, createdBy}` (`packages/shared/src/types.ts`)。
 - **意味**: ふりかえり (儀式) を回すほど、チーム固有の改善ルールが増え、Agent の検出基準が育つ。**Belvedere の儀式そのものが AI を育てる**最も本質的な改善ループ。これは新規実装不要で、図とストーリーで「まわす」として見せ切る。
 
-### 1-2. RAG 検索層 (KnowledgeSearcher) ✅ 配線まで完了 / 本番 OFF
+### 1-2. RAG 検索層 (KnowledgeSearcher) ✅ ツール配線まで完了 (呼出指示は §3-3① で未実装) / 本番 OFF
 - 抽象: `packages/tools/src/knowledge.ts`
   - `interface KnowledgeSearcher { name; search(query, opts: {workspaceId, topK?}): Promise<KnowledgeHit[]> }`、`KnowledgeHit = {sourceId, title, text, score}`。
   - `MockKnowledgeSearcher` (キーワード一致 / 決定的 / テスト・CLI 用)。
@@ -176,7 +176,7 @@ expect(run.outputArtifacts?.summary).toContain('G-DOD');
 
 > **使うほど賢くなる**: Belvedere の儀式 (特に Retrospective) を回すほど、チーム固有の改善 Try と知識が貯まり、Agent が `knowledge.search` でそれを意味検索して**そのチームに最適化された提案**を出すようになる (Retro loop → Elastic RAG)。
 > **後退させない**: その AI を、agent eval が CI ゲートで守る。プロンプトやルールを改善してもデグレしたら CI が落ちる。
-> **CI/CD で回す**: WIF 鍵レスデプロイ + 464 テスト + e2e が、改善を本番まで安全に届ける。
+> **CI/CD で回す**: WIF 鍵レスデプロイ + 462 テスト + e2e が、改善を本番まで安全に届ける。
 
 この 3 文が「まわす = CI/CD + AI を継続的に改善するサイクル」への直接の回答になる。Elasticsearch は公式 AI 技術リスト (11 群) の 1 つでもあり、採用は技術要件の上乗せにもなる (A-2 は Gemini で既に充足)。
 
