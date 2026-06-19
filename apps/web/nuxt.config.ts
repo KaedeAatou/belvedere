@@ -42,6 +42,9 @@ export default defineNuxtConfig({
       firebaseProjectId: 'belvedere-dev-atrium',
       firebaseAppId: '1:876087923874:web:898d399e0f1d74e39f73fb',
       apiBaseUrl: 'https://belvedere-api-dev-cpszmcqmuq-an.a.run.app',
+      // ④ feature flag (既定 OFF = 回帰ゼロ)。ON で AI パネル送信を Orchestrator (単一窓口=協議統括)
+      // 経由にする。env NUXT_PUBLIC_USE_ORCHESTRATOR_WINDOW=true で本番でも切替可。
+      useOrchestratorWindow: false,
     },
   },
 

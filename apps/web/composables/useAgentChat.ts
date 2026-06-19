@@ -19,12 +19,21 @@ const SCREEN_TO_AGENT: Record<ScreenId, string> = {
   retro:      'retrospective',
 };
 
+/**
+ * ④ feature flag: AI パネルの送信先 agent を決める純粋関数 (Nuxt 非依存。直接 unit テストする)。
+ * useOrchestratorWindow=true なら Orchestrator (単一窓口=協議統括) に集約、false なら画面に対応する儀式 agent。
+ */
+export function resolveAgentName(screen: ScreenId, useOrchestratorWindow: boolean): string {
+  return useOrchestratorWindow ? 'orchestrator' : SCREEN_TO_AGENT[screen];
+}
+
 export const useAgentChat = () => {
   const messages = useState<ChatMessage[]>('agent-chat-messages', () => []);
   const isSending = useState<boolean>('agent-chat-sending', () => false);
   const sendError = useState<string | null>('agent-chat-error', () => null);
 
   const api = useApiClient();
+  const config = useRuntimeConfig();
 
   async function send(screen: ScreenId, prompt: string): Promise<void> {
     const trimmed = prompt.trim();
@@ -34,7 +43,8 @@ export const useAgentChat = () => {
     isSending.value = true;
     sendError.value = null;
 
-    const agentName = SCREEN_TO_AGENT[screen];
+    // ④ feature flag (既定 OFF = 回帰ゼロ): ON で Orchestrator (単一窓口=協議統括) に集約、OFF で画面対応 agent。
+    const agentName = resolveAgentName(screen, Boolean(config.public.useOrchestratorWindow));
     try {
       const run = await api.post<{
         status: string;
