@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Ticket, ValueImpact } from '@belvedere/shared';
+import type { Ticket } from '@belvedere/shared';
 import { compareTicketOrder } from '@belvedere/shared';
 import { VueDraggable } from 'vue-draggable-plus';
 
@@ -13,7 +13,7 @@ const emit = defineEmits<{
 }>();
 
 const { activeSprint, sprints, velocityHistory } = useSprints();
-const { reorderTickets, createTicket } = useTickets();
+const { reorderTickets, patchTicket } = useTickets();
 const { members } = useMembers();
 
 // 複数選択 → 一括変更/削除 (画面ローカル)。全選択 = carry-over 候補全件。
@@ -66,26 +66,28 @@ const demos = computed(() =>
 const highlights = computed(() => done.value.slice(0, 3).map((t) => ({ id: t.id, text: t.title })));
 const risks = computed(() => carry.value.slice(0, 2).map((t) => ({ id: t.id, text: t.title })));
 
-// ステークホルダーフィードバック → バックログ起票
-const feedbackText = ref('');
-const feedbackImpact = ref<ValueImpact>('medium');
-const feedbackSubmitting = ref(false);
-const feedbackConfirm = ref(false);
+// ステークホルダーの指摘 → 対象チケット (完成 increment) の reviewNotes に追記。
+// Review は完成チケットをデモして関係者が指摘する場なので、新規起票せず対象チケット自体に蓄積する。
+// demo チケットごとに指摘入力欄を持つ (対象は demo-row = done/review チケット)。
+const noteInput = ref<Record<string, string>>({});
+// 二重送信防止は per-ticket。グローバルにすると 1 件送信中に他の demo 行の「指摘を追加」まで
+// 無効化され、複数完成チケットへ並行に指摘を残せなくなるため、チケット id 単位で持つ。
+const noteBusy = ref<Record<string, boolean>>({});
 
-async function submitFeedback() {
-  const title = feedbackText.value.trim();
-  if (!title) return;
-  feedbackSubmitting.value = true;
-  feedbackConfirm.value = false;
-  // ステークホルダーフィードバックは「外部からの受信事項」なので incident で起票する。
-  // story 化すると案A により親 Epic 必須になり、この自動起票経路では Epic を選べず 400 になるため。
-  // (フィードバックを正式な User Story へ昇格する導線は Refinement 側の責務。followUp 参照)
-  await createTicket({ title, status: 'backlog', type: 'incident', valueImpact: feedbackImpact.value });
-  feedbackText.value = '';
-  feedbackImpact.value = 'medium';
-  feedbackSubmitting.value = false;
-  feedbackConfirm.value = true;
-  setTimeout(() => { feedbackConfirm.value = false; }, 2500);
+async function addReviewNote(t: Ticket): Promise<void> {
+  const text = (noteInput.value[t.id] ?? '').trim();
+  if (!text) return;
+  if (noteBusy.value[t.id]) return; // 同一チケットの二重送信防止
+  noteBusy.value[t.id] = true;
+  try {
+    // read→append: 対象チケットの現 reviewNotes を read → 新指摘を末尾に append → 全配列を PATCH。
+    // 配列まるごと replace 契約なので、既存を消さないために必ず append した全配列を送る。
+    const next = [...(t.reviewNotes ?? []), text];
+    const updated = await patchTicket(t.id, { reviewNotes: next });
+    if (updated) noteInput.value[t.id] = ''; // 成功時のみ入力クリア
+  } finally {
+    noteBusy.value[t.id] = false;
+  }
 }
 </script>
 
@@ -119,11 +121,40 @@ async function submitFeedback() {
         preview URL は Reviewer Agent (Phase 3-A) が自動生成予定。
       </p>
       <div v-if="demos.length > 0" style="border: 1px solid var(--line-1); margin-top: 2px">
-        <div v-for="t in demos" :key="t.id" class="demo-row" @click="emit('select', t.id)">
-          <span class="demo-row-id">{{ t.id }}</span>
-          <span class="demo-row-ttl">{{ t.title }}</span>
-          <StatusDot :status="t.status" />
-          <Avatar :user="t.assigneeId" />
+        <div v-for="t in demos" :key="t.id" class="demo-cell" data-testid="review-demo-cell">
+          <div class="demo-row" @click="emit('select', t.id)">
+            <span class="demo-row-id">{{ t.id }}</span>
+            <span class="demo-row-ttl">{{ t.title }}</span>
+            <span v-if="t.reviewNotes && t.reviewNotes.length > 0" class="demo-note-count" data-testid="review-note-count">
+              指摘 {{ t.reviewNotes.length }}
+            </span>
+            <StatusDot :status="t.status" />
+            <Avatar :user="t.assigneeId" />
+          </div>
+          <!-- 既存指摘の一覧 (この完成 increment への関係者指摘)。空なら非表示。 -->
+          <ul v-if="t.reviewNotes && t.reviewNotes.length > 0" class="demo-notes" data-testid="review-note-list">
+            <li v-for="(n, i) in t.reviewNotes" :key="i">{{ n }}</li>
+          </ul>
+          <!-- 指摘追記 (read→append→PATCH)。新規起票しない。 -->
+          <div class="demo-note-add">
+            <textarea
+              v-model="noteInput[t.id]"
+              class="demo-note-input"
+              rows="1"
+              placeholder="このチケットへの指摘を残す (例: フィルタが分かりにくい)"
+              data-testid="review-note-input"
+              @keydown.enter.meta.prevent="addReviewNote(t)"
+            />
+            <button
+              class="h-btn"
+              :disabled="noteBusy[t.id] || !(noteInput[t.id] ?? '').trim()"
+              style="background: var(--accent); color: #FBF8F2"
+              data-testid="review-note-add"
+              @click="addReviewNote(t)"
+            >
+              指摘を追加
+            </button>
+          </div>
         </div>
       </div>
       <p v-else style="font-family: var(--sans); font-size: 13px; color: var(--ink-2); padding: 12px 0">
@@ -163,48 +194,6 @@ async function submitFeedback() {
           <p v-if="carryList.length === 0" style="padding: 12px 16px; font-family: var(--sans); font-size: 13px; color: var(--ink-2)">
             未完了チケットはありません。
           </p>
-        </div>
-      </div>
-      <!-- ステークホルダーフィードバック → バックログ起票 -->
-      <div style="margin-top: 28px">
-        <h2 style="margin: 0 0 6px; font-size: 14px; font-weight: 500">ステークホルダーフィードバック</h2>
-        <p style="font-family: var(--sans); font-size: 12px; color: var(--ink-2); margin: 0 0 12px">
-          フィードバックをバックログに追加して次スプリントの計画に活かします。
-        </p>
-        <div class="feedback-form">
-          <textarea
-            v-model="feedbackText"
-            class="feedback-input"
-            rows="2"
-            placeholder="例: ダッシュボードのフィルタが分かりにくい"
-            data-testid="review-feedback-input"
-            @keydown.enter.meta.prevent="submitFeedback"
-          />
-          <div class="feedback-controls">
-            <div style="display: flex; align-items: center; gap: 8px">
-              <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase">VALUE</span>
-              <select
-                v-model="feedbackImpact"
-                class="feedback-select"
-                data-testid="review-feedback-impact"
-              >
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-            </div>
-            <span style="flex: 1" />
-            <span v-if="feedbackConfirm" style="font-family: var(--mono); font-size: 11px; color: var(--ok)">追加しました</span>
-            <button
-              class="h-btn"
-              :disabled="feedbackSubmitting || !feedbackText.trim()"
-              style="background: var(--accent); color: #FBF8F2"
-              data-testid="review-feedback-submit"
-              @click="submitFeedback"
-            >
-              バックログに追加
-            </button>
-          </div>
         </div>
       </div>
     </div>
@@ -267,46 +256,51 @@ async function submitFeedback() {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.feedback-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: var(--hairline) solid var(--line-2);
-  border-radius: var(--radius);
-  padding: 12px 14px;
-  background: var(--bg-1);
+/* demo セル: 行 + 既存指摘リスト + 指摘追記欄 をまとめる単位 */
+.demo-cell {
+  border-bottom: var(--hairline) solid var(--line-1);
 }
-.feedback-input {
-  width: 100%;
+.demo-cell:last-child { border-bottom: none; }
+.demo-note-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+.demo-notes {
+  margin: 0;
+  padding: 0 16px 8px 96px;
+  list-style: none;
+}
+.demo-notes li {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink-1);
+  padding: 3px 0;
+  border-left: 2px solid var(--accent);
+  padding-left: 10px;
+  margin-bottom: 4px;
+}
+.demo-note-add {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0 16px 12px 96px;
+}
+.demo-note-input {
+  flex: 1;
   resize: vertical;
   border: var(--hairline) solid var(--line-2);
   border-radius: var(--radius);
   background: var(--bg-0);
   font-family: var(--sans);
   font-size: 13px;
-  padding: 8px 10px;
+  padding: 6px 10px;
   color: var(--ink-0);
   box-sizing: border-box;
 }
-.feedback-input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.feedback-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.feedback-select {
-  padding: 4px 8px;
-  border: var(--hairline) solid var(--line-2);
-  border-radius: var(--radius);
-  background: var(--bg-0);
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-1);
-}
-.feedback-select:focus {
+.demo-note-input:focus {
   outline: none;
   border-color: var(--accent);
 }

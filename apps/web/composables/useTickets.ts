@@ -26,6 +26,8 @@ export interface CreateTicketInput {
   parentTicketId?: string;
   /** type==='story' の親 Epic (案A: story 作成時は必須)。incident/bug/task/spike では不要。 */
   epicId?: string;
+  /** Review 儀式の指摘ノート (完成 increment への関係者フィードバックを対象チケット自体に残す)。 */
+  reviewNotes?: string[];
 }
 
 /** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
@@ -44,6 +46,8 @@ export interface PatchTicketInput {
   type?: TicketType;
   timeboxHours?: number;
   orderIndex?: number;
+  /** Review 儀式の指摘ノート。read→append した全配列を渡す (配列まるごと replace)。 */
+  reviewNotes?: string[];
 }
 
 export const useTickets = () => {
@@ -96,6 +100,7 @@ export const useTickets = () => {
       if (input.timeboxHours !== undefined) body.timeboxHours = input.timeboxHours;
       if (input.parentTicketId !== undefined) body.parentTicketId = input.parentTicketId;
       if (input.epicId !== undefined) body.epicId = input.epicId;
+      if (input.reviewNotes !== undefined) body.reviewNotes = input.reviewNotes;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)

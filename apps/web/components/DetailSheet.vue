@@ -227,6 +227,14 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </template>
       </div>
 
+      <!-- レビュー指摘 (Review 儀式でこの完成 increment に残された関係者の指摘)。空なら非表示。 -->
+      <div v-if="ticket.reviewNotes && ticket.reviewNotes.length > 0" class="field" data-testid="sheet-review-notes">
+        <div class="l">レビュー指摘</div>
+        <div class="review-note-list">
+          <div v-for="(n, i) in ticket.reviewNotes" :key="i" class="review-note">{{ n }}</div>
+        </div>
+      </div>
+
       <!-- AI Integrity (ルールエンジン findings) -->
       <div v-if="findings.length > 0" class="field">
         <div class="l" style="color: var(--accent)">AI INTEGRITY · {{ findings.length }} ISSUE{{ findings.length > 1 ? 'S' : '' }}</div>
@@ -304,6 +312,12 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 .edit-input:focus { outline: none; border-color: var(--accent); }
 .edit-textarea { width: 100%; resize: vertical; line-height: 1.5; }
 .edit-err { color: var(--err); font-size: 12px; margin: 0 0 12px; }
+.review-note-list { display: flex; flex-direction: column; gap: 6px; }
+.review-note {
+  font-family: var(--sans); font-size: 13px; line-height: 1.5;
+  color: var(--ink-1); border-left: 2px solid var(--accent);
+  padding: 4px 0 4px 12px;
+}
 .delete-zone { border-top: var(--hairline) solid var(--line-1); padding-top: 16px; margin-top: 8px; }
 .delete-btn {
   padding: 8px 16px;

@@ -304,6 +304,74 @@ describe('patchTicket', () => {
     const got = await repo.tickets.get(id);
     expect(got?.orderIndex).toBe(1250.5);
   });
+
+  // --- Review 儀式の指摘 (reviewNotes) ---
+  // ハンドラは配列まるごと replace 契約。「既存を消さない append」は呼び出し側 (ReviewScreen) が
+  // 現 reviewNotes を read → 新指摘を append → 全配列を PATCH することで実現する。
+  // ここでは『全配列を渡せば既存が残る / 省略すれば保持 / 配列は replace』の契約を固定する。
+
+  it('正常系: reviewNotes を新規セットできる (created 直後は無し → PATCH で配列を永続化)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'demo me', status: 'review' });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    expect(created.body.reviewNotes).toBeUndefined();
+    const res = await patchTicket(repo, CTX, id, { reviewNotes: ['指摘A'] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.reviewNotes).toEqual(['指摘A']);
+    const got = await repo.tickets.get(id);
+    expect(got?.reviewNotes).toEqual(['指摘A']); // 永続確認
+  });
+
+  it('append が既存 reviewNotes を消さない: read→append した全配列を渡すと既存が残る', async () => {
+    const created = await createTicket(repo, CTX, { title: 'demo me' });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    // 既存 1 件を作る
+    const first = await patchTicket(repo, CTX, id, { reviewNotes: ['指摘A'] });
+    if (!first.ok) throw new Error('setup failed');
+    // 呼び出し側相当の read→append: 現 reviewNotes を read → 新指摘を末尾に append
+    const current = first.body.reviewNotes ?? [];
+    const next = [...current, '指摘B'];
+    const res = await patchTicket(repo, CTX, id, { reviewNotes: next });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.reviewNotes).toEqual(['指摘A', '指摘B']); // 既存が消えない
+    const got = await repo.tickets.get(id);
+    expect(got?.reviewNotes).toEqual(['指摘A', '指摘B']);
+  });
+
+  it('reviewNotes を省略した PATCH は既存 reviewNotes を保持する (undefined は変更なし)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'keep notes', reviewNotes: ['指摘A', '指摘B'] });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    expect(created.body.reviewNotes).toEqual(['指摘A', '指摘B']);
+    // title だけ patch → reviewNotes 不変
+    const res = await patchTicket(repo, CTX, id, { title: 'renamed' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.reviewNotes).toEqual(['指摘A', '指摘B']);
+  });
+
+  it('配列 replace 契約: PATCH で渡した配列が既存を merge せず置換する', async () => {
+    const created = await createTicket(repo, CTX, { title: 'replace me', reviewNotes: ['A', 'B'] });
+    if (!created.ok) throw new Error('setup failed');
+    const id = created.body.id;
+    // append せず単一件だけ渡すと既存が消える (replace) — read→append を怠った場合の挙動を固定
+    const res = await patchTicket(repo, CTX, id, { reviewNotes: ['C'] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.reviewNotes).toEqual(['C']);
+  });
+
+  it('空文字の指摘は schema で弾く (z.string().min(1) / MCP・直 PATCH 防御)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'guard empty note' });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await patchTicket(repo, CTX, created.body.id, { reviewNotes: [''] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('reorderTickets (区画 d&d 密再採番)', () => {

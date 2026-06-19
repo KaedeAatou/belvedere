@@ -104,3 +104,25 @@ describe('DetailSheet 編集 → 保存 の配線', () => {
     await flushPromises();
   });
 });
+
+describe('DetailSheet レビュー指摘 (reviewNotes) 表示', () => {
+  it('reviewNotes を持つチケットで「レビュー指摘」セクションと各指摘テキストを描画する', async () => {
+    const tk = ticket({ id: 'WC-1', reviewNotes: ['UI が分かりにくい', 'ボタン位置を直す'] });
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: tk } });
+    const section = wrapper.find('[data-testid="sheet-review-notes"]');
+    expect(section.exists()).toBe(true);
+    expect(section.text()).toContain('レビュー指摘');
+    expect(section.text()).toContain('UI が分かりにくい');
+    expect(section.text()).toContain('ボタン位置を直す');
+  });
+
+  it('reviewNotes 未設定なら「レビュー指摘」セクションは描画されない (空なら非表示)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    expect(wrapper.find('[data-testid="sheet-review-notes"]').exists()).toBe(false);
+  });
+
+  it('reviewNotes が空配列なら「レビュー指摘」セクションは描画されない', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1', reviewNotes: [] }) } });
+    expect(wrapper.find('[data-testid="sheet-review-notes"]').exists()).toBe(false);
+  });
+});
