@@ -156,7 +156,6 @@ export const MemberSchema = z.object({
   displayName: z.string(),
   email: z.string(),
   role: z.enum(['owner', 'sm', 'po', 'dev', 'guest']),
-  slackUserId: z.string().optional(),
   githubUsername: z.string().optional(),
 });
 

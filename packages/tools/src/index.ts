@@ -271,25 +271,6 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
     },
   };
 
-  const slackPostTool: AgentTool<{ channel: string; text: string }, unknown> = {
-    spec: {
-      name: 'slack.message.post',
-      description: 'Slackにメッセージを投稿する (現在はローカルで stdout に出力)。',
-      parameters: {
-        type: 'object',
-        properties: {
-          channel: { type: 'string' },
-          text: { type: 'string' },
-        },
-        required: ['channel', 'text'],
-      },
-    },
-    async invoke({ channel, text }) {
-      console.log(`\n┌─ Slack post → #${channel}\n│ ${text.replace(/\n/g, '\n│ ')}\n└─\n`);
-      return { ok: true, ts: new Date().toISOString() };
-    },
-  };
-
   const humanAskTool: AgentTool<{ question: string }, unknown> = {
     spec: {
       name: 'human.ask',
@@ -343,7 +324,6 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
     ticketRulesCheckTool,
     retroTriesListTool,
     memberListTool,
-    slackPostTool,
     humanAskTool,
   ];
 

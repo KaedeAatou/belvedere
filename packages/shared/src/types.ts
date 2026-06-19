@@ -338,7 +338,6 @@ export interface Member {
   displayName: string;
   email: string;
   role: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
-  slackUserId?: string;
   githubUsername?: string;
 }
 
