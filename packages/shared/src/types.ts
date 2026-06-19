@@ -322,6 +322,11 @@ export interface AgentRun {
     costUsd: number;
   };
   error?: { message: string; stack?: string };
+  /**
+   * agent.invoke (Orchestrator 協議) で起動した子 run。深さ 1 固定 (子は agent.invoke を
+   * 持たないため孫 run は生まれない)。協議していない通常 run では省略される (後方互換 optional)。
+   */
+  childRuns?: AgentRun[];
 }
 
 // === Member ===

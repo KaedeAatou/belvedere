@@ -8,10 +8,16 @@
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
-import { buildTools, checkTicketQuality, checkBacklogRefinement, type KnowledgeSearcher } from '@belvedere/tools';
+import {
+  buildTools,
+  buildOrchestratorTools,
+  checkTicketQuality,
+  checkBacklogRefinement,
+  type KnowledgeSearcher,
+} from '@belvedere/tools';
 import type { LLMProvider } from '@belvedere/llm';
 import type { RepoContainer, TicketQuery } from '@belvedere/repo';
-import type { AgentName } from '@belvedere/shared';
+import type { AgentName, AgentRun } from '@belvedere/shared';
 import { StatusSchema, RitualSchema, TicketTypeSchema, modelForAgent } from '@belvedere/shared';
 import { authMiddleware, type AuthenticatedUser } from './middleware/auth';
 import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspace';
@@ -73,6 +79,11 @@ const VALID_AGENTS: ReadonlyArray<AgentName> = [
   'reviewer',
   'retrospective',
 ];
+
+// Orchestrator 協議 (agent.invoke) の 1 リクエスト costUsd ハードキャップ (USD)。
+// 累積コストがこの値以上になると以降の agent.invoke は error を返す (暴走協議のコスト上限)。
+// Mock LLM は costUsd=0 (packages/llm/src/mock.ts) なので CI/デモでは発火しない = 無害。
+const AGENT_INVOKE_COST_CAP_USD = 1.0;
 
 function buildCtx(c: Context): HandlerContext {
   return {
@@ -413,8 +424,23 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     const body: { prompt?: string } = await c.req.json<{ prompt?: string }>().catch(() => ({}));
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
-    // workspaceId を closure cap した tools を毎リクエストで作成 (request-scoped)。
-    const tools = buildRegistry(buildTools(repo, workspaceId, knowledge ? { knowledge } : undefined));
+    // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
+    // 他 5 agent は素の buildTools (agent.invoke なし = 子になっても再協議できない / 深さ 1 固定)。
+    // childRuns コレクタと costCap は 1 リクエスト境界 (request-scoped) で持つ
+    // (module singleton にすると複数 workspace 同時実行でクロス汚染する)。
+    const knowledgeDeps = knowledge ? { knowledge } : undefined;
+    const childRuns: AgentRun[] = [];
+    const tools =
+      name === 'orchestrator'
+        ? buildRegistry(
+            buildOrchestratorTools(repo, workspaceId, {
+              llm,
+              childRuns,
+              costCapUsd: AGENT_INVOKE_COST_CAP_USD,
+              ...(knowledge && { knowledge }),
+            }),
+          )
+        : buildRegistry(buildTools(repo, workspaceId, knowledgeDeps));
 
     const run = await runAgent(
       {
@@ -429,7 +455,8 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
       prompt,
     );
 
-    return c.json(run);
+    // 協議で子 run が起きていれば親 run へ後付け (後方互換: 0 件なら conditional spread でキーごと省略)。
+    return c.json({ ...run, ...(childRuns.length > 0 && { childRuns }) });
   });
 
   return app;

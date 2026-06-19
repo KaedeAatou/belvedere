@@ -15,6 +15,7 @@
   "dependencies": {
     "@belvedere/shared": "workspace:*",
     "@belvedere/repo": "workspace:*",
-    "@belvedere/agent": "workspace:*"
+    "@belvedere/agent": "workspace:*",
+    "@belvedere/llm": "workspace:*"
   }
 }
