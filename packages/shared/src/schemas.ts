@@ -219,7 +219,9 @@ const AgentStepSchema = z.object({
   durationMs: z.number().optional(),
 });
 
-export const AgentRunSchema = z.object({
+// childRuns 以外の AgentRun フィールドを base に切り出す。childRuns は AgentRun 自身の
+// 配列 (深さ 1 固定だが型は再帰) なので、base を extend して z.lazy で自己参照を解決する。
+const AgentRunBaseSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
   agentName: AgentNameSchema,
@@ -249,6 +251,15 @@ export const AgentRunSchema = z.object({
     })
     .optional(),
 });
+
+// base を AgentRun 型へ注釈した上で childRuns (自己参照配列) を z.lazy で足す。
+// 明示注釈 + as cast で循環推論 (TS7022/7024) を断つ。ただし cast の副作用で z.infer<AgentRunSchema>
+// は注釈型から自明に AgentRun を返すため、下の _check_AgentRun は本体フィールドの drift を検出できない
+// (トートロジー化する)。本体フィールド (childRuns 以外) の drift 検出は cast していない
+// _check_AgentRunBase が担保し、childRuns 枝の runtime 検証は packages/shared/test/schemas.test.ts で固める。
+export const AgentRunSchema: z.ZodType<AgentRun> = AgentRunBaseSchema.extend({
+  childRuns: z.lazy(() => z.array(AgentRunSchema)).optional(),
+}) as unknown as z.ZodType<AgentRun>;
 
 // === CeremonyHealthScore ===
 export const CeremonyHealthScoreSchema = z.object({
@@ -336,6 +347,9 @@ const _check_Member: Equal<z.infer<typeof MemberSchema>, Member> = true;
 const _check_ApiKey: Equal<z.infer<typeof ApiKeySchema>, ApiKey> = true;
 const _check_Ceremony: Equal<z.infer<typeof CeremonySchema>, Ceremony> = true;
 const _check_AgentRun: Equal<z.infer<typeof AgentRunSchema>, AgentRun> = true;
+// AgentRunSchema は cast で drift 検出力を失うため、cast していない base schema で本体フィールド
+// (childRuns 以外) の drift を検出し、型↔zod の不変条件を AgentRun でも実質維持する。
+const _check_AgentRunBase: Equal<z.infer<typeof AgentRunBaseSchema>, Omit<AgentRun, 'childRuns'>> = true;
 const _check_CeremonyHealth: Equal<z.infer<typeof CeremonyHealthScoreSchema>, CeremonyHealthScore> = true;
 const _check_EstimationSession: Equal<z.infer<typeof EstimationSessionSchema>, EstimationSession> = true;
 const _check_RetroTry: Equal<z.infer<typeof RetroTrySchema>, RetroTry> = true;
@@ -352,6 +366,8 @@ void _check_Member;
 void _check_ApiKey;
 void _check_Ceremony;
 void _check_AgentRun;
+void _check_AgentRunBase;
 void _check_CeremonyHealth;
 void _check_EstimationSession;
 void _check_RetroTry;
+void _check_RetroNote;

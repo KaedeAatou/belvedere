@@ -228,6 +228,9 @@ importers:
       '@belvedere/agent':
         specifier: workspace:*
         version: link:../agent
+      '@belvedere/llm':
+        specifier: workspace:*
+        version: link:../llm
       '@belvedere/repo':
         specifier: workspace:*
         version: link:../repo

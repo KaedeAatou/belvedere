@@ -1,10 +1,14 @@
 import type { AgentTool } from '@belvedere/agent';
+import { runAgent, buildRegistry, buildSystemPrompt } from '@belvedere/agent';
 import type { RepoContainer } from '@belvedere/repo';
-import type { Ritual } from '@belvedere/shared';
+import type { AgentRun, Ritual } from '@belvedere/shared';
+import { modelForAgent } from '@belvedere/shared';
+import type { LLMProvider } from '@belvedere/llm';
 import type { KnowledgeSearcher } from './knowledge';
 import { runTicketRules, buildRuleContext } from './ticket-rules';
 import { checkTicketQuality } from './quality';
 import { checkBacklogRefinement } from './refinement';
+import { validateInvocation, CEREMONY_AGENTS } from './agent-invoke';
 
 // ルールエンジンを外部 (apps/api の finding-handlers 等) からも使えるよう re-export
 export {
@@ -45,6 +49,15 @@ export {
   type KnowledgeBackend,
   type KnowledgeFactoryConfig,
 } from './knowledge';
+
+// Orchestrator 協議ツールの引数検証 (純粋関数) を re-export (apps/api / 直接 unit テスト用)。
+export {
+  validateInvocation,
+  CEREMONY_AGENTS,
+  type AgentInvokeInput,
+  type InvocationRejectReason,
+  type ValidateInvocationResult,
+} from './agent-invoke';
 
 /** buildTools に注入する追加依存 (storage 非依存の検索層など)。 */
 export interface BuildToolsDeps {
@@ -359,5 +372,111 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
     tools.push(knowledgeSearchTool);
   }
 
+  return tools;
+}
+
+/** buildOrchestratorTools に注入する依存。 */
+export interface OrchestratorToolsDeps extends BuildToolsDeps {
+  /** 子 runAgent を起動する LLM。Orchestrator 自身と同じプロバイダを渡す。 */
+  llm: LLMProvider;
+  /**
+   * 1 リクエスト内で許容する子 run コストの累積上限 (USD)。超過後の agent.invoke は
+   * error tool_result を返す (子 run は起動しない)。Mock LLM は costUsd=0 (mock.ts) なので
+   * CI/デモでは発火しない = 無害。未指定なら無制限。
+   */
+  costCapUsd?: number;
+  /**
+   * 起動した子 run を集約するコレクタ。呼出側 (apps/api ハンドラ) が配列を渡し、
+   * runAgent 完了後に親 run.childRuns へマージする。深さ 1 固定の証拠でもある
+   * (子 run は agent.invoke を持たないので孫 run はここに積まれない)。
+   */
+  childRuns: AgentRun[];
+}
+
+/**
+ * Orchestrator 専用の Tool セットを組み立てる。
+ *
+ * buildTools の戻り (= 子に渡すのと同一の素のツール集合) に agent.invoke を 1 個だけ足す。
+ * agent.invoke は呼び出された ceremony agent を **in-process で子 runAgent として再帰起動**する
+ * (HTTP 往復なし)。子には agent.invoke を含まない buildTools を渡すため、深さ 1 が構造的に保証される
+ * (孫協議は物理的に発生しない)。
+ *
+ * buildTools のシグネチャは不変なので、他 5 agent は従来どおり buildTools を使う。
+ * Orchestrator 起動時のみ呼出側がこのファクトリに切り替えることで「Orchestrator にのみ agent.invoke」を満たす。
+ */
+// 子 runAgent の反復上限。runtime のデフォルト (6) に暗黙依存せず明示的に渡し、デフォルトを変えても
+// 協議の反復上限が静かにドリフトしないようにする (深さ1 と並ぶ無限協議対策の明示化)。
+export const CHILD_MAX_ITERATIONS = 6;
+
+export function buildOrchestratorTools(
+  repo: RepoContainer,
+  workspaceId: string,
+  deps: OrchestratorToolsDeps,
+): AgentTool[] {
+  const baseDeps: BuildToolsDeps = deps.knowledge ? { knowledge: deps.knowledge } : {};
+  // 親 Orchestrator が持つツール = 素の buildTools + agent.invoke。
+  const tools = buildTools(repo, workspaceId, baseDeps);
+
+  // 子に渡すツールは agent.invoke を含まない素の buildTools (= 深さ 1 固定の核)。
+  const childTools = buildTools(repo, workspaceId, baseDeps);
+
+  const agentInvokeTool: AgentTool<{ agentName?: unknown; prompt?: unknown }, unknown> = {
+    spec: {
+      name: 'agent.invoke',
+      description:
+        'スクラムマスター (Orchestrator) が 5 儀式 agent (planner/daily/refinement/reviewer/retrospective) の 1 体を子として起動し、その出力を受け取って協議を統括する。協議は深さ 1 (呼ばれた agent はさらに agent.invoke できない)。',
+      parameters: {
+        type: 'object',
+        properties: {
+          agentName: { type: 'string', enum: [...CEREMONY_AGENTS] },
+          prompt: { type: 'string' },
+        },
+        required: ['agentName', 'prompt'],
+      },
+    },
+    async invoke(args) {
+      // 引数検証 (空名 / 未知名 / 自己参照 / 空 prompt)。reject は throw せず error tool_result を返す
+      // (runtime.ts の tool catch と同じ無害な形 = 親 run は failed にならず協議を続けられる)。
+      const v = validateInvocation(args, { selfName: 'orchestrator', knownAgents: CEREMONY_AGENTS });
+      if (!v.ok) {
+        return { error: v.reason };
+      }
+
+      // 1 リクエスト costUsd ハードキャップ: 既に積んだ子 run の合計が cap 以上なら起動しない。
+      if (deps.costCapUsd !== undefined) {
+        const spent = deps.childRuns.reduce((sum, r) => sum + r.llmUsage.costUsd, 0);
+        if (spent >= deps.costCapUsd) {
+          return { error: 'cost_cap_exceeded' };
+        }
+      }
+
+      // 子 runAgent を in-process 起動。workspaceId は親 closure を継承 (IDOR: 他 ws 越境不可)。
+      // 子ツールは agent.invoke を含まない childTools = 深さ 1。
+      const childRun = await runAgent(
+        {
+          agentName: v.agentName,
+          workspaceId,
+          llm: deps.llm,
+          model: modelForAgent(v.agentName),
+          systemPrompt: buildSystemPrompt(v.agentName),
+          tools: buildRegistry(childTools),
+          trigger: 'event',
+          maxIterations: CHILD_MAX_ITERATIONS,
+        },
+        v.prompt,
+      );
+
+      // 親 run へマージするコレクタに積む。
+      deps.childRuns.push(childRun);
+
+      return {
+        agentName: childRun.agentName,
+        status: childRun.status,
+        summary: childRun.outputArtifacts?.summary,
+      };
+    },
+  };
+
+  tools.push(agentInvokeTool);
   return tools;
 }
