@@ -19,7 +19,7 @@
 2. **設定した課題へのアプローチ力** → 冒頭で Jira ユーザーが頷く問いかけ
 3. **ユーザビリティ** → Claude Design 由来の 5 画面 (Nuxt 3 + Vue 3 SSR) でデモ。Jira の 1 画面に対し **儀式の数だけ専用画面 = 5 画面**
 4. **実用性・体験価値** → 「ふりかえり Try → 翌スプリント WIP」の繋がり
-5. **実装力** → アーキ図1枚 + Cloud Run / Vertex AI / ADK の実物
+5. **実装力** → アーキ図1枚 + Cloud Run / Gemini API / ADK の実物 + 「まわす」(CI/CD + AI 継続改善)
 
 ---
 
@@ -107,7 +107,7 @@
 - **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で儀式エージェントを協議招集・統括 (単一窓口)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
 - **チケット種別ルールエンジン**: Story / Task / Spike / Bug / Incident の 17 観点 (親なし Task / 価値の見えない DoD / 停滞 / 見積もり割れ…) を宣言的ルール表に集約、5 Agent が共有
 - **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション + Retro Try carry-forward + マルチテナント (Workspace 作成・招待・切替)
-- **Vertex AI Vector Search + RAG Engine**: Refinement / Retrospective が過去 Try / Scrum Guide を参照
+- **「まわす」= AI を継続的に改善するループ**: ふりかえりの Try が Agent の検出基準に積み上がり、**使うほどチームに最適化**される (実装済 / `retro.tries.list`)。**Elastic RAG** で意味検索化してスケール (Elasticsearch = 公式 AI 技術リストの 1 つ / 設計済)。プロンプト改善は **agent eval を CI ゲート**で後退防止 → CI/CD (WIF 鍵レスデプロイ) で本番へ届ける
 - **Cloud Build / WIF**: 個人 GitHub (KaedeAatou/belvedere) からの鍵レスデプロイ
 - **MCP Server (stdio + HTTP)**: Claude Code / Cursor / 他 AI Agent クライアントから Belvedere を呼べる API。「Belvedere の開発自体を Claude Code 経由で Belvedere に管理させている」究極のドッグフード
 
@@ -129,7 +129,7 @@
 | 質問 | 答え方 |
 |---|---|
 | ハルシネーションの懸念は? | L0-L4 の自律性レベル設計。重要書込前は L2 で人間確認。**MCP 経由でも書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲** |
-| Geminiでなく他LLMでもよくない? | **Orchestrator + 5 Agent を ADK (Agent Development Kit) で宣言的に編成**できるのが Gemini エコシステムの強み。画面操作を受けて複数 AI を協議招集・統括する構成を、個別実装でなく宣言的に組める。Vertex AI でログ統合 |
+| Geminiでなく他LLMでもよくない? | **Orchestrator + 5 Agent を ADK (Agent Development Kit) で宣言的に編成**できるのが Gemini エコシステムの強み。画面操作を受けて複数 AI を協議招集・統括する構成を、個別実装でなく宣言的に組める。Cloud Logging / Trace で観測統合 |
 | Atlassian Intelligence との差は? | 1機能ではなく "儀式" + "チケット品質" を統合的に扱う体系。**司令塔 (Orchestrator) が複数の専門 AI を儀式ごとに編成**するのは Atlassian には無い。**MCP で外部 AI Agent から呼べるのも独自軸** |
 | 個人参加で完走できる? | Boot Camp 並行、Cloud Run + Firestore で MVP / 6/7 でチーム化判断。**Belvedere の開発自体を Claude Code + MCP で Belvedere に管理させているのが究極のドッグフード** |
 | コスト規模は? | 1スプリント (2週間) で $5-10 想定。Plannerが重く Dailyは軽い。Orchestrator は gemini-2.5-flash で協議招集・統括の軽量処理のみ |
@@ -152,3 +152,35 @@
 > ふりかえりの Try、見積もりの認識ズレ、翌スプリントに繋がっていますか?
 > **Belvedere** は、保存した瞬間に AI がチケット品質を補強し、**司令塔 (Orchestrator) が単一窓口として 5 つの専門 AI を協議編成**して形骸化を査読し、**見積もりポーカーまで AI が運営**するスクラム支援サービスです。
 > 形だけ回っているスクラムから、本当に前進するスクラムへ。」
+
+---
+
+## Proto Pedia 提出ドラフト (2026-06-20 / 朝コピペ用)
+
+> 公式の評価コンセプト **「つくる・まわす・とどける」** に沿って書いた下書き。ユーザーはこれをコピペし、動画 URL と図を貼るだけ。出典: Google Cloud 公式ブログ。
+
+### 必須メタ
+- **作品ステータス**: 開発中 (ハッカソン提出)
+- **タイトル**: Belvedere — 形骸化したスクラムを AI が底上げするマルチエージェント PM サービス
+- **タグ**: `findy_hackathon` を必ず含める (+ `Gemini` `CloudRun` `ADK` `Elasticsearch` `Scrum` 等)
+- **動画 (YouTube/Vimeo URL)**: ⬜ 撮影後に貼る (90 秒デモ / 台本は本ファイル §4)
+- **システムアーキテクチャ図**: ⬜ `docs/submission-diagram.md` の Eraser DSL を貼って PNG 書き出し → アップロード
+
+### 概要 (2〜3 文)
+「儀式は回っているのに、プロダクトは前進しない」── そんな形骸化したスクラムを、AI が **チケット品質** と **儀式運営** の両面から底上げする Jira 型 PM サービスです。チケットを書くのは人間、Orchestrator (スクラムマスター AI) が単一窓口として 5 つの専門エージェントを協議に招集し、DoD・User Story 紐付け・Story Point・戦略整合性の不足を査読、見積もりポーカーまで運営します。Cloud Run + Gemini + ADK で構築し、使うほどチームに最適化されていきます。
+
+### ストーリー① 課題と背景
+Jira を使うチームで広く起きる「なんちゃってアジャイル」── DoD 空・SP 未定・User Story 未紐付けのチケットが溜まり、デイリーは進捗報告会、レビューは社内デモ、ふりかえりの Try は翌スプリントに繋がらない。さらに **開発者が「何のためにこのチケットをやるか」(Epic の Why) を見失う**。チケット管理 SaaS は「データの倉庫」を提供するだけで、書き方の品質や儀式の運営は助けてくれない。
+
+### ストーリー② 利用ユーザー
+スクラムで開発する PO / SM / Dev / EM。PO はチケット作成の手間を、SM は儀式運営の疲弊を、Dev はレビュー前の品質バラつきを、EM は「うちのスクラムは健康か」の可視化を求めている。
+
+### ストーリー③ 特徴 ── つくる・まわす・とどける
+- **つくる (自律的 AI エージェント)**: Orchestrator + Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを **ADK で宣言的にマルチエージェント編成**。画面操作を単一窓口で受け、Orchestrator が必要なエージェントを `agent.invoke` で協議に招集・統括。各エージェントはチケット種別ルールエンジンを共有し、DoD/US/SP/停滞/戦略整合性 (Epic.rationale 欠落) を査読。**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の宣言的編成。
+- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で 464 テストをゲートしながら本番へ。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Elastic RAG で意味検索化)。プロンプト改善は **agent eval を CI ゲート**にして後退を防ぐ。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード。
+- **とどける (本番品質を Cloud Run で)**: フロント (Nuxt 3 SSR) と API (Hono) を Cloud Run に、Firestore + Firebase Auth + マルチテナント (Workspace) で本番稼働。儀式ごとに専用画面 (Jira の 1 ボードに対し 6 画面) で形骸化を可視化。
+
+### 提出フォーム (Google Form) 必須 3 URL
+1. 公開 GitHub: `https://github.com/KaedeAatou/belvedere`
+2. デプロイ URL: `https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health`
+3. Proto Pedia 作品 URL: ⬜ 上記登録後に確定
