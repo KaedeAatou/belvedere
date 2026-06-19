@@ -24,6 +24,24 @@ function fakeFetch(responseBody: unknown, opts: { ok?: boolean; status?: number 
   return { impl, captured };
 }
 
+/** attempt ごとに status を変える fake fetch。statuses[i] が i 回目の応答 (末尾以降は最後の値を反復)。 */
+function sequencedFetch(statuses: number[], okBody: unknown) {
+  const calls = { count: 0 };
+  const impl = (async (_url: string, _init: RequestInit) => {
+    const status = statuses[Math.min(calls.count, statuses.length - 1)]!;
+    calls.count++;
+    const ok = status >= 200 && status < 300;
+    return {
+      ok,
+      status,
+      statusText: `HTTP ${status}`,
+      json: async () => okBody,
+      text: async () => JSON.stringify({ error: { message: 'transient' } }),
+    } as unknown as Response;
+  }) as unknown as typeof fetch;
+  return { impl, calls };
+}
+
 const textResponse = {
   candidates: [{ content: { parts: [{ text: 'Sprint Goal: 決済 MVP を完成させる' }] }, finishReason: 'STOP' }],
   usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 },
@@ -92,6 +110,35 @@ describe('GeminiLLMProvider', () => {
     await expect(
       provider.generate({ model: 'gemini-2.5-pro', messages: [{ role: 'user', content: 'x' }] }),
     ).rejects.toThrow(/403/);
+  });
+
+  it('429/503 は指数バックオフでリトライし、回復したら成功する', async () => {
+    const { impl, calls } = sequencedFetch([503, 429, 200], textResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl, retryBaseMs: 0 });
+    const resp = await provider.generate({
+      model: 'gemini-2.5-flash',
+      messages: [{ role: 'user', content: 'x' }],
+    });
+    expect(resp.text).toContain('Sprint Goal');
+    expect(calls.count).toBe(3); // 503 → 429 → 200
+  });
+
+  it('リトライ枯渇後も 5xx が続けば throw する (初回 + maxRetries 回)', async () => {
+    const { impl, calls } = sequencedFetch([503, 503, 503, 503, 503], textResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl, retryBaseMs: 0, maxRetries: 3 });
+    await expect(
+      provider.generate({ model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'x' }] }),
+    ).rejects.toThrow(/503/);
+    expect(calls.count).toBe(4); // 初回 + 3 リトライ
+  });
+
+  it('400/403 はリトライせず即 throw する (RETRYABLE 外)', async () => {
+    const { impl, calls } = sequencedFetch([403, 200], textResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl, retryBaseMs: 0 });
+    await expect(
+      provider.generate({ model: 'gemini-2.5-pro', messages: [{ role: 'user', content: 'x' }] }),
+    ).rejects.toThrow(/403/);
+    expect(calls.count).toBe(1); // リトライしない
   });
 
   it('API キー未設定なら constructor が throw する (silent fallback しない)', () => {
