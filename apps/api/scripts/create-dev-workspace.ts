@@ -16,13 +16,16 @@
 //     = 本人が一度ログイン済みであることが前提 (email-allowlist bootstrap 済み)。
 
 import { createRepoContainer } from '@belvedere/repo';
-import type { Member, Ticket, Workspace } from '@belvedere/shared';
+import type { Epic, Member, Ticket, Workspace } from '@belvedere/shared';
 
 const TARGET_PROJECT = 'belvedere-dev-atrium';
 const SOURCE_WS = 'ws-belvedere';        // owner UID をここから引く
 const OWNER_EMAIL = 'mygolanglearn@gmail.com';
 const NEW_WS = 'ws-belvedere-dev';
 const NOW = '2026-06-12T00:00:00+09:00';
+// story は親 Epic 必須 (案A)。新 ws 専用 Epic を 1 件用意し 4 story を紐付ける
+// (ws-belvedere の EP-1..4 は別 workspace なので流用しない — workspace 実在チェックと整合させる)。
+const DEV_EPIC_ID = 'EP-dev-1';
 
 function assertGuards(): void {
   if (process.env.REPO_BACKEND !== 'firestore') {
@@ -109,7 +112,18 @@ async function main(): Promise<void> {
   await repo.members.upsert(member);
   console.log(`  ✓ member: ${member.displayName} (owner)`);
 
-  // 4. バックログ Story 4 件
+  // 4. 親 Epic (story は親 Epic 必須 / 案A)
+  const epic: Epic = {
+    id: DEV_EPIC_ID,
+    workspaceId: NEW_WS,
+    name: 'Belvedere 開発バックログ',
+    status: 'active',
+    createdAt: NOW,
+  };
+  await repo.epics.upsert(epic);
+  console.log(`  ✓ epic: ${epic.id} (${epic.name})`);
+
+  // 5. バックログ Story 4 件 (DEV_EPIC_ID に紐付け)
   for (const b of devBacklog) {
     const t: Ticket = {
       id: b.id,
@@ -120,6 +134,7 @@ async function main(): Promise<void> {
       priority: b.priority,
       valueImpact: b.valueImpact,
       type: b.type,
+      epicId: DEV_EPIC_ID,
       acceptanceCriteria: b.acceptanceCriteria,
       createdAt: NOW,
       updatedAt: NOW,

@@ -6,6 +6,7 @@ import type { ScreenId } from '~/composables/useUiMeta';
 const { tickets, fetchTickets, changeStatus } = useTickets();
 const { fetchMembers } = useMembers();
 const { fetchSprints } = useSprints();
+const { fetchEpics } = useEpics();
 const { fetchFindings } = useFindings();
 
 const screen = ref<ScreenId>('backlog');
@@ -60,6 +61,7 @@ onMounted(() => {
   fetchTickets();
   fetchMembers();
   fetchSprints();
+  fetchEpics(); // story 作成フォームの親 Epic セレクタ候補 (案A)
   fetchFindings('refinement'); // 全画面共通: チケット品質の指摘 (T5-3 ピル / T9 ワークキュー)
 
   // U-2: ESC で DetailSheet を閉じる。

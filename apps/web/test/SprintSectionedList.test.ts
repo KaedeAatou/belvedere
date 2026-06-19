@@ -17,12 +17,19 @@ type SSLProps = InstanceType<typeof SprintSectionedList>['$props'];
 // 共有する reorderTickets スパイは vi.hoisted で生成 (mockNuxtImport は巻き上げられるため)。
 const mocks = vi.hoisted(() => {
   const reorderTickets = vi.fn(() => Promise.resolve([]));
+  // createTicket は作成成功 (truthy) を返すスパイ。submitCreate / submitSplit の配線 (epicId が body に
+  // 載るか / 必須ガードで弾かれるか) を呼出引数で固定するため、デフォルトで created を返す。
+  const createTicket = vi.fn((input: Record<string, unknown>) => Promise.resolve({ id: 'WC-new', ...input }));
   return {
     reorderTickets,
+    createTicket,
+    // テンプレートは ref を自動アンラップするが、プレーン {value} はアンラップされない。
+    // createLoading は template でのみ truthy 判定される (script で .value を読まない) ので素の値を渡す。
+    // liveError は script で .value を読むので {value} 形を保つ。
     useTickets: () => ({
-      createTicket: () => Promise.resolve(null),
+      createTicket,
       reorderTickets,
-      isLoading: { value: false },
+      isLoading: false,
       error: { value: null },
     }),
     useFindings: () => ({ findingsFor: () => [] }),
@@ -30,6 +37,13 @@ const mocks = vi.hoisted(() => {
     useSprints: () => ({
       activeSprint: { value: { id: 's-active' } },
       nextPlanned: { value: { id: 's-next' } },
+    }),
+    // selectableEpics は template の v-for で消費される。ref のアンラップ後の素の配列を渡す
+    // (プレーン {value:[...]} だと v-for がオブジェクトを走査して option が壊れる)。
+    useEpics: () => ({
+      epics: [{ id: 'EP-1', workspaceId: 'ws-belvedere', name: 'Epic 1', status: 'active', createdAt: '2026-06-01T00:00:00Z' }],
+      selectableEpics: [{ id: 'EP-1', workspaceId: 'ws-belvedere', name: 'Epic 1', status: 'active', createdAt: '2026-06-01T00:00:00Z' }],
+      fetchEpics: () => Promise.resolve(),
     }),
     useSelection: () => ({
       count: { value: 0 },
@@ -48,6 +62,7 @@ mockNuxtImport('useTickets', () => mocks.useTickets);
 mockNuxtImport('useFindings', () => mocks.useFindings);
 mockNuxtImport('useStoryCheck', () => mocks.useStoryCheck);
 mockNuxtImport('useSprints', () => mocks.useSprints);
+mockNuxtImport('useEpics', () => mocks.useEpics);
 mockNuxtImport('useTicketSelection', () => mocks.useSelection);
 
 const t = (id: string): Ticket => ({
@@ -129,5 +144,118 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
       { item: el('data-ticket-id', 'GHOST'), from: el('data-section', 'backlog'), to: el('data-section', 'backlog') },
     );
     expect(mocks.reorderTickets).not.toHaveBeenCalled();
+  });
+});
+
+// ===== 案A: story 作成の親Epic必須化 + 分割子の親Epic継承の配線 (T1b) =====
+// 物理 d&d と同じく「配線」を固定する層。submitCreate / submitSplit が createTicket を
+// epicId 付き/無しで正しく呼ぶか、必須ガードで呼ばず弾くかを引数アサートで踏む。
+const story = (id: string, epicId?: string): Ticket => ({
+  ...t(id),
+  type: 'story',
+  ...(epicId !== undefined && { epicId }),
+});
+
+describe('SprintSectionedList story 作成の親Epic必須化 (案A)', () => {
+  const storyProps = {
+    ...baseProps,
+    allowedTypes: ['story'] as TicketType[],
+    current: [] as Ticket[],
+    next: [] as Ticket[],
+    backlog: [] as Ticket[],
+  };
+
+  // New issue → story フォームを開き 3 欄を埋める (親 Epic 選択は各テストで分岐)。
+  async function openCreateStory() {
+    const wrapper = await mountSuspended(SprintSectionedList, { props: storyProps });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    await wrapper.get('[data-testid=us-asa]').setValue('運営担当者');
+    await wrapper.get('[data-testid=us-iwant]').setValue('ゴール提案がほしい');
+    await wrapper.get('[data-testid=us-sothat]').setValue('判定が割れない');
+    return wrapper;
+  }
+
+  it('親 Epic 未選択で作成 → createTicket を呼ばず createError を出す', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid=create-error]').text()).toContain('親 Epic');
+  });
+
+  it('親 Epic を選ぶと createTicket が epicId 付き story で呼ばれる', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=us-epic]').setValue('EP-1');
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({ type: 'story', epicId: 'EP-1' });
+  });
+});
+
+describe('SprintSectionedList 分割の親Epic継承 (案A)', () => {
+  // split ボタン → ダイアログを開き 1 行目のタイトルを埋める。
+  async function mountAndOpenSplit(props: SSLProps, parentId: string, rowTitle: string) {
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    await wrapper.get(`[data-testid=split-${parentId}]`).trigger('click');
+    await wrapper.get('[data-testid=split-row-0]').setValue(rowTitle);
+    return wrapper;
+  }
+
+  it('child-story: 親に epicId があれば子 Story が継承する', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await mountAndOpenSplit(
+      { ...baseProps, splitMode: 'child-story', allowedTypes: ['story'] as TicketType[],
+        current: [], next: [], backlog: [story('US-1', 'EP-9')] },
+      'US-1', '最小ゴール提案を返す',
+    );
+    await wrapper.get('[data-testid=split-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({ type: 'story', parentTicketId: 'US-1', epicId: 'EP-9' });
+  });
+
+  it('child-story: 親に epicId が無い時はダイアログで選んだ Epic を子に付ける', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await mountAndOpenSplit(
+      { ...baseProps, splitMode: 'child-story', allowedTypes: ['story'] as TicketType[],
+        current: [], next: [], backlog: [story('US-2')] },
+      'US-2', '子 Story A',
+    );
+    await wrapper.get('[data-testid=split-epic]').setValue('EP-1');
+    await wrapper.get('[data-testid=split-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({ type: 'story', parentTicketId: 'US-2', epicId: 'EP-1' });
+  });
+
+  it('child-story: 親も選択も Epic 無しなら createTicket を呼ばず splitError (blocker 再現)', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await mountAndOpenSplit(
+      { ...baseProps, splitMode: 'child-story', allowedTypes: ['story'] as TicketType[],
+        current: [], next: [], backlog: [story('US-3')] },
+      'US-3', '子 Story X',
+    );
+    await wrapper.get('[data-testid=split-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid=split-error]').text()).toContain('親 Epic');
+  });
+
+  it('task-spike: 子 Task には epicId を付けない (親が epicId 持ちでも)', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await mountAndOpenSplit(
+      { ...baseProps, splitMode: 'task-spike', allowedTypes: ['task'] as TicketType[],
+        current: [story('US-4', 'EP-9')], next: [], backlog: [] },
+      'US-4', 'API 実装',
+    );
+    await wrapper.get('[data-testid=split-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    const arg = mocks.createTicket.mock.calls[0]![0];
+    expect(arg).toMatchObject({ type: 'task', parentTicketId: 'US-4' });
+    expect(arg).not.toHaveProperty('epicId');
   });
 });

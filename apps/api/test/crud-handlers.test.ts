@@ -61,10 +61,14 @@ describe('createTicket', () => {
   });
 
   it('正常系: type / timeboxHours を保存する (種別バッジ / Spike timebox の前提)', async () => {
-    const story = await createTicket(repo, CTX, { title: 'a story', type: 'story' });
+    // story は親 Epic 必須 (案A) なので実在 epic を 1 件用意して渡す。
+    const epic = await createEpic(repo, CTX, { name: 'Parent' });
+    if (!epic.ok) throw new Error('setup failed');
+    const story = await createTicket(repo, CTX, { title: 'a story', type: 'story', epicId: epic.body.id });
     expect(story.ok).toBe(true);
     if (!story.ok) return;
     expect(story.body.type).toBe('story');
+    expect(story.body.epicId).toBe(epic.body.id);
 
     const spike = await createTicket(repo, CTX, { title: 'a spike', type: 'spike', timeboxHours: 4 });
     expect(spike.ok).toBe(true);
@@ -127,6 +131,69 @@ describe('createTicket', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.workspaceId).toBe(WS); // ctx の workspaceId が優先
+  });
+
+  // ----- story 親 Epic 必須化 + 実在検証 (案A / 2026-06-19) -----
+  // create 経路のみ。退化入力 (undefined / 空文字 / 不在 / 別 WS / 実在) を固定する (.claude/rules/testing.md §1)。
+  describe('story の親 Epic 必須化 + 実在検証', () => {
+    it('異常系: type=story で epicId 未指定 (undefined) → 400 epic_required', async () => {
+      const res = await createTicket(repo, CTX, { title: 'no epic', type: 'story' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('epic_required');
+    });
+
+    it('異常系: type=story で epicId が空文字 → 400 epic_required', async () => {
+      const res = await createTicket(repo, CTX, { title: 'empty epic', type: 'story', epicId: '' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('epic_required');
+    });
+
+    it('異常系: type=story で workspace に実在しない epicId (fabricated) → 400 epic_not_found', async () => {
+      const res = await createTicket(repo, CTX, { title: 'fake epic', type: 'story', epicId: 'EP-FAKE-NOEXIST' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('epic_not_found');
+    });
+
+    it('異常系: type=story で別 workspace の epicId → 400 epic_not_found (workspace 越え弾き)', async () => {
+      const otherEpic = await createEpic(repo, OTHER_CTX, { name: 'Other WS Epic' });
+      if (!otherEpic.ok) throw new Error('setup failed');
+      const res = await createTicket(repo, CTX, { title: 'cross ws', type: 'story', epicId: otherEpic.body.id });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('epic_not_found');
+    });
+
+    it('正常系: type=story で同一 workspace の実在 epicId → 201 + epicId 保存', async () => {
+      const epic = await createEpic(repo, CTX, { name: 'Parent' });
+      if (!epic.ok) throw new Error('setup failed');
+      const res = await createTicket(repo, CTX, { title: 'good story', type: 'story', epicId: epic.body.id });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.status).toBe(201);
+      expect(res.body.epicId).toBe(epic.body.id);
+      // 永続化確認
+      const got = await repo.tickets.get(res.body.id);
+      expect(got?.epicId).toBe(epic.body.id);
+    });
+
+    it('正常系: story 以外 (task/bug) は epicId 無しでも 201 (非必須)', async () => {
+      const task = await createTicket(repo, CTX, { title: 'a task', type: 'task' });
+      expect(task.ok).toBe(true);
+      if (!task.ok) return;
+      expect(task.status).toBe(201);
+
+      const bug = await createTicket(repo, CTX, { title: 'a bug', type: 'bug' });
+      expect(bug.ok).toBe(true);
+      if (!bug.ok) return;
+      expect(bug.status).toBe(201);
+    });
   });
 });
 

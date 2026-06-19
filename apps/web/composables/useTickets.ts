@@ -24,6 +24,8 @@ export interface CreateTicketInput {
   timeboxHours?: number;
   /** 分割で生成する子チケットの親 (Refinement: US→子Story / Planning: Story→Task/Spike)。 */
   parentTicketId?: string;
+  /** type==='story' の親 Epic (案A: story 作成時は必須)。incident/bug/task/spike では不要。 */
+  epicId?: string;
 }
 
 /** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
@@ -93,6 +95,7 @@ export const useTickets = () => {
       if (input.type !== undefined) body.type = input.type;
       if (input.timeboxHours !== undefined) body.timeboxHours = input.timeboxHours;
       if (input.parentTicketId !== undefined) body.parentTicketId = input.parentTicketId;
+      if (input.epicId !== undefined) body.epicId = input.epicId;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)

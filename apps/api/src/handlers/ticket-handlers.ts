@@ -55,6 +55,10 @@ export const TicketCreateBodySchema = z.object({
   parentTicketId: z.string().optional(),
   blockedBy: z.array(z.string()).optional(),
   projectId: z.string().optional(),
+  // type==='story' の親 Epic。schema 上は optional のまま据え置く
+  // (story 限定の必須化 + 実在検証は createTicket ハンドラ内の手続きチェックで行う。
+  //  ここに .refine を掛けると .partial() 派生の TicketPatchBodySchema へ必須化が漏れるため)。
+  epicId: z.string().optional(),
   type: TicketTypeSchema.optional(),
   timeboxHours: z.number().min(0).optional(),
   // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
@@ -93,6 +97,20 @@ export async function createTicket(
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
+  // story 限定の親 Epic 必須化 + 実在検証 (案A / 2026-06-19)。
+  // create 経路のみに掛ける (PATCH/list/read には波及させない = 既存 seed の epicId 無し story を壊さない)。
+  // 実在チェックは repo 参照を伴う async なので zod .refine ではなくハンドラ内手続きで行う。
+  if (parsed.data.type === 'story') {
+    const epicId = parsed.data.epicId;
+    if (epicId === undefined || epicId === '') {
+      return { ok: false, status: 400, body: { error: 'epic_required' } };
+    }
+    // fabricated な EP-xxx / 他 workspace の epic は「存在しない」扱いで 400 (IDOR ガードと同方針)。
+    const epic = await repo.epics.get(epicId);
+    if (!epic || epic.workspaceId !== ctx.workspaceId) {
+      return { ok: false, status: 400, body: { error: 'epic_not_found' } };
+    }
+  }
   const now = new Date().toISOString();
   const t: Ticket = {
     id: generateId('WC'),
@@ -112,6 +130,7 @@ export async function createTicket(
     ...(parsed.data.parentTicketId !== undefined && { parentTicketId: parsed.data.parentTicketId }),
     ...(parsed.data.blockedBy !== undefined && { blockedBy: parsed.data.blockedBy }),
     ...(parsed.data.projectId !== undefined && { projectId: parsed.data.projectId }),
+    ...(parsed.data.epicId !== undefined && { epicId: parsed.data.epicId }),
     ...(parsed.data.type !== undefined && { type: parsed.data.type }),
     ...(parsed.data.timeboxHours !== undefined && { timeboxHours: parsed.data.timeboxHours }),
     ...(parsed.data.orderIndex !== undefined && { orderIndex: parsed.data.orderIndex }),

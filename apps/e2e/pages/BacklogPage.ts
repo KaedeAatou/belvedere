@@ -9,6 +9,7 @@ export class BacklogPage extends BasePage {
   readonly createDialog: Locator;
   readonly newTicketTitle: Locator;
   readonly newTicketType: Locator;
+  readonly newTicketEpic: Locator;
   readonly newTicketPriority: Locator;
   readonly submitCreate: Locator;
   readonly liveSection: Locator;
@@ -21,6 +22,7 @@ export class BacklogPage extends BasePage {
     this.createDialog = page.getByTestId('create-dialog');
     this.newTicketTitle = page.getByTestId('new-ticket-title');
     this.newTicketType = page.getByTestId('new-ticket-type');
+    this.newTicketEpic = page.getByTestId('us-epic');
     this.newTicketPriority = page.getByTestId('new-ticket-priority');
     this.submitCreate = page.getByTestId('submit-create');
     this.liveSection = page.getByTestId('live-section');
@@ -57,6 +59,8 @@ export class BacklogPage extends BasePage {
     title: string;
     priority?: 'low' | 'medium' | 'high' | 'urgent';
     type?: 'story' | 'task' | 'spike' | 'bug' | 'incident';
+    /** story 作成時の親 Epic id (案A: story は親 Epic 必須)。実在 Epic (例 EP-1) を渡す。 */
+    epic?: string;
   }): Promise<void> {
     await this.newTicketBtn.click();
     await expect(this.createDialog).toBeVisible();
@@ -66,6 +70,8 @@ export class BacklogPage extends BasePage {
       await this.page.getByTestId('us-asa').fill('E2E 運営担当者');
       await this.page.getByTestId('us-iwant').fill(opts.title);
       await this.page.getByTestId('us-sothat').fill('E2E 検証で品質チェックを通すため');
+      // story は親 Epic 必須 (案A)。指定があれば選ぶ。
+      if (opts.epic) await this.newTicketEpic.selectOption(opts.epic);
     } else {
       await this.newTicketTitle.fill(opts.title);
     }

@@ -77,7 +77,10 @@ async function submitFeedback() {
   if (!title) return;
   feedbackSubmitting.value = true;
   feedbackConfirm.value = false;
-  await createTicket({ title, status: 'backlog', type: 'story', valueImpact: feedbackImpact.value });
+  // ステークホルダーフィードバックは「外部からの受信事項」なので incident で起票する。
+  // story 化すると案A により親 Epic 必須になり、この自動起票経路では Epic を選べず 400 になるため。
+  // (フィードバックを正式な User Story へ昇格する導線は Refinement 側の責務。followUp 参照)
+  await createTicket({ title, status: 'backlog', type: 'incident', valueImpact: feedbackImpact.value });
   feedbackText.value = '';
   feedbackImpact.value = 'medium';
   feedbackSubmitting.value = false;
