@@ -25,10 +25,32 @@ export const useEpics = () => {
     }
   }
 
+  /**
+   * Epic を新規作成 (POST /api/epics)。案A の決定2部目「Story を作れる儀式で Epic も追加できる」。
+   * 成功時はローカル epics に追記して selectableEpics に即反映する (作成→即選択を可能にする)。
+   */
+  async function createEpic(input: { name: string; rationale?: string }): Promise<Epic | null> {
+    isLoading.value = true;
+    error.value = null;
+    try {
+      const body: Record<string, unknown> = { name: input.name };
+      if (input.rationale !== undefined && input.rationale !== '') body.rationale = input.rationale;
+      const created = await api.post<Epic>('/api/epics', body);
+      epics.value = [...epics.value, created];
+      return created;
+    } catch (e) {
+      const err = e as { data?: { error?: string }; message?: string };
+      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      return null;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   /** story の親に選べる Epic (cancelled / completed は除外)。セレクタの候補に使う。 */
   const selectableEpics = computed<Epic[]>(() =>
     epics.value.filter((e) => e.status !== 'cancelled' && e.status !== 'completed'),
   );
 
-  return { epics, selectableEpics, isLoading, error, fetchEpics };
+  return { epics, selectableEpics, isLoading, error, fetchEpics, createEpic };
 };

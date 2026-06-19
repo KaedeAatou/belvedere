@@ -20,9 +20,13 @@ const mocks = vi.hoisted(() => {
   // createTicket は作成成功 (truthy) を返すスパイ。submitCreate / submitSplit の配線 (epicId が body に
   // 載るか / 必須ガードで弾かれるか) を呼出引数で固定するため、デフォルトで created を返す。
   const createTicket = vi.fn((input: Record<string, unknown>) => Promise.resolve({ id: 'WC-new', ...input }));
+  // createEpic は新 Epic を返すスパイ。インライン Epic 作成 (Story を作る儀式で Epic も追加) の配線を固定。
+  const createEpic = vi.fn((input: { name: string }) =>
+    Promise.resolve({ id: 'EP-NEW', workspaceId: 'ws-belvedere', name: input.name, status: 'planned', createdAt: '2026-06-01T00:00:00Z' }));
   return {
     reorderTickets,
     createTicket,
+    createEpic,
     // テンプレートは ref を自動アンラップするが、プレーン {value} はアンラップされない。
     // createLoading は template でのみ truthy 判定される (script で .value を読まない) ので素の値を渡す。
     // liveError は script で .value を読むので {value} 形を保つ。
@@ -44,6 +48,8 @@ const mocks = vi.hoisted(() => {
       epics: [{ id: 'EP-1', workspaceId: 'ws-belvedere', name: 'Epic 1', status: 'active', createdAt: '2026-06-01T00:00:00Z' }],
       selectableEpics: [{ id: 'EP-1', workspaceId: 'ws-belvedere', name: 'Epic 1', status: 'active', createdAt: '2026-06-01T00:00:00Z' }],
       fetchEpics: () => Promise.resolve(),
+      createEpic,
+      error: { value: null },
     }),
     useSelection: () => ({
       count: { value: 0 },
@@ -192,6 +198,30 @@ describe('SprintSectionedList story 作成の親Epic必須化 (案A)', () => {
     await flushPromises();
     expect(mocks.createTicket).toHaveBeenCalledTimes(1);
     expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({ type: 'story', epicId: 'EP-1' });
+  });
+
+  // 決定2部目: Story を作れる儀式で Epic も追加できる (インライン作成 → 即選択)。
+  it('インライン Epic 作成: 名前を入れて作成すると createEpic が呼ばれフォームが閉じる', async () => {
+    mocks.createEpic.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=epic-new-toggle]').trigger('click');
+    await wrapper.get('[data-testid=epic-new-name]').setValue('運営の自動化');
+    await wrapper.get('[data-testid=epic-new-rationale]').setValue('レビュー判定を割れさせない');
+    await wrapper.get('[data-testid=epic-new-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createEpic).toHaveBeenCalledTimes(1);
+    expect(mocks.createEpic.mock.calls[0]![0]).toMatchObject({ name: '運営の自動化', rationale: 'レビュー判定を割れさせない' });
+    expect(wrapper.find('[data-testid=epic-create]').exists()).toBe(false); // 作成後に閉じる
+  });
+
+  it('インライン Epic 作成: 名前が空なら createEpic を呼ばずエラーを出す', async () => {
+    mocks.createEpic.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=epic-new-toggle]').trigger('click');
+    await wrapper.get('[data-testid=epic-new-submit]').trigger('click');
+    await flushPromises();
+    expect(mocks.createEpic).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid=epic-new-error]').text()).toContain('Epic 名');
   });
 });
 

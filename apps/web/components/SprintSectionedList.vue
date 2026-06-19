@@ -66,7 +66,7 @@ const { createTicket, reorderTickets, isLoading: createLoading, error: liveError
 const { findingsFor } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
-const { selectableEpics, fetchEpics } = useEpics();
+const { selectableEpics, fetchEpics, createEpic, error: epicsError } = useEpics();
 
 // 複数選択 (全区画跨ぎ選択可)。BulkActionBar は上部に 1 つ。
 const sel = useTicketSelection();
@@ -193,6 +193,43 @@ const storyVerdict = ref<StoryQualityVerdict | null>(null);
 // story の親 Epic (案A: story 作成時は必須)。selectableEpics から選ぶ。
 const newEpicId = ref<string>('');
 
+// ===== インライン Epic 作成 (ユーザー決定2部目: Story を作れる儀式で Epic も追加できる) =====
+// Story 作成フォームの親 Epic セレクタの隣で「その場で Epic を作って即選択」できる。
+// epic 0 件の workspace でも story を作れるようにする (案A の必須化が行き止まりにならない)。
+const showEpicCreate = ref(false);
+const newEpicName = ref('');
+const newEpicRationale = ref('');
+const epicCreateBusy = ref(false);
+const epicCreateError = ref<string | null>(null);
+
+function toggleEpicCreate(): void {
+  showEpicCreate.value = !showEpicCreate.value;
+  epicCreateError.value = null;
+}
+
+async function submitEpicCreate(): Promise<void> {
+  epicCreateError.value = null;
+  const name = newEpicName.value.trim();
+  if (!name) {
+    epicCreateError.value = 'Epic 名は必須です';
+    return;
+  }
+  epicCreateBusy.value = true;
+  const created = await createEpic({
+    name,
+    ...(newEpicRationale.value.trim() && { rationale: newEpicRationale.value.trim() }),
+  });
+  epicCreateBusy.value = false;
+  if (created) {
+    newEpicId.value = created.id; // 作った Epic を即・親に選択
+    showEpicCreate.value = false;
+    newEpicName.value = '';
+    newEpicRationale.value = '';
+  } else {
+    epicCreateError.value = epicsError.value ?? 'Epic 作成に失敗しました';
+  }
+}
+
 const isStory = computed(() => newType.value === 'story');
 // US の title は 3 欄から自動生成 (空欄時)。手入力 title があればそれを優先。
 const composedStoryTitle = computed(() =>
@@ -226,6 +263,10 @@ function openCreate(): void {
   usSoThat.value = '';
   storyVerdict.value = null;
   newEpicId.value = '';
+  showEpicCreate.value = false;
+  newEpicName.value = '';
+  newEpicRationale.value = '';
+  epicCreateError.value = null;
   newSection.value = 'backlog';
   // story 作成時の親 Epic セレクタ用に Epic 一覧を確実に読み込む (単体マウント経路でも空にしない)。
   void fetchEpics();
@@ -543,16 +584,35 @@ async function submitSplit(): Promise<void> {
             <input id="ssl-us-sothat" v-model="usSoThat" data-testid="us-sothat" type="text" class="text-input"
                    maxlength="160" placeholder="例: 測定可能なゴールを定義でき、レビュー時の判定が割れない" />
           </div>
-          <!-- 親 Epic は story 作成時に必須 (案A)。実在 Epic から選ぶ。 -->
+          <!-- 親 Epic は story 作成時に必須 (案A)。実在 Epic から選ぶ or その場で作る (決定2部目)。 -->
           <div class="field">
             <label class="label" for="ssl-us-epic">親 Epic <span class="req">*</span></label>
-            <select id="ssl-us-epic" v-model="newEpicId" data-testid="us-epic" class="select-input">
-              <option value="" disabled>親 Epic を選択</option>
-              <option v-for="e in selectableEpics" :key="e.id" :value="e.id">{{ e.name }}</option>
-            </select>
-            <p v-if="selectableEpics.length === 0" class="us-epic-empty" data-testid="us-epic-empty">
-              選択できる Epic がありません。先に Epic を作成してください。
+            <div class="epic-select-row">
+              <select id="ssl-us-epic" v-model="newEpicId" data-testid="us-epic" class="select-input">
+                <option value="" disabled>親 Epic を選択</option>
+                <option v-for="e in selectableEpics" :key="e.id" :value="e.id">{{ e.name }}</option>
+              </select>
+              <button type="button" class="epic-new-btn" data-testid="epic-new-toggle" @click="toggleEpicCreate">
+                {{ showEpicCreate ? '閉じる' : '+ 新規 Epic' }}
+              </button>
+            </div>
+            <p v-if="selectableEpics.length === 0 && !showEpicCreate" class="us-epic-empty" data-testid="us-epic-empty">
+              選択できる Epic がありません。「+ 新規 Epic」でこの場で作成してください。
             </p>
+            <!-- インライン Epic 作成: Story を作る流れのまま親 Epic を新設して即選択する -->
+            <div v-if="showEpicCreate" class="epic-create" data-testid="epic-create">
+              <input v-model="newEpicName" data-testid="epic-new-name" type="text" class="text-input"
+                     maxlength="120" placeholder="Epic 名 (例: スプリント運営の自動化)" />
+              <input v-model="newEpicRationale" data-testid="epic-new-rationale" type="text" class="text-input"
+                     maxlength="200" placeholder="戦略意図 / なぜこの Epic か (任意)" />
+              <div class="epic-create-foot">
+                <button type="button" class="btn-primary" data-testid="epic-new-submit"
+                        :disabled="epicCreateBusy" @click="submitEpicCreate">
+                  {{ epicCreateBusy ? '作成中…' : 'Epic を作成' }}
+                </button>
+              </div>
+              <p v-if="epicCreateError" class="msg-error" data-testid="epic-new-error">{{ epicCreateError }}</p>
+            </div>
           </div>
           <p v-if="composedStoryTitle" class="us-preview">
             プレビュー: <b>{{ newTitle.trim() || composedStoryTitle }}</b>
@@ -764,6 +824,22 @@ async function submitSplit(): Promise<void> {
 .us-suggestion { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 /* 親 Epic セレクタ補助文 (create / split 共通): 候補ゼロ or 継承不能時の案内 */
 .us-epic-empty { margin: 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
+/* 親 Epic セレクタ + 「+ 新規 Epic」を横並び。インライン Epic 作成フォーム */
+.epic-select-row { display: flex; gap: 8px; align-items: center; }
+.epic-select-row .select-input { flex: 1; }
+.epic-new-btn {
+  flex: 0 0 auto; padding: 8px 12px; white-space: nowrap;
+  background: transparent; color: var(--accent);
+  border: var(--hairline) solid var(--accent-dim, var(--line-2)); border-radius: var(--radius);
+  font-family: var(--sans); font-size: 12px; cursor: pointer;
+}
+.epic-new-btn:hover { background: var(--accent-bg, #fff3ee); }
+.epic-create {
+  margin-top: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px;
+  border: var(--hairline) dashed var(--accent-dim, var(--line-2)); border-radius: var(--radius);
+  background: var(--bg-0);
+}
+.epic-create-foot { display: flex; justify-content: flex-end; }
 
 /* 分割ダイアログ */
 .split-dialog { max-width: 560px; }
