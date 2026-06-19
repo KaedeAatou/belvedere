@@ -68,13 +68,18 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
     role: 'Orchestrator',
     responsibility: `
 <responsibility>
-5 つの儀式エージェント (Planner / Daily / Refinement / Reviewer / Retrospective) の起動順・並列度を判定する軽量ルーティング (gemini-2.5-flash 相当)。
+スクラムマスターとして単一窓口になり、5 つの儀式エージェント (Planner / Daily / Refinement / Reviewer / Retrospective) を必要に応じて協議に招集し、その出力を統括して 1 つの回答にまとめる (gemini-2.5-flash 相当)。
 <reasoning>
-1. 現在時刻と曜日を確認
-2. 月曜朝 = Planner、平日朝 = Daily、Refinement 時刻 = Refinement、Review 1営業日前 = Reviewer、ふりかえり時刻 = Retrospective
-3. 失敗時は代替ルーティングを提案
-4. 重い思考はサブエージェントに委譲する (Orchestrator 自身は判断のみ)
+1. 人間の要求 (画面操作で渡される) を読み、どの儀式エージェントの知見が必要かを判断する
+2. 必要な儀式エージェントを agent.invoke で子として起動し、出力を受け取る
+3. 複数エージェントが関わる場合は互いの出力を突き合わせて協議し、矛盾や補完関係を解消する
+4. 統括した結論を 1 つの回答にまとめる (招集したエージェントと各々の主要指摘を source ID 付きで添えて統合)。重い思考は各儀式エージェントに委譲し、Orchestrator 自身は招集と統括に徹する
 </reasoning>
+<constraints>
+  <rule>時刻・スケジュールでの自動起動はしない。人が画面を操作した時にだけ動く (トリガーは画面操作のみ)</rule>
+  <rule>招集した儀式エージェントをさらに Orchestrator として再帰起動しない (協議の深さは 1 段まで)</rule>
+  <rule>子エージェントの結論を改変せず、突き合わせた上で統合する (個別の根拠 source ID は保持して引用)</rule>
+</constraints>
 </responsibility>`.trim(),
   },
   planner: {
@@ -113,7 +118,7 @@ Daily Scrum 運営支援。
    例: Try「BLOCKED 遷移時に理由を必須記入する」→ labels に 'blocked' が付いているのに
    description に理由記載が無いチケットを検出して指摘。
    Try「金曜に更新がゼロのチケットは月曜朝にメンション」→ 該当チケットを抽出してメンション候補に追加。
-6. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
+6. AI パネルに Daily 要約を提示 (停滞・品質の指摘。担当者へのメンションは L2 提案)
 </reasoning>
 Try 項目はスプリントのバックログに積むものではなく、チームが合意した「プロセス改善ルール」として
 毎 Daily に監視する基準になる。
@@ -163,7 +168,7 @@ Sprint Review の準備を支援する。
 レビュー会 前 (1営業日前):
     1. ticket.list で review/done 状態のチケットを取得
     2. デモシナリオ草稿を作成、各チケットに Cloud Run preview URL を付与
-    3. ステークホルダ向け Slack 通知文を整える
+    3. ステークホルダ向けの通知文案を AI パネルに提示する
 </reasoning>
 提案は L2 (人が承認後に反映)。
 </responsibility>`.trim(),

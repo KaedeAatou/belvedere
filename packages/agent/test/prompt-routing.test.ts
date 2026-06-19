@@ -19,7 +19,7 @@ const ROLE_MARKERS: Record<AgentName, string> = {
   daily: '【デイリースクラム要約 (Daily / Mock)】',
   reviewer: '【スプリントレビュー支援 (Reviewer / Mock)】',
   retrospective: '【ふりかえり Try 抽出 (Retrospective / Mock)】',
-  orchestrator: '【Orchestrator 判定 (Mock)】',
+  orchestrator: '【Orchestrator 協議統括 (Mock)】',
 };
 
 describe('prompt routing: 実 buildSystemPrompt 出力 → Mock detectRole', () => {

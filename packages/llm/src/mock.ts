@@ -106,7 +106,11 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('ticket.list', { sprintId: 'sprint-12' });
         break;
       case 'orchestrator':
-        // 軽量ルーティングなのでツール呼ばずに即終了
+        // 単一窓口=協議統括: 儀式エージェントを子として招集する (agent.invoke が渡された時のみ)。
+        // Refinement にバックログ品質を、Planner に計画整合を諮問し、出力を突き合わせて統括する。
+        // ※ agent.invoke は buildOrchestratorTools でのみ渡される (素の buildTools には無い=深さ1)。
+        tryCall('agent.invoke', { agentName: 'refinement', prompt: '次スプリント候補のバックログ品質を診断して' });
+        tryCall('agent.invoke', { agentName: 'planner', prompt: '今スプリントの計画 SP と velocity の整合を確認して' });
         break;
       case 'unknown':
         // フォールバック: 全部
@@ -252,7 +256,7 @@ function getStructuredOutput(role: AgentRole): unknown {
           { ticketId: 'WC-103', durationMin: 5, previewUrl: 'https://belvedere-pr-103-dev-asia-northeast1.run.app' },
           { ticketId: 'WC-107', durationMin: 3, previewUrl: 'https://belvedere-pr-107-prod-asia-northeast1.run.app' },
         ],
-        stakeholderNotice: 'Cloud Run preview URL 2件発行済。Slack #review-stakeholders に投稿予定 (1営業日前)。',
+        stakeholderNotice: 'Cloud Run preview URL 2件発行済。ステークホルダ向け通知文案を AI パネルに提示済 (1営業日前)。',
         risks: ['WC-103 の e2e テストがまだ unstable。バックアップ録画も用意'],
       };
     case 'retrospective':
@@ -267,8 +271,9 @@ function getStructuredOutput(role: AgentRole): unknown {
       };
     case 'orchestrator':
       return {
-        routedTo: ['planner', 'daily'],
-        reason: '月曜朝なので Planner、平日なので Daily を起動。',
+        consulted: ['refinement', 'planner'],
+        synthesis:
+          'Refinement の品質診断 (粒度過大2件・EP-3 の戦略意図欠落) と Planner の計画整合 (計画68pt vs velocity 27pt = 過剰計画) を突き合わせ、まず過剰計画の是正と EP-3 の rationale 補完を優先する、と統括。',
       };
     default:
       return { error: 'unknown role; provide system prompt with agent identity' };
@@ -342,7 +347,7 @@ function getNaturalOutput(role: AgentRole): string {
         '◆ 警告: WC-106 が3日停滞。林さんへの blocker 確認をご相談 (L2)',
         '◆ 品質: WC-101 (DoD/SP空) / WC-104 (US紐付けなし) → Planner が候補準備済',
         '',
-        '#daily チャンネルに投下しました。',
+        'Daily 要約を AI パネルに提示しました。',
       ].join('\n');
 
     case 'reviewer':
@@ -357,7 +362,7 @@ function getNaturalOutput(role: AgentRole): string {
         '       → preview URL: https://belvedere-pr-107-prod-asia-northeast1.run.app',
         '',
         '◆ ステークホルダ通知:',
-        '  Cloud Run preview URL 2件を Slack #review-stakeholders に投稿予定 (1営業日前)。',
+        '  Cloud Run preview URL 2件付きの通知文案を AI パネルに提示予定 (1営業日前)。',
         '',
         '◆ リスク:',
         '  - WC-103 の e2e テストがまだ unstable。バックアップ録画も用意',
@@ -391,14 +396,18 @@ function getNaturalOutput(role: AgentRole): string {
 
     case 'orchestrator':
       return [
-        '【Orchestrator 判定 (Mock)】',
+        '【Orchestrator 協議統括 (Mock)】',
+        'スクラムマスターとして単一窓口になり、関係する儀式エージェントを招集して統括しました。',
         '',
-        '時刻: 月曜 08:30',
-        '判断: Planner Agent と Daily Agent を並列起動',
-        '理由:',
-        '  - 月曜朝 = プランニングの30分前なので Planner を起動',
-        '  - 平日朝 = Daily も並行で要約準備',
-        '次回: 火曜 09:55 / Daily Agent を単独起動',
+        '◆ 招集した儀式エージェント (agent.invoke で子として起動):',
+        '  - Refinement: 次スプリント候補のバックログ品質を診断',
+        '  - Planner: 今スプリントの計画 SP と velocity の整合を確認',
+        '',
+        '◆ 協議の統括:',
+        '  Refinement の指摘 (粒度過大 2件 / EP-3 の戦略意図欠落) と Planner の指摘',
+        '  (計画68pt vs velocity 27pt = 過剰計画) を突き合わせ、まず過剰計画の是正と',
+        '  EP-3 の rationale 補完を優先する方針に統括しました。',
+        '  ※ 起動は時刻ではなく、人が画面を操作した時に行います (スケジュールなし)。',
       ].join('\n');
 
     case 'unknown':

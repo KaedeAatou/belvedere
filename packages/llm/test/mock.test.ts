@@ -32,7 +32,7 @@ describe('MockLLMProvider role detection (system prompt → role)', () => {
     { role: 'daily',         systemPrompt: 'COMMON\n\nYour role: Daily Agent\nYour responsibility: ...',             marker: '【デイリースクラム要約 (Daily / Mock)】' },
     { role: 'reviewer',      systemPrompt: 'COMMON\n\nYour role: Reviewer Agent\nYour responsibility: ...',          marker: '【スプリントレビュー支援 (Reviewer / Mock)】' },
     { role: 'retrospective', systemPrompt: 'COMMON\n\nYour role: Retrospective Agent\nYour responsibility: ...',     marker: '【ふりかえり Try 抽出 (Retrospective / Mock)】' },
-    { role: 'orchestrator',  systemPrompt: 'COMMON\n\nYour role: Orchestrator (gemini-2.5-flash 相当)\nYour responsibility: ...', marker: '【Orchestrator 判定 (Mock)】' },
+    { role: 'orchestrator',  systemPrompt: 'COMMON\n\nYour role: Orchestrator (gemini-2.5-flash 相当)\nYour responsibility: ...', marker: '【Orchestrator 協議統括 (Mock)】' },
   ];
 
   for (const { role, systemPrompt, marker } of cases) {
@@ -160,6 +160,43 @@ describe('MockLLMProvider tool-call decision tree (C3: deferred branches)', () =
     });
     expect(res.stop.type).toBe('stop');
     expect(res.text).toContain('【プランニング補助 (Planner / Mock)】');
+  });
+
+  // phase 3: Orchestrator=単一窓口=協議統括。agent.invoke が渡されたら儀式 agent を子として招集する。
+  it('orchestrator は agent.invoke が渡されると儀式 agent を子として招集する (協議統括)', async () => {
+    const provider = new MockLLMProvider();
+    const res = await provider.generate({
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: 'Your role: Orchestrator (gemini-2.5-flash 相当)\nYour responsibility: 協議統括。' },
+        { role: 'user', content: 'まとめて' },
+      ],
+      tools: [{ name: 'agent.invoke', description: '', parameters: {} }],
+    });
+    expect(res.stop.type).toBe('tool_calls');
+    if (res.stop.type !== 'tool_calls') return;
+    const invokes = res.stop.calls.filter((c) => c.name === 'agent.invoke');
+    expect(invokes.length).toBeGreaterThan(0);
+    // 招集先は儀式 agent (CEREMONY_AGENTS) のみ。orchestrator 自身は招集しない (自己参照しない)。
+    const ceremony = ['planner', 'daily', 'refinement', 'reviewer', 'retrospective'];
+    for (const c of invokes) {
+      expect(ceremony).toContain((c.arguments as { agentName?: string }).agentName);
+    }
+  });
+
+  it('orchestrator は agent.invoke が無ければ儀式作業をせず即統括出力へ (素の buildTools = 深さ1)', async () => {
+    const provider = new MockLLMProvider();
+    const res = await provider.generate({
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: 'Your role: Orchestrator (gemini-2.5-flash 相当)' },
+        { role: 'user', content: 'まとめて' },
+      ],
+      tools: [{ name: 'ticket.list', description: '', parameters: {} }], // agent.invoke 無し
+    });
+    // agent.invoke が無いので base tool (ticket.list) を呼ばず即終了 = 窓口は儀式作業を自分でしない
+    expect(res.stop.type).toBe('stop');
+    expect(res.text).toContain('【Orchestrator 協議統括 (Mock)】');
   });
 });
 
