@@ -40,8 +40,15 @@ export const AGENT_MODEL: Record<AgentName, string> = {
   retrospective: 'gemini-2.5-pro',
 };
 
-/** AGENT_MODEL の lookup。未マップ名はデフォルトに落とさず throw して signpost する。 */
+/**
+ * AGENT_MODEL の lookup。未マップ名はデフォルトに落とさず throw して signpost する。
+ * env GEMINI_MODEL_OVERRIDE が設定されていれば全エージェントをそのモデルに上書きする
+ * (無料枠キーは gemini-2.5-pro が limit 0 のため、ローカル gemini ドッグフードを flash に倒す用途)。
+ * 本番は未設定のまま AGENT_MODEL (pro/flash 使い分け) を正とする。
+ */
 export function modelForAgent(name: AgentName): string {
+  const override = process.env.GEMINI_MODEL_OVERRIDE;
+  if (override) return override;
   const model = AGENT_MODEL[name];
   if (!model) throw new Error(`[shared] no Gemini model mapped for agent "${name}"`);
   return model;
