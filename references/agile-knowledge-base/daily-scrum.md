@@ -50,7 +50,7 @@
 2. ticket.list で対象 Sprint のチケット一覧を取得
 3. 2 日以内にチケットが完了しているか観測
 4. 3 日以上動きのないチケットを停滞として検出
-5. Slack 要約を生成 (L3 通知 / 担当者メンションは L2)
+5. 要約を生成し AI パネルに提示 (L2 提案 / 通知・メンションは人間が判断)
 ```
 
 ---
@@ -65,7 +65,7 @@
 | 1 日 = 偶然 (集中 / レビュー待ち) / 2 日 = 注意 / 3 日 = 障害物の可能性 | Mike Cohn "stalled tickets" rule of thumb |
 | Cycle Time の中央値 + 2σ あたりが「異常」サイン | カンバン Lean metrics |
 
-**Belvedere Daily Agent**: 3 日停滞を検出 → SM への通知は L3 自律 (Slack 投下) + 担当者メンションは L2 (人間判断)。
+**Belvedere Daily Agent**: 3 日停滞を検出 → AI パネルに L2 提案として提示 (SM への通知・担当者メンションは人間判断)。
 
 ### 5-2. 2 日以内完了率の意義
 
@@ -97,7 +97,7 @@ Belvedere Daily Agent の current 実装 は Burn-down 寄り (残 SP 表示)。
 
 ---
 
-## 7. Daily Agent の Slack 要約フォーマット (推奨)
+## 7. Daily Agent の要約フォーマット (推奨 / AI パネル提示)
 
 ```
 【デイリースクラム要約 (Daily Agent)】
@@ -113,7 +113,7 @@ Sprint 13 / Day N of 14 / Velocity 27 (前 3 平均) / 今消化 X SP
 ◆ 品質:
   - WC-101 (DoD/SP空) / WC-104 (US紐付けなし) → Planner が候補準備済
 
-#daily チャンネルに投下しました。
+AI パネルに提示しました (L2 提案 / 通知は人間判断)。
 ```
 
 `packages/llm/src/mock.ts` の `getNaturalOutput('daily')` がこのフォーマットを返す (Mock LLM で確認可)。

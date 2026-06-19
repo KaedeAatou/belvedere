@@ -44,7 +44,7 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 **色凡例 (実装ステータス / 2026-06-09 時点)**:
 - 🟢 **緑** = Cloud Run / GCP で動作確認済 (deployed) — Web / API / Firestore backend / GitHub Actions (deploy-api + deploy-web) / WIF / Cloud Build / Artifact Registry / Cloud Logging
 - 🟡 **黄** = コードあり / ローカル動作 / 空インスタンス (implemented) — MCP (stdio) / Orchestrator + 5 Agent (Mock LLM で動作中)
-- ⚪ **灰** = 未実装、Phase 2 以降に着手予定 (planned) — Tool Server / IAP / Gemini 本物推論 / ADK ランタイム / Vector Search / Pub/Sub / Cloud Scheduler / Firebase Auth
+- ⚪ **灰** = 未実装、Phase 2 以降に着手予定 (planned) — Tool Server / IAP / Gemini 本物推論 / ADK ランタイム / Vector Search / Pub/Sub (アプリ内イベント配送 / スケジュール起動は不採用) / Firebase Auth
 
 詳細: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 
@@ -63,7 +63,7 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 
 - 人がチケットを起票する。AI Agent は **DoD / SP / User Story 紐付け / valueImpact / Epic.rationale** の不足を検出し提案 (人が承認 / L2 自律性)
 - スクラムの **5 儀式 (Planning / Daily / Refinement / Review / Retrospective)** ごとに **専用画面** を持ち、儀式特有の形骸化シグナルを AI が診断 (Jira の 1 Sprint Board に対する差別化軸)
-- ⭐ **Orchestrator** が儀式の時刻に合わせて 5 つの専門 Agent を編成 (ADK 宣言的マルチエージェント)。各 Agent は **チケット種別ルールエンジン (17 観点)** を共有
+- ⭐ **Orchestrator** が単一窓口として 5 つの専門 Agent を協議編成 (ADK 宣言的マルチエージェント / 画面操作トリガ)。各 Agent は **チケット種別ルールエンジン (17 観点)** を共有
 - ⭐ **見積もりポーカー** を Belvedere 内で完結 (隠蔽投票 → 一斉開示 → 採用、AI が会を運営。スプレッドシート / 外部サイト不要)
 - ⭐ Refinement Agent の **第 6 観点「戦略整合性」** で Epic.rationale 欠落を検出
 - ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接呼べる (= AI Agent エコシステム統合)
@@ -205,7 +205,7 @@ LLM_PROVIDER=vertex pnpm demo          # 〃
 
 ### 🟡 Phase 1-C (5/23-29) — Web UI で CRUD 動作
 ### 🟡 Phase 1-D (5/30-6/3) — MCP server を Cloud Run へ
-### 🟡 Phase 2 (6/10-6/30) — Mock Agent トリガ可視化 (Pub/Sub + Cloud Scheduler)
+### 🟡 Phase 2 (6/10-6/30) — 画面操作トリガの AI パネル可視化
 ### 🟡 Phase 3 (7/1-7/27) — Gemini + ADK 本実装 + Reviewer Multimodal + RAG
 ### 🔴 Phase 4 (7/31-8/19) — 仕上げ + ピッチ + 最終発表
 

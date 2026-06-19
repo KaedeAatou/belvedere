@@ -88,7 +88,7 @@ Anthropic推奨の最強ツール。**LLMはXMLタグで囲まれた領域を意
 | Daily | Daily Scrum 支援 / Velocity 整合 / 2日完了率 / 3日停滞 (血のつまり) | 3日以上動きのないチケットは警告候補に上げる |
 | Reviewer | Sprint Review 支援 / デモシナリオ / Cloud Run preview URL集 | デモは review/done のチケットからのみ構成 |
 | Retrospective | Retrospective 支援 / Try 抽出 / 翌スプリントWIPへ転記 / CeremonyHealthScore 推移 | Try は parentTicketId で元の議事と必ず紐付ける |
-| Orchestrator | 5儀式の起動順制御 / 軽量モデル | 重い思考はサブエージェントに委譲 |
+| Orchestrator | 5儀式の協議招集・統括 / 軽量モデル | 重い思考はサブエージェントに委譲 |
 
 ---
 

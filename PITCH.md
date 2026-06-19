@@ -71,18 +71,18 @@
 2. **(8秒)** 保存した瞬間、右パネルに **AI 提案** がポップアップ:
    - 🟡 DoD 候補3件 / 関連 Story 紐付け候補 / SP=5 (過去類似から)
    - 「Apply」ボタン3クリック → **Quality 100% 緑バッジ**
-3. **(12秒)** 月曜朝の画面に切替え → Slack に Planner Agent から「議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」
+3. **(12秒)** Planning 画面を開く → AI Integrity パネルに Planner Agent から「議題4件・品質要修正3件・計画 68pt (velocity 実績 27pt を超過)」
 4. **(14秒)** Refinement 画面 (CURRENT / NEXT / BACKLOG の 3 区画) → AI が BACKLOG の候補を **6観点で診断**し、各行に finding ピルで表示: 「WC-110 は priority=medium だが valueImpact=high (ゴール直結)、引き上げ推奨」「WC-106 は SP=13 で過大 → 最小価値ストーリー 3 つに分割候補 (parentTicketId で親 US に紐付け)」「⭐ EP-3 (デリバリー信頼化) に rationale 未設定 → 配下 3 チケットが Why を見失う形骸化サイン」 — 分割した子 Story を d&d で NEXT 区画へ移動、EP-3 はクリックで Epic.rationale 編集画面へジャンプ
 5. **(20秒) ★Orchestrator マルチエージェント キラーシーン★** AI Integrity Panel が一気に埋まる →
-   **Orchestrator** が月曜朝の時刻を見て **Planner + Daily を並列起動**、各 Agent が **種別ルールエンジン (17 観点)** で査読した結果が 1 画面に集約:
+   **Orchestrator (スクラムマスター)** が画面操作を受けて **Planner と Refinement を agent.invoke で協議に招集し統括**、各 Agent が **種別ルールエンジン (17 観点)** で査読した結果が 1 画面に集約:
    - 🔴 WC-103「デモ環境を Cloud Run に統一」は **task なのに親 Story なし** → 何の価値のための作業か追えない
    - 🔴 WC-108「Cloud Build → Deploy 分離」は **種別未設定** → 形骸化サイン
    - 🟡 WC-105 は **進行中のまま 4 日停滞** (着手時刻 startedAt 基準で検出)
    - そして **見積もりポーカー**: SP 未設定の Story で「見積もりセッション開始」→ メンバが**互いに見えない状態で投票** → 一斉開示 → 8 と 2 に割れる → **AI が「認識ズレの可能性、スコープを話し合って再投票を」と運営** (スプレッドシートも外部サイトも不要)
 6. **(12秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)。(現実装: Try を積み上げへ d&d → Firestore 永続 → 次の儀式で AI が参照。自動転記は Phase 3-A)
-7. **(8秒)** Live Activity に「Daily Agent: 停滞警告 → 林 へ」と AI が自分で動いた履歴
+7. **(8秒)** Daily 画面で停滞検出が AI パネルに提示される (「WC-105 が 4 日停滞 → 林 へ確認を」/ L2 提案。投稿は人間が判断)
 
-> 「全部、**司令塔 (Orchestrator) が儀式の時刻に合わせて複数 AI を動かした結果**です。見積もりの会も AI が回します。ボタンを押したのは Apply だけ。」
+> 「全部、**司令塔 (Orchestrator) が単一窓口として複数 AI を協議招集して統括した結果**です。見積もりの会も AI が回します。ボタンを押したのは Apply だけ。」
 
 ---
 
@@ -93,18 +93,18 @@
 | 「DoD空ですよ」と表示するだけ | 過去類似・US・コードを参照して **中身を生成** |
 | 1機能=1ボタン | チケット品質→US候補→SP推定 を **連鎖** |
 | 静的ルール | ふりかえりとチーム判断履歴から **学習** |
-| ユーザー起点 | チケット保存・Slack・儀式時刻の **トリガで自分から動く** |
-| 1 体の AI | **Orchestrator が儀式の時刻で 5 つの専門 Agent を編成** (ADK マルチエージェント) |
+| ユーザー起点 | 画面操作を **トリガに必要な Agent を協議に招集して動く** |
+| 1 体の AI | **Orchestrator が単一窓口として 5 つの専門 Agent を協議編成** (ADK マルチエージェント) |
 | 単独 SaaS に閉じる | **MCP** で Claude Code / Cursor から呼べる ── AI Agent エコシステム統合 |
 
 ---
 
 ## 6. 実装スタック (3:25 - 3:45 / 20秒)
 
-スライド: アーキ図 (Cloud Run × 5 / Gemini + ADK / Firestore / Pub/Sub)
+スライド: アーキ図 (Cloud Run × 5 / Gemini + ADK / Firestore)
 
 - **Cloud Run**: Frontend (Nuxt 3 SSR) + Orchestrator + 5 Ceremony Agents + Tool Server を独立サービスに
-- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で軽量ルーティング (儀式の時刻でどの Agent を起動するか判定)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
+- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で儀式エージェントを協議招集・統括 (単一窓口)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
 - **チケット種別ルールエンジン**: Story / Task / Spike / Bug / Incident の 17 観点 (親なし Task / 価値の見えない DoD / 停滞 / 見積もり割れ…) を宣言的ルール表に集約、5 Agent が共有
 - **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション + Retro Try carry-forward + マルチテナント (Workspace 作成・招待・切替)
 - **Vertex AI Vector Search + RAG Engine**: Refinement / Retrospective が過去 Try / Scrum Guide を参照
@@ -129,10 +129,10 @@
 | 質問 | 答え方 |
 |---|---|
 | ハルシネーションの懸念は? | L0-L4 の自律性レベル設計。重要書込前は L2 で人間確認。**MCP 経由でも書込承認はホスト (Claude Code) の標準ツール承認 UI に委譲** |
-| Geminiでなく他LLMでもよくない? | **Orchestrator + 5 Agent を ADK (Agent Development Kit) で宣言的に編成**できるのが Gemini エコシステムの強み。儀式の時刻トリガで複数 AI を協調させる構成を、個別実装でなく宣言的に組める。Vertex AI でログ統合 |
+| Geminiでなく他LLMでもよくない? | **Orchestrator + 5 Agent を ADK (Agent Development Kit) で宣言的に編成**できるのが Gemini エコシステムの強み。画面操作を受けて複数 AI を協議招集・統括する構成を、個別実装でなく宣言的に組める。Vertex AI でログ統合 |
 | Atlassian Intelligence との差は? | 1機能ではなく "儀式" + "チケット品質" を統合的に扱う体系。**司令塔 (Orchestrator) が複数の専門 AI を儀式ごとに編成**するのは Atlassian には無い。**MCP で外部 AI Agent から呼べるのも独自軸** |
 | 個人参加で完走できる? | Boot Camp 並行、Cloud Run + Firestore で MVP / 6/7 でチーム化判断。**Belvedere の開発自体を Claude Code + MCP で Belvedere に管理させているのが究極のドッグフード** |
-| コスト規模は? | 1スプリント (2週間) で $5-10 想定。Plannerが重く Dailyは軽い。Orchestrator は gemini-2.5-flash で軽量ルーティングのみ |
+| コスト規模は? | 1スプリント (2週間) で $5-10 想定。Plannerが重く Dailyは軽い。Orchestrator は gemini-2.5-flash で協議招集・統括の軽量処理のみ |
 | 実用は? | 自分のチームでドッグフードして、品質充足率改善を測る。MCP server もハッカソン期間中に自分が使い続けて UX を改善 |
 
 ---
@@ -150,5 +150,5 @@
 
 > 「Jira を使っていて、DoD空・SP未定・User Story紐付けなしのチケット、ありませんか?
 > ふりかえりの Try、見積もりの認識ズレ、翌スプリントに繋がっていますか?
-> **Belvedere** は、保存した瞬間に AI がチケット品質を補強し、**司令塔 (Orchestrator) が儀式の時刻に合わせて 5 つの専門 AI を編成**して形骸化を査読し、**見積もりポーカーまで AI が運営**するスクラム支援サービスです。
+> **Belvedere** は、保存した瞬間に AI がチケット品質を補強し、**司令塔 (Orchestrator) が単一窓口として 5 つの専門 AI を協議編成**して形骸化を査読し、**見積もりポーカーまで AI が運営**するスクラム支援サービスです。
 > 形だけ回っているスクラムから、本当に前進するスクラムへ。」

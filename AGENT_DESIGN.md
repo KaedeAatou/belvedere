@@ -227,7 +227,7 @@ Backlog でユーザーストーリー起票
 | 自律性 | L2 (デモシナリオは人間確認後に確定) |
 
 > 2026-06-10 縮退: Sprint Review 録画 → 指摘抽出 (Multimodal) 機能は削除。差別化の中心は
-> **Orchestrator マルチエージェント (ADK で 5 Agent を儀式の時刻で編成) + チケット種別ルールエンジン
+> **Orchestrator マルチエージェント (ADK で 5 Agent を単一窓口として協議編成) + チケット種別ルールエンジン
 > (17 観点) + 見積もりポーカー** に置換。「他 LLM でなく Gemini である必然性」は ADK で
 > Orchestrator + 5 Agent を宣言的に編成できる点で回答する (PITCH §5 / 質疑参照)。
 
@@ -253,7 +253,7 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 
 | Agent | model | 理由 |
 |---|---|---|
-| Orchestrator | `gemini-2.5-flash` | 起動順判定のみの軽量処理 |
+| Orchestrator | `gemini-2.5-flash` | 協議招集・統括の軽量処理 |
 | Planner / Refinement / Reviewer / Retrospective | `gemini-2.5-pro` | 分割・診断・生成の推論が重い |
 | Daily | `gemini-2.5-flash` | 高頻度・短い要約処理 |
 
