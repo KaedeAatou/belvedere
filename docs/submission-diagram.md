@@ -40,13 +40,13 @@ AI [label: "つくる: AI"] {
 // ===== データ + まわす(改善) =====
 Data [label: "Data"] {
   Firestore [icon: gcp-firestore, label: "Firestore (正本)\nWorkspace>Project>Epic>Story>Task"]
-  Elastic [icon: elasticsearch, label: "Elastic RAG (意味検索)\nまわす: 使うほど賢くなる"]
+  Elastic [icon: elasticsearch, label: "Elastic RAG (意味検索 / 設計済)\nまわす: 使うほど賢くなる"]
 }
 
 // ===== まわす: CI/CD 鍵レス (DevOps テーマ直結) =====
 CICD [label: "まわす: CI/CD 鍵レスデプロイ"] {
   GitHub [icon: github, label: "GitHub\nKaedeAatou/belvedere"]
-  Actions [icon: github-actions, label: "GitHub Actions + WIF\n(鍵レス / 464 テスト gate)"]
+  Actions [icon: github-actions, label: "GitHub Actions + WIF\n(鍵レス / 462 テスト gate)"]
   CloudBuild [icon: gcp-cloud-build, label: "Cloud Build"]
 }
 
@@ -74,7 +74,9 @@ CloudBuild > Web: deploy
 ## ノード一覧 (12) と「描かないもの」
 
 **描く (12)**: User / ClaudeCode / Web / API / Orchestrator / 5 Agents / MCP / Gemini+ADK / Firestore / Elastic RAG / GitHub / Actions+WIF / Cloud Build
-→ 厳密には 13 だが、Agents を 1 箱に畳んでいるので体感 12。**つくる (Agent) / まわす (CI/CD + Elastic) / とどける (Cloud Run)** がラベルで一目で読める。
+→ 厳密には 13 だが、Agents を 1 箱に畳んでいるので体感 12。**つくる (Agent) / まわす (CI/CD + agent eval + Elastic) / とどける (Cloud Run)** がラベルで一目で読める。
+
+> **注 (overclaim 回避)**: 図中の **Elastic RAG と agent eval は設計済・実装は次セッション**。図は到達構成を示す (実装ステータス色分けは省略)。「まわす」= CI/CD レーンで **462 テスト + agent eval (設計済) をゲート** + Elastic で使うほど賢くなる (設計済)。本番で現に動いているのは CI/CD と Retro→Agent 改善ループ。
 
 **描かない (詳細図に委ねる)**: Artifact Registry 単独箱 / belvedere-deployer・belvedere-runtime SA とロール数 / Cloud Logging・Trace・Error Reporting / Secret Manager / Load Balancer / IAP / Cloud Storage / Vector Search / 実装ステータス色分け。
 → これらは `ARCHITECTURE.md` の詳細図にあり、GitHub 上で実装力として見せる。提出図に盛ると「フローが読めない」減点になる。
