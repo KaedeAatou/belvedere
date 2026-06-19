@@ -22,6 +22,23 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# .env を読み込んで子プロセス (api dev) へ渡す。tsx watch は .env を自動読込しないため必須。
+# memory backend なので .env 内の他変数を export しても影響は軽微。(trap 設定前なので失敗時も安全)
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+
+# LLM provider: 既定 mock (後方互換)。`LLM_PROVIDER=gemini ./scripts/dev-local-noauth.sh` で実 Gemini。
+LLM_PROVIDER="${LLM_PROVIDER:-mock}"
+# gemini 指定で鍵が空だと factory.ts が throw する。silent mock fallback を避け前段で明示中断。
+if [ "$LLM_PROVIDER" = "gemini" ] && [ -z "${GEMINI_API_KEY:-}" ]; then
+  echo "[dev-local-noauth] 中断: LLM_PROVIDER=gemini だが GEMINI_API_KEY が空です (.env を確認)。" >&2
+  exit 1
+fi
+# 無料枠キーは gemini-2.5-pro が limit 0 (429)。gemini ドッグフードは既定で全エージェントを flash に倒す。
+# 別モデルを使う場合は GEMINI_MODEL_OVERRIDE を明示指定。
+if [ "$LLM_PROVIDER" = "gemini" ]; then
+  GEMINI_MODEL_OVERRIDE="${GEMINI_MODEL_OVERRIDE:-gemini-2.5-flash}"
+fi
+
 AUTH=apps/api/src/middleware/auth.ts
 MW=apps/web/middleware/auth.global.ts
 CFG=apps/web/nuxt.config.ts
@@ -67,7 +84,7 @@ if ! grep -q DEV_NO_AUTH "$AUTH" || ! grep -q devNoAuth "$MW" || ! grep -q devNo
 fi
 echo "[dev-local-noauth] OK。API(:8080 memory+seed, 無認証) と web(:3000 → local API) を起動…"
 
-DEV_NO_AUTH=1 REPO_BACKEND=memory pnpm --filter @belvedere/api dev > /tmp/belv-api.log 2>&1 &
+DEV_NO_AUTH=1 REPO_BACKEND=memory LLM_PROVIDER="$LLM_PROVIDER" GEMINI_API_KEY="${GEMINI_API_KEY:-}" GEMINI_MODEL_OVERRIDE="${GEMINI_MODEL_OVERRIDE:-}" pnpm --filter @belvedere/api dev > /tmp/belv-api.log 2>&1 &
 API_PID=$!
 NUXT_PUBLIC_API_BASE_URL=http://localhost:8080 NUXT_PUBLIC_DEV_NO_AUTH=1 pnpm --filter @belvedere/web dev > /tmp/belv-web.log 2>&1 &
 WEB_PID=$!
@@ -75,6 +92,7 @@ WEB_PID=$!
 echo "[dev-local-noauth] 起動待ち… (初回 Nuxt ビルドに ~20s)"
 echo "[dev-local-noauth]   web : http://localhost:3000  (無認証 / seed owner=kagayayuuki)"
 echo "[dev-local-noauth]   api : http://localhost:8080  (memory backend + seed)"
+echo "[dev-local-noauth]   llm : $LLM_PROVIDER${GEMINI_MODEL_OVERRIDE:+ (model override: $GEMINI_MODEL_OVERRIDE)}"
 echo "[dev-local-noauth]   ログ: /tmp/belv-web.log  /tmp/belv-api.log"
 echo "[dev-local-noauth] Ctrl+C で停止 + 認証コード自動復元。"
 wait
