@@ -27,6 +27,10 @@ export interface GeminiConfig {
   baseUrl?: string;
   /** テスト用に fetch を差し替える。未指定なら global fetch。 */
   fetchImpl?: typeof fetch;
+  /** 429/5xx の最大リトライ回数 (=初回に加える追加試行数)。既定 3 (合計 4 回試行)。 */
+  maxRetries?: number;
+  /** リトライ初回の待機 ms (指数バックオフの基数)。既定 500。テストは 0 を渡す。 */
+  retryBaseMs?: number;
 }
 
 // ===== Gemini REST の最小型 (使う範囲のみ) =====
@@ -58,6 +62,10 @@ function estimateCostUsd(model: string, inputTokens: number, outputTokens: numbe
   const row = COST_TABLE.find((r) => r.match.test(model)) ?? COST_TABLE[1]!;
   return (inputTokens / 1_000_000) * row.inUsd + (outputTokens / 1_000_000) * row.outUsd;
 }
+
+/** 一時障害として安全にリトライできる HTTP status (429 rate / 5xx 過負荷)。400/403 等は即 throw。 */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 /** tool メッセージの JSON 文字列を functionResponse.response (オブジェクト必須) に変換。 */
 function toResponseObject(content: string): Record<string, unknown> {
@@ -166,6 +174,8 @@ export class GeminiLLMProvider implements LLMProvider {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly maxRetries: number;
+  private readonly retryBaseMs: number;
 
   constructor(cfg: GeminiConfig) {
     if (!cfg.apiKey) {
@@ -176,6 +186,8 @@ export class GeminiLLMProvider implements LLMProvider {
     this.apiKey = cfg.apiKey;
     this.baseUrl = cfg.baseUrl ?? 'https://generativelanguage.googleapis.com/v1beta';
     this.fetchImpl = cfg.fetchImpl ?? fetch;
+    this.maxRetries = cfg.maxRetries ?? 3;
+    this.retryBaseMs = cfg.retryBaseMs ?? 500;
   }
 
   async generate(req: LLMRequest): Promise<LLMResponse> {
@@ -205,11 +217,19 @@ export class GeminiLLMProvider implements LLMProvider {
 
     // API キーはヘッダ (x-goog-api-key) に置き URL に載せない (ログ漏洩回避)。
     const url = `${this.baseUrl}/models/${encodeURIComponent(req.model)}:generateContent`;
-    const res = await this.fetchImpl(url, {
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
       body: JSON.stringify(body),
-    });
+    };
+
+    // 429 (rate) / 5xx (過負荷) は一時障害。指数バックオフでリトライする。
+    // Gemini 無料枠 flash は混雑時 503 を返しやすく、リトライなしだと agent run が落ちるため。
+    let res = await this.fetchImpl(url, init);
+    for (let attempt = 0; !res.ok && RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries; attempt++) {
+      await sleep(this.retryBaseMs * 2 ** attempt);
+      res = await this.fetchImpl(url, init);
+    }
 
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
