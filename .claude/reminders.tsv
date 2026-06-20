@@ -1,0 +1,7 @@
+# 将来イベントのリマインダーレジストリ — reminders-check.sh が SessionStart / UserPromptSubmit で走査する。
+# 書式: <due>\t<id>\t<owner>\t<title>\t<action>   (タブ区切り / 5 フィールド)
+#   due  = ISO日付 YYYY-MM-DD  または  when:<条件文>(日付未定の条件型)
+#   owner= claude (Claude が実行) / user (Claude は手順を促す)
+# 完了/無効化した行は行頭に # を付ける。新しい将来イベントはこの下に 1 行追記する。
+when:Elastic Cloud をユーザーが provision したら	elastic-ignite	claude	Elastic 多言語E5 RAG を本番点火する (Stage3)	apps/api/scripts/index-elastic.ts で 8本コーパス + Try を投入し SEARCH_BACKEND=elastic に切替 → /health で knowledge 有効を確認 (docs/continuous-improvement-design.md §3)
+when:Elastic Cloud の14日トライアルを開始したら	elastic-trial-delete	claude	トライアル削除の期日リマインダーを仕込む (課金回避)	開始日+14日を本レジストリに日付行 (owner=user) で追記し、/schedule でも同日 cron を作成。放置すると ~$99/月・GCP クレジット対象外
