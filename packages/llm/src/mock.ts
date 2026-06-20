@@ -79,6 +79,8 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('sprint.get', { id: 'sprint-13' });
         tryCall('epic.list', {});
         tryCall('ticket.quality.check', { ticketId: 'WC-105' });
+        // RAG: searcher 注入時のみ (toolNames ガード)。Sprint Goal / velocity 計画の標準を引く
+        tryCall('knowledge.search', { query: 'Sprint Goal の立て方と velocity 基準のスプリント計画' });
         break;
       case 'refinement':
         // Backlog Refinement 補助: 次スプリント候補と全体構造を診断
@@ -86,6 +88,8 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('epic.list', {});
         tryCall('ticket.list', { sprintId: 'sprint-14' });
         tryCall('backlog.refinement.check', { sprintId: 'sprint-14' });
+        // RAG: searcher 注入時のみ (toolNames ガード)。Story 分割 / DoD の標準を引く
+        tryCall('knowledge.search', { query: 'Story の分割と Definition of Done の良い書き方' });
         break;
       case 'daily':
         // Daily Scrum 補助: 進行中チケット確認 + 品質チェック (DoD/SP/US)
@@ -104,6 +108,8 @@ export class MockLLMProvider implements LLMProvider {
         tryCall('sprint.get', { id: 'sprint-12' });
         tryCall('member.list', {});
         tryCall('ticket.list', { sprintId: 'sprint-12' });
+        // RAG: searcher 注入時のみ (toolNames ガード)。Retro Try を次に繋げる進め方を引く
+        tryCall('knowledge.search', { query: 'Retrospective の Try を次スプリントに繋げる進め方' });
         break;
       case 'orchestrator':
         // 単一窓口=協議統括: 儀式エージェントを子として招集する (agent.invoke が渡された時のみ)。
