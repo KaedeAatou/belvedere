@@ -28,6 +28,10 @@ jobs:
         run: pnpm typecheck
       - name: Test (vitest)
         run: pnpm test
+      - name: Agent evals (quality gate / まわす)
+        # AI の判断品質ゲート。pnpm test にも含まれるが、「まわす=後退させない」を
+        # CI 上で独立した signal として可視化するため名前付き step でも実行する。
+        run: pnpm --filter @belvedere/agent-evals test
 
   py-lint:
     name: Python lint + type
