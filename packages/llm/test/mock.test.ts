@@ -200,6 +200,44 @@ describe('MockLLMProvider tool-call decision tree (C3: deferred branches)', () =
   });
 });
 
+describe('MockLLMProvider knowledge.search 配線 (RAG / Stage2 / 2026-06-20)', () => {
+  // prompts.ts の COMMON_KNOWLEDGE_STEP は Refinement / Planner / Retrospective にのみ付与され、
+  // mock.ts はこの 3 ロールで knowledge.search を tryCall する。tryCall は toolNames ガード付きなので、
+  // searcher 未注入 (本番 SEARCH_BACKEND=none) では発火しない = ここを回帰固定する。
+  const firstCallNames = async (role: string, includeKnowledge: boolean): Promise<string[]> => {
+    const toolNames = [
+      'ticket.list', 'sprint.get', 'epic.list', 'project.list',
+      'ticket.quality.check', 'backlog.refinement.check', 'member.list',
+    ];
+    if (includeKnowledge) toolNames.push('knowledge.search');
+    const tools = toolNames.map((name) => ({ name, description: '', parameters: {} }));
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      messages: [
+        { role: 'system', content: `Agent-Id: ${role}` },
+        { role: 'user', content: 'go' },
+      ],
+      tools,
+    });
+    return res.stop.type === 'tool_calls' ? res.stop.calls.map((c) => c.name) : [];
+  };
+
+  for (const role of ['refinement', 'planner', 'retrospective'] as const) {
+    it(`${role} は knowledge.search が利用可能なら呼ぶ`, async () => {
+      expect(await firstCallNames(role, true)).toContain('knowledge.search');
+    });
+    it(`${role} は knowledge.search が無ければ呼ばない (toolNames ガード / 本番無害)`, async () => {
+      expect(await firstCallNames(role, false)).not.toContain('knowledge.search');
+    });
+  }
+
+  it('daily / reviewer / orchestrator は knowledge.search を呼ばない (knowledge-heavy 3 ロール限定)', async () => {
+    for (const role of ['daily', 'reviewer', 'orchestrator'] as const) {
+      expect(await firstCallNames(role, true)).not.toContain('knowledge.search');
+    }
+  });
+});
+
 describe('MockLLMProvider seed consistency (C2 fix: avoid fabricated values)', () => {
   // ピッチデモで Web UI が seed の値 (Sprint 12 velocity=27pt / US-201 等) を表示する横で、
   // Mock LLM 応答が異なる数値や fabricated ID を吐くと矛盾露呈する。本テストは

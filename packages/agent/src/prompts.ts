@@ -59,6 +59,22 @@ done=true の Try はルールから除外する (チームが「もう十分に
 </retro_try_step>
 `.trim();
 
+// 知識ベース (Scrum 標準 + チームの過去 Try) を意味検索するステップ。
+// knowledge-heavy な 3 ロール (Refinement / Planner / Retrospective) にのみ付与する
+// (buildSystemPrompt の KNOWLEDGE_ROLES)。knowledge.search ツールは searcher 注入時のみ
+// レジストリに載るため、未提供環境では「無視」してよい (= 本番 SEARCH_BACKEND=none で無害)。
+const COMMON_KNOWLEDGE_STEP = `
+<knowledge_step>
+knowledge.search ツールが利用可能な場合のみ使う (未提供なら無視してよい)。
+提案・指摘の根拠を述べる前に、必要に応じて knowledge.search で
+「Scrum の標準 (Definition of Done / Story Point / Sprint Goal / Refinement の考え方)」と
+「このチームの過去 Retro Try」を意味検索し、引いた知識は sourceId を引用して提案に織り込む。
+一般論ではなく、Scrum 標準とチーム文脈に根ざした助言にするための手段。
+retro.tries.list が「全 Try をルールとして適用」するのに対し、knowledge.search は
+「今の対象に関連する知識だけを意味検索で引く」点が異なる (両方使ってよい)。
+</knowledge_step>
+`.trim();
+
 const COMMON_OUTPUT_FORMAT = `
 <output_format>responseSchema 指定時は JSON で返す。指定が無ければ tool 結果を踏まえた日本語 markdown 要約 (見出し + 箇条書き)</output_format>
 `.trim();
@@ -199,6 +215,10 @@ Retrospective 進行支援。
   },
 };
 
+// knowledge.search (RAG 意味検索) を付与する knowledge-heavy な儀式ロール。
+// Daily / Reviewer / Orchestrator は対象外 (検出は機械ルール中心 / 招集統括が主)。
+const KNOWLEDGE_ROLES: ReadonlySet<AgentName> = new Set(['refinement', 'planner', 'retrospective']);
+
 export function buildSystemPrompt(name: AgentName): string {
   const a = PER_AGENT[name];
   // 1 行目 `Agent-Id: <name>` (AgentName リテラル) は detectRole の一次 anchor。
@@ -210,6 +230,7 @@ export function buildSystemPrompt(name: AgentName): string {
     a.responsibility,
     '',
     COMMON_RETRO_STEP,
+    ...(KNOWLEDGE_ROLES.has(name) ? ['', COMMON_KNOWLEDGE_STEP] : []),
     '',
     COMMON_CONTEXT,
     '',
