@@ -22,7 +22,7 @@ export function scoreGolden(cases: EvalCase[]): GoldenScore {
   const falseFires: ExpectedFinding[] = [];
 
   for (const c of cases) {
-    const findings = runTicketRules(c.ceremony, buildRuleContext(EVAL_NOW, c.tickets, [], []));
+    const findings = runTicketRules(c.ceremony, buildRuleContext(EVAL_NOW, c.tickets, c.sprints ?? [], []));
     const fired = (e: ExpectedFinding): boolean =>
       findings.some((f) => f.ruleId === e.ruleId && f.ticketId === e.ticketId);
 
