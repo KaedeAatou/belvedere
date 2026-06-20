@@ -1,0 +1,14 @@
+{
+  "name": "@belvedere/agent-evals",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@belvedere/shared": "workspace:*",
+    "@belvedere/tools": "workspace:*"
+  }
+}

@@ -190,6 +190,15 @@ importers:
         specifier: workspace:*
         version: link:../shared
 
+  packages/agent-evals:
+    dependencies:
+      '@belvedere/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@belvedere/tools':
+        specifier: workspace:*
+        version: link:../tools
+
   packages/llm:
     dependencies:
       '@belvedere/shared':
