@@ -60,7 +60,7 @@
         │                belvedere-kb-scrum         (全社共通 / Scrum Guide・DoD・SP 等)
         │                belvedere-kb-tries-<ws>    (テナント別 / チーム自身の Try) ← 使うほど増える
         │                         ▲
-        ▼                         │ semantic search (ELSER)
+        ▼                         │ semantic search (多言語E5 / semantic_text)
    Agent (Refinement/Planner/...) ─┘  ※ knowledge.search ツール (配線済) + prompts.ts 指示 (未)
 ```
 
@@ -74,8 +74,8 @@
 ### 3-1. index 設計
 | index | スコープ | 内容 | semantic field |
 |---|---|---|---|
-| `belvedere-kb-scrum` | 全社共通 | Scrum Guide 抜粋 / DoD の良い例 / Story Point の考え方 / WSJF など (静的コーパス) | `content` (ELSER) |
-| `belvedere-kb-tries-<workspaceId>` | テナント別 | そのチームの `RetroTry.text` (+ 将来は ticket/epic の要約) | `content` (ELSER) |
+| `belvedere-kb-scrum` | 全社共通 | Scrum Guide 抜粋 / DoD の良い例 / Story Point の考え方 / WSJF など (静的コーパス) | `content` (多言語E5 / semantic_text) |
+| `belvedere-kb-tries-<workspaceId>` | テナント別 | そのチームの `RetroTry.text` (+ 将来は ticket/epic の要約) | `content` (多言語E5 / semantic_text) |
 
 - ドキュメント形: `{ sourceId, title, content }` (`KnowledgeHit` にマップ)。`sourceId` は引用用 (`US-xxx` / `try:<id>` / `scrum-guide#xx`)。
 - テナント越境防止: 検索の index 名は `knowledge.search` ツールが `workspaceId` を closure で固定し LLM に選ばせない (既存の IDOR 思想と一致 / 実装済)。
@@ -103,12 +103,10 @@
    - Elastic Cloud trial or 最小ノード。`ELASTIC_URL` / `ELASTIC_API_KEY` を Secret Manager に登録 (キーはリポジトリに置かない)。
    - コストは Elastic 側課金 (GCP クレジット外)。ハッカソン期間の小規模なら trial で足りる想定。**要ユーザー確認**。
 
-4. **ELSER vs Gemini Embeddings の決定** 🟠 要確認 (memory の未決事項と一致)
-   - 現状コード既定 = **ELSER** (Elastic 内蔵 inference / 埋め込みパイプライン不要 / `query:{semantic:...}` のまま動く)。
-   - 選択肢:
-     - **ELSER (推奨・出荷優先)**: index 作成だけで意味検索が動く。埋め込み生成パイプラインを自前で持たなくてよい → ハッカソンの残日数で最速で点火できる。
-     - **Gemini Embeddings (dense_vector)**: 「全部 Gemini エコシステムで完結 = Gemini である必然性」のナラティブ利点。ただし embeddings 生成の indexer 工程が増える。`ElasticKnowledgeSearcher.search` 内部の query だけ差し替え (I/F 不変)。
-   - **本設計の推奨 = ELSER で点火**。Gemini 必然性は「Orchestrator + 5 Agent を ADK で宣言的編成」で既に立つため、RAG の埋め込みまで Gemini に寄せる必要は薄い。**ただしユーザーのロック (過去の選好) と差異があり得るので、実装前にユーザー確認**。
+4. **埋め込みモデル: ✅ 確定 = Elastic 多言語 E5 (2026-06-20 ユーザー決定 / 案A)**
+   - 当初「ELSER 推奨」だったが、**ELSER は英語特化**でコーパスが日本語 (Scrum 知識 + Try) の Belvedere では精度が落ちる。→ 同じ **`semantic_text` / Elastic-hosted / 埋め込みパイプライン不要**のまま、**多言語モデル `.multilingual-e5-small`** を使う (日本語 OK)。「index 作るだけで意味検索が動く」手軽さはそのまま維持。
+   - Gemini Embeddings は不採用 (= 案B)。**Elasticsearch を公式 AI 技術リスト (11 群) の加点**として採る方針 (A-2 は Gemini で既に充足、その上乗せ)。`ElasticKnowledgeSearcher.search` の `query:{semantic:...}` は不変で、index 側の inference を ELSER → `.multilingual-e5-small` にマップするだけ (I/F 不変)。
+   - **コスト戦略 (✅ ユーザー決定)**: 開発中は **MockKnowledgeSearcher (キーワード / 常時 ¥0)** で進める。**Elastic Cloud は提出直前の 14 日無料トライアルだけ点火 → 使用後すぐ削除** (放置すると ~$99/月 / GCP クレジット対象外)。トライアル開始日に削除リマインダーを `/schedule`。個人アカウントで契約 (会社不可)。
 
 ---
 
