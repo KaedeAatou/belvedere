@@ -43,6 +43,7 @@ venv/
 /.claude/.last-hackathon-check
 /.claude/.last-hackathon-reminder
 /.claude/.last-usage-audit
+/.claude/.last-reminders-check
 /.claude/.eraser-sync-pending
 /.claude/.hooks.log
 /.claude/.usage.log
