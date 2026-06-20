@@ -184,16 +184,20 @@ expect(run.outputArtifacts?.summary).toContain('G-DOD');
 
 **次のセッションは本ドキュメントを仕様として実装する。常に「まわす = AI を継続的に改善するサイクル」軸との接続を意識すること** (提出物の評価軸そのもの)。
 
-### やること (優先順)
-1. **eval ハーネス (L1 + L2)** を実装 — §4。最初に着手 (低リスク・私単独可・CLAUDE.md のテスト規律に合致)。`agent-prompt-sync` は不要だが、ルール変更を伴うなら `ticket-rules.test.ts` を先に赤にする (再現テスト先行)。
-2. **prompts.ts に `COMMON_KNOWLEDGE_STEP` 追加** — §3-3①。**`agent-prompt-sync` skill + `mock-llm-reviewer` + `prompt-quality-reviewer` を必ず通す**。`mock.ts` も同期し、役割判定 anchor を壊さない。
-3. **Elastic indexer (バッチ)** — §3-3②。`apps/api/scripts/index-elastic.ts`。まず `belvedere-kb-scrum` の静的コーパス + `belvedere-kb-tries-<ws>`。
-4. **provision + 点火** — §3-3③。`ELASTIC_URL`/`ELASTIC_API_KEY` を Secret Manager → 本番 `SEARCH_BACKEND=elastic`。**`--allow-unauthenticated` / Secret 注入 / IAM はユーザー実行** (memory `feedback_gcp_user_executes`)。
+### 進捗 (2026-06-20 / Stage 1-2 完了)
+1. ✅ **eval ハーネス (L1)** 実装済 — `packages/agent-evals` (golden 9 ケース + 検出率ゲート / CI 名前付き step / commit a6d002c)。L2 (Mock agent 出力) は次段。
+2. ✅ **prompts.ts に `COMMON_KNOWLEDGE_STEP` 追加** 済 — KNOWLEDGE_ROLES={refinement,planner,retrospective} / mock.ts + agents.py 同期 / agent-prompt-sync + mock-llm-reviewer + prompt-quality-reviewer 全 blocker ゼロ (commit 852e99e)。**Mock searcher で動く・本番(searcher 無し)は無害**。
 
-### 着手前に確認する未決事項 🟠
-- **ELSER vs Gemini Embeddings** (§3-3④)。本設計は ELSER 推奨だが、ユーザーのロックと差異があり得る。**実装前にユーザー確認**。
-- Elastic Cloud のコスト負担 (GCP クレジット外)。
-- RAG を本番で点火するか、それとも「設計済 + デモ用に局所点火」に留めるか (提出物の見せ方の判断)。
+### 残り (Stage 3 / 要ユーザー provision)
+3. **Elastic indexer (バッチ)** — §3-3②。`apps/api/scripts/index-elastic.ts`。`belvedere-kb-scrum` の静的コーパス (`references/agile-knowledge-base/*` 8本) + `belvedere-kb-tries-<ws>`。index 側 inference を **`.multilingual-e5-small`** にマップ。
+4. **provision + 点火** — §3-3③。`ELASTIC_URL`/`ELASTIC_API_KEY` を Secret Manager → 本番 `SEARCH_BACKEND=elastic`。**Secret 注入 / IAM はユーザー実行** (memory `feedback_gcp_user_executes`)。
+   - (任意) ローカル demo で RAG を Mock で見せたい場合は `apps/api/src/index.ts` の `SEARCH_BACKEND=mock` 経路に 8本コーパスを `mockDocs` として読込む配線を足す。本番経路 (none/elastic) は無改修。
+   - **リマインダー登録済**: provision したら自発点火するよう `.claude/reminders.tsv` の `elastic-ignite` (条件型) が毎セッション surface する ([[feedback_reminder_mechanism]])。
+
+### 確定事項 (旧 未決 / 2026-06-20 解決)
+- ✅ **埋め込み = Elastic 多言語 E5** 確定 (§3-3④。素の ELSER は英語特化のため回避)。
+- ✅ **コスト**: 開発は Mock で常時¥0、Elastic Cloud は提出直前 14 日トライアルだけ点火→即削除 (削除リマインダーは reminders.tsv `elastic-trial-delete` + /schedule cron)。
+- ✅ **見せ方**: Elasticsearch を公式 AI 技術リスト加点として本番点火する方針。
 
 ### 触らない / 守る
 - 既存配線 (`knowledge.ts` / `buildTools` / `app.ts` / `apps/api/src/index.ts`) は完成しているので壊さない。
