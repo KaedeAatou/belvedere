@@ -22,8 +22,7 @@ export const useMembers = () => {
     try {
       members.value = await api.get<Member[]>('/api/members');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       members.value = [];
     } finally {
       isLoading.value = false;
@@ -52,8 +51,8 @@ export const useMembers = () => {
     return m.userId.startsWith('invite:');
   }
 
-  /** メンバーを招待する (owner/sm のみ。失敗時は throw)。成功後に一覧を再取得。 */
-  async function invite(email: string, role: 'sm' | 'po' | 'dev' | 'guest', displayName?: string): Promise<void> {
+  /** メンバーを招待する (admin/po/sm のみ。付与できる role は po/sm/dev。失敗時は throw)。成功後に一覧を再取得。 */
+  async function invite(email: string, role: 'po' | 'sm' | 'dev', displayName?: string): Promise<void> {
     await api.post<Member>('/api/workspaces/members/invite', {
       email,
       role,

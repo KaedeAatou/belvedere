@@ -75,8 +75,7 @@ export const useFindings = () => {
       }
       findingsByTicket.value = map;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       findingsByTicket.value = {};
     } finally {
       isLoading.value = false;

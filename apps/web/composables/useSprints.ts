@@ -17,8 +17,7 @@ export const useSprints = () => {
     try {
       sprints.value = await api.get<Sprint[]>('/api/sprints');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       sprints.value = [];
     } finally {
       isLoading.value = false;

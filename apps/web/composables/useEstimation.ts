@@ -23,8 +23,7 @@ export const useEstimation = () => {
   const error = ref<string | null>(null);
 
   function msg(e: unknown): string {
-    const err = e as { data?: { error?: string }; message?: string };
-    return err.data?.error ?? err.message ?? 'unknown error';
+    return apiErrorMessage(e);
   }
 
   /** セッション取得。未開始 (404) は null を返す (正常系)。 */

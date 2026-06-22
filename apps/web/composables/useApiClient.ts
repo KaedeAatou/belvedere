@@ -51,7 +51,20 @@ export const useApiClient = (): ApiClient => {
       const wsId = window.localStorage.getItem('belvedere.workspaceId');
       if (wsId) headers['X-Workspace-Id'] = wsId;
     }
-    return await $fetch<T>(`${baseUrl}${path}`, { ...opts, headers });
+    try {
+      return await $fetch<T>(`${baseUrl}${path}`, { ...opts, headers });
+    } catch (e) {
+      // needs_workspace = ログイン許可済だが所属 Workspace ゼロ (招待されたが部屋未作成)。
+      // onboarding (自分の Workspace を作る画面) へ一度だけ誘導する。既に profile 上なら無限ループを避ける。
+      const err = e as { data?: { error?: string } };
+      if (import.meta.client && err?.data?.error === 'needs_workspace') {
+        const route = useRoute();
+        if (!route.path.startsWith('/settings/profile')) {
+          await navigateTo('/settings/profile?onboard=1');
+        }
+      }
+      throw e;
+    }
   }
 
   return {
