@@ -17,8 +17,7 @@ export const useEpics = () => {
     try {
       epics.value = await api.get<Epic[]>('/api/epics');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       epics.value = [];
     } finally {
       isLoading.value = false;
@@ -39,8 +38,7 @@ export const useEpics = () => {
       epics.value = [...epics.value, created];
       return created;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     } finally {
       isLoading.value = false;

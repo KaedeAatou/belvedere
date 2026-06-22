@@ -20,8 +20,7 @@ export const useRetroTries = () => {
     try {
       tries.value = await api.get<RetroTry[]>('/api/retro-tries');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       tries.value = [];
     } finally {
       isLoading.value = false;

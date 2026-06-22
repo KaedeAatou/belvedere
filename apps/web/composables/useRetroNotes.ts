@@ -20,8 +20,7 @@ export const useRetroNotes = () => {
     try {
       notes.value = await api.get<RetroNote[]>('/api/retro-notes');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       notes.value = [];
     } finally {
       isLoading.value = false;

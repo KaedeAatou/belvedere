@@ -70,8 +70,7 @@ export const useAgentChat = () => {
       }
       messages.value = [...messages.value, { role: 'agent', text: responseText }];
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      const errText = err.data?.error ?? err.message ?? '通信エラーが発生しました';
+      const errText = apiErrorMessage(e);
       sendError.value = errText;
       messages.value = [...messages.value, { role: 'agent', text: `エラー: ${errText}` }];
     } finally {

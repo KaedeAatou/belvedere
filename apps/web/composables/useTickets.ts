@@ -72,8 +72,7 @@ export const useTickets = () => {
       const path = `/api/tickets${q.toString() ? '?' + q.toString() : ''}`;
       tickets.value = await api.get<Ticket[]>(path);
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       tickets.value = [];
     } finally {
       isLoading.value = false;
@@ -108,8 +107,7 @@ export const useTickets = () => {
       void refreshFindings();
       return created;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     } finally {
       isLoading.value = false;
@@ -129,8 +127,7 @@ export const useTickets = () => {
       void refreshFindings();
       return updated;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     }
   }
@@ -162,8 +159,7 @@ export const useTickets = () => {
       void refreshFindings();
       return updated;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     }
   }
@@ -185,8 +181,7 @@ export const useTickets = () => {
       void refreshFindings();
       return res.ticket;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       tickets.value = prev; // ロールバック
       return null;
     }
@@ -201,8 +196,7 @@ export const useTickets = () => {
       void refreshFindings();
       return true;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return false;
     }
   }

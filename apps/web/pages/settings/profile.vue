@@ -10,8 +10,16 @@ const { members, fetchMembers, isPendingInvite, invite, cancelInvite } = useMemb
 const editName = ref('');
 const saveSuccess = ref(false);
 
-// 管理操作 (招待 / 取消) は owner/sm のみ。me.role で判定。
-const canManage = computed(() => me.value?.role === 'owner' || me.value?.role === 'sm');
+// 管理操作 (招待 / 取消) = member.invite は admin/po/sm。me.role で判定。
+// 旧 'owner' は admin 相当 (normalize 前の永続値が /api/me に出る移行期のため legacy alias も許可)。
+const canManage = computed(() => {
+  const r = me.value?.role;
+  return r === 'admin' || r === 'owner' || r === 'po' || r === 'sm';
+});
+
+// onboarding 誘導: 所属 Workspace ゼロ (needs_workspace) で誘導されてきた時に作成フォームを強調する。
+const route = useRoute();
+const onboarding = computed(() => route.query.onboard === '1');
 
 // ===== Workspace 新規作成 =====
 const wsName = ref('');
@@ -35,7 +43,8 @@ async function submitCreateWorkspace(): Promise<void> {
 
 // ===== メンバー招待 =====
 const inviteEmail = ref('');
-const inviteRole = ref<'sm' | 'po' | 'dev' | 'guest'>('dev');
+// 招待で付与できる role は po/sm/dev (admin は workspace 作成者のみ / API の InviteBodySchema と一致)。
+const inviteRole = ref<'po' | 'sm' | 'dev'>('dev');
 const inviteBusy = ref(false);
 const inviteError = ref<string | null>(null);
 const inviteSuccess = ref(false);
@@ -104,9 +113,9 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ja-JP');
 }
 
+// 権限拒否 (forbidden) の人間向け message を含め、画面に出せる文言を取り出す (utils/apiError.ts)。
 function errText(e: unknown): string {
-  const err = e as { data?: { error?: string }; message?: string };
-  return err.data?.error ?? err.message ?? 'unknown error';
+  return apiErrorMessage(e);
 }
 
 onMounted(async () => {
@@ -192,6 +201,16 @@ async function save(): Promise<void> {
     <section class="card">
       <h2 class="section-title">Workspace</h2>
 
+      <!-- onboarding 誘導: 所属 Workspace ゼロで needs_workspace から来た時 (?onboard=1) -->
+      <div v-if="onboarding" class="onboard-banner" data-testid="onboard-banner">
+        <p class="onboard-title">ようこそ！まずは自分の Workspace を作りましょう</p>
+        <p class="onboard-body">
+          あなたは Belvedere へのログインを許可されていますが、まだどのチーム (Workspace) にも
+          所属していません。下のフォームで自分の Workspace を作成すると、その部屋の<strong>管理者
+          (admin)</strong> として全機能を使えます。
+        </p>
+      </div>
+
       <!-- 所属 Workspace 一覧 -->
       <div class="field">
         <label class="label">所属 Workspace</label>
@@ -240,17 +259,16 @@ async function save(): Promise<void> {
         <p v-if="members.length === 0" class="muted">メンバーがいません。</p>
       </div>
 
-      <!-- 招待フォーム (owner/sm のみ) -->
+      <!-- 招待フォーム (member.invite = admin/po/sm のみ) -->
       <div v-if="canManage" class="field editable" style="margin-top: 20px">
         <label class="label" for="inviteEmail">メンバーを招待</label>
         <div class="edit-row">
           <input id="inviteEmail" v-model="inviteEmail" type="email" class="text-input"
                  data-testid="invite-email" placeholder="invitee@example.com" :disabled="inviteBusy" />
           <select v-model="inviteRole" class="text-input role-select" data-testid="invite-role" :disabled="inviteBusy">
-            <option value="sm">sm</option>
             <option value="po">po</option>
+            <option value="sm">sm</option>
             <option value="dev">dev</option>
-            <option value="guest">guest</option>
           </select>
           <button class="save-btn" data-testid="invite-submit"
                   :disabled="inviteBusy || inviteEmail.trim().length === 0" @click="submitInvite">
@@ -483,6 +501,29 @@ async function save(): Promise<void> {
   color: var(--ink-2);
 }
 
+
+/* ===== onboarding 誘導バナー (needs_workspace から来た時) ===== */
+.onboard-banner {
+  border: var(--hairline) solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  padding: 16px 18px;
+  margin-bottom: 20px;
+}
+.onboard-title {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 6px;
+}
+.onboard-body {
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ink-1);
+  margin: 0;
+}
 
 /* ===== Workspace / メンバー管理 ===== */
 .muted {

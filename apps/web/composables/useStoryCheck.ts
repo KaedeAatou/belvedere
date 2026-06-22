@@ -47,8 +47,7 @@ export const useStoryCheck = () => {
       };
       return await api.post<StoryQualityVerdict>('/api/story-quality', body);
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     } finally {
       checking.value = false;

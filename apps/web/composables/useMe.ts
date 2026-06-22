@@ -21,8 +21,7 @@ export const useMe = () => {
     try {
       me.value = await api.get<Member>('/api/me');
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       me.value = null;
     } finally {
       isLoading.value = false;
@@ -39,8 +38,7 @@ export const useMe = () => {
     try {
       me.value = await api.patch<Member>(`/api/members/${me.value.userId}`, { displayName });
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
     } finally {
       isLoading.value = false;
     }

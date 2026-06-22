@@ -9,7 +9,8 @@
 export interface MyWorkspace {
   id: string;
   name: string;
-  role: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
+  // 正準 role (admin/po/sm/dev) + 移行期の legacy (owner/guest)。API は normalize 前の永続値を返しうる。
+  role: 'admin' | 'po' | 'sm' | 'dev' | 'owner' | 'guest';
 }
 
 /** localStorage key (useApiClient と共有)。 */
@@ -42,8 +43,7 @@ export const useWorkspaces = () => {
         setCurrent(workspaces.value[0]!.id, { reload: false });
       }
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       workspaces.value = [];
     } finally {
       isLoading.value = false;
@@ -63,8 +63,7 @@ export const useWorkspaces = () => {
       setCurrent(created.id); // reload して新 ws に入る
       return created;
     } catch (e) {
-      const err = e as { data?: { error?: string }; message?: string };
-      error.value = err.data?.error ?? err.message ?? 'unknown error';
+      error.value = apiErrorMessage(e);
       return null;
     }
   }

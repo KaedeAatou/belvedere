@@ -15,8 +15,7 @@ export const useApiKeys = () => {
   const newToken = ref<string | null>(null);
 
   function errText(e: unknown): string {
-    const err = e as { data?: { error?: string }; message?: string };
-    return err.data?.error ?? err.message ?? 'unknown error';
+    return apiErrorMessage(e);
   }
 
   async function fetchKeys(): Promise<void> {

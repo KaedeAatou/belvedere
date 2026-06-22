@@ -14,7 +14,18 @@ const est = useEstimation();
 type EstimationView = Awaited<ReturnType<typeof est.fetch>>;
 const session = ref<EstimationView>(null);
 
-const privileged = computed(() => ['owner', 'sm', 'po'].includes(me.value?.role ?? ''));
+// 権限再設計 (2026-06-23): 見積もりは操作ごとに許可ロールが違う (permissions.ts の MATRIX と一致)。
+//   facilitate(開始/開示/再投票)=admin/sm、vote(投票)=admin/dev、adopt(採用)=admin/sm/dev。
+// /api/me は normalize 前の永続 role を返しうる (移行期) ので owner→admin / guest→dev を吸収する。
+const role = computed(() => {
+  const r = me.value?.role;
+  if (r === 'owner') return 'admin';
+  if (r === 'guest') return 'dev';
+  return r ?? '';
+});
+const canFacilitate = computed(() => ['admin', 'sm'].includes(role.value)); // 開始 / 開示 / 再投票
+const canVote = computed(() => ['admin', 'dev'].includes(role.value));      // 投票 (見積もる当事者)
+const canAdopt = computed(() => ['admin', 'sm', 'dev'].includes(role.value)); // 採用 (確定)
 const fibs: EstimationValue[] = [1, 2, 3, 5, 8, 13, '?'];
 
 // 状態別に型を絞った view
@@ -69,15 +80,16 @@ onUnmounted(() => { if (timer) clearInterval(timer); });
       <div class="est-current">
         現在の SP: <b>{{ ticket.estimatePt ?? '未設定' }}</b>
       </div>
-      <button v-if="privileged" class="est-primary" data-testid="est-start" @click="start">
+      <button v-if="canFacilitate" class="est-primary" data-testid="est-start" @click="start">
         見積もりセッションを開始
       </button>
-      <p v-else class="est-note">見積もりセッションはまだありません。</p>
+      <p v-else class="est-note">見積もりセッションはまだありません（開始はスクラムマスター）。</p>
     </div>
 
     <!-- voting -->
     <div v-else-if="votingView" class="est-block">
-      <div class="est-fibs">
+      <!-- 投票は見積もる当事者 = 開発者 (Dev) のみ。進行役 (PO/SM) には投票 UI を出さない。 -->
+      <div v-if="canVote" class="est-fibs">
         <button v-for="f in fibs" :key="f"
                 :class="['est-vote', votingView.myVote === f && 'mine']"
                 :data-testid="`est-vote-${f}`"
@@ -87,7 +99,7 @@ onUnmounted(() => { if (timer) clearInterval(timer); });
         {{ votingView.voteCount }} 人投票済<template v-if="votingView.votedUserIds.length">: {{ votingView.votedUserIds.map((u) => memberName(u)).join('、') }}</template>
         <span style="color: var(--ink-3)"> （値は開示まで非表示）</span>
       </p>
-      <button v-if="privileged" class="est-primary" data-testid="est-reveal"
+      <button v-if="canFacilitate" class="est-primary" data-testid="est-reveal"
               :disabled="votingView.voteCount === 0" @click="reveal">
         開示する
       </button>
@@ -109,14 +121,13 @@ onUnmounted(() => { if (timer) clearInterval(timer); });
       <p v-if="diverged" class="est-warn">
         見積もりが割れています。話し合って再投票か採用を選んでください。
       </p>
-      <template v-if="privileged">
-        <div class="est-adopt-row">
-          <span class="est-note">この値で採用:</span>
-          <button v-for="f in FIBONACCI_POINTS" :key="f" class="est-vote"
-                  :data-testid="`est-adopt-${f}`" @click="adopt(f)">{{ f }}</button>
-        </div>
-        <button class="est-secondary" data-testid="est-revote" @click="start">再投票</button>
-      </template>
+      <!-- 採用 (確定) は SM・Dev (admin 含む)。再投票 (= 開始しなおし) は facilitate = SM のみ。 -->
+      <div v-if="canAdopt" class="est-adopt-row">
+        <span class="est-note">この値で採用:</span>
+        <button v-for="f in FIBONACCI_POINTS" :key="f" class="est-vote"
+                :data-testid="`est-adopt-${f}`" @click="adopt(f)">{{ f }}</button>
+      </div>
+      <button v-if="canFacilitate" class="est-secondary" data-testid="est-revote" @click="start">再投票</button>
     </div>
   </div>
 </template>
