@@ -15,7 +15,7 @@ import {
 const WS = 'ws-belvedere';
 const DEV = { workspaceId: WS, user: { userId: 'u-dev', email: 'dev@example.com' }, role: 'dev' as const };
 const DEV2 = { workspaceId: WS, user: { userId: 'u-dev2', email: 'dev2@example.com' }, role: 'dev' as const };
-const OTHER = { workspaceId: 'ws-other', user: { userId: 'u-x', email: 'x@example.com' }, role: 'owner' as const };
+const OTHER = { workspaceId: 'ws-other', user: { userId: 'u-x', email: 'x@example.com' }, role: 'admin' as const };
 
 describe('createRetroNote', () => {
   let repo: RepoContainer;

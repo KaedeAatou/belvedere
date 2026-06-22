@@ -7,6 +7,7 @@ import { ValueImpactSchema, stripUndefinedPartial, generateId } from '@belvedere
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
 import { loadOwned } from './crud-factory';
+import { can, forbidden } from '../permissions';
 
 export const EpicCreateBodySchema = z.object({
   name: z.string().min(1, 'name is required'),
@@ -27,6 +28,10 @@ export async function createEpic(
   ctx: HandlerContext,
   body: unknown,
 ): Promise<HandlerResult<Epic>> {
+  // Epic/Story の価値・優先度の設定は PO の専権 (admin は bypass / permissions.ts)。
+  if (!can('epic.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('epic.write') };
+  }
   const parsed = EpicCreateBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
@@ -57,6 +62,10 @@ export async function patchEpic(
 ): Promise<HandlerResult<Epic>> {
   const loaded = await loadOwned(repo.epics, ctx, id);
   if (!loaded.ok) return loaded.response;
+  // IDOR (別 ws → 404) を先に、その後 epic.write (PO/admin) ゲート。patchSprint と同じ順序。
+  if (!can('epic.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('epic.write') };
+  }
   const existing = loaded.entity;
   const parsed = EpicPatchBodySchema.safeParse(body);
   if (!parsed.success) {

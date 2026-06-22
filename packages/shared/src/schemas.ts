@@ -155,7 +155,9 @@ export const MemberSchema = z.object({
   workspaceId: z.string(),
   displayName: z.string(),
   email: z.string(),
-  role: z.enum(['owner', 'sm', 'po', 'dev', 'guest']),
+  // 後方互換 enum (admin/po/sm/dev が正準 / owner・guest は legacy で normalizeRole が変換)。
+  // 本番 migration 後に ['admin','po','sm','dev'] へ締める (2026-06-23 再設計)。
+  role: z.enum(['admin', 'po', 'sm', 'dev', 'owner', 'guest']),
   githubUsername: z.string().optional(),
 });
 

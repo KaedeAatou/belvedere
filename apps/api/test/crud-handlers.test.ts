@@ -20,8 +20,11 @@ import { createEpic, patchEpic } from '../src/handlers/epic-handlers';
 
 const WS = 'ws-belvedere';
 const OTHER_WS = 'ws-attacker';
-const CTX = { workspaceId: WS, user: { userId: 'firebase-uid-test', email: 'test@example.com' } };
-const OTHER_CTX = { workspaceId: OTHER_WS, user: { userId: 'firebase-uid-attacker', email: 'attacker@example.com' } };
+// 権限再設計 (2026-06-23): reorder=backlog.reorder(po/admin)、epic create/patch=epic.write(po/admin) が
+// ゲートされる。ここは「CRUD 機構 / IDOR」を検証する層なので、ゲートを素通しする admin を既定にする
+// (ゲート自体のマトリクス境界は末尾の専用 describe で po/sm/dev を踏む)。
+const CTX = { workspaceId: WS, user: { userId: 'firebase-uid-test', email: 'test@example.com' }, role: 'admin' as const };
+const OTHER_CTX = { workspaceId: OTHER_WS, user: { userId: 'firebase-uid-attacker', email: 'attacker@example.com' }, role: 'admin' as const };
 
 describe('createTicket', () => {
   let repo: RepoContainer;
@@ -611,5 +614,86 @@ describe('createEpic / patchEpic', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(400);
+  });
+});
+
+// 権限マトリクス境界 (2026-06-23 再設計): backlog.reorder=po/admin、epic.write=po/admin。
+// 上の describe 群は admin 既定で「機構」を検証している。ここは role を po/sm/dev/未確定 と振って
+// 「誰が弾かれ・誰が通るか」をマトリクス通り handler で実際に踏む (.claude/rules/testing.md 統合層)。
+describe('権限マトリクス境界 (reorder / epic.write)', () => {
+  let repo: RepoContainer;
+  beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+  const ctxRole = (role: 'po' | 'sm' | 'dev') => ({
+    workspaceId: WS, user: { userId: `u-${role}`, email: `${role}@x.com` }, role,
+  });
+  const NO_ROLE = { workspaceId: WS, user: { userId: 'u-x', email: 'x@x.com' } }; // workspace 未解決
+
+  async function mk(title: string): Promise<string> {
+    // 並び替え対象は admin で作る (createTicket はゲート無しなので role 不問だが既定 CTX を使う)。
+    const r = await createTicket(repo, CTX, { title });
+    if (!r.ok) throw new Error('setup failed');
+    return r.body.id;
+  }
+
+  it('reorder: po は並び替えできる (backlog.reorder = po/admin)', async () => {
+    const a = await mk('A'); const b = await mk('B');
+    const res = await reorderTickets(repo, ctxRole('po'), { orderedIds: [b, a] });
+    expect(res.ok).toBe(true);
+  });
+  it('reorder: sm は 403 (PO の優先順位付け / マトリクス境界)', async () => {
+    const a = await mk('A'); const b = await mk('B');
+    const res = await reorderTickets(repo, ctxRole('sm'), { orderedIds: [b, a] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+    // forbidden ヘルパーが「何の操作が・誰なら可能か」を返す。
+    expect(res.body.error).toBe('forbidden');
+    const details = res.body as { action?: string; message?: string; requiredRoles?: string[] };
+    expect(details.action).toBe('backlog.reorder');
+    expect(details.requiredRoles).toEqual(['admin', 'po']);
+    expect(typeof details.message).toBe('string');
+    expect((details.message ?? '').length).toBeGreaterThan(0);
+  });
+  it('reorder: dev は 403', async () => {
+    const a = await mk('A'); const b = await mk('B');
+    const res = await reorderTickets(repo, ctxRole('dev'), { orderedIds: [b, a] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+  });
+  it('reorder: role 未確定 (workspace 未解決) は 403', async () => {
+    const a = await mk('A'); const b = await mk('B');
+    const res = await reorderTickets(repo, NO_ROLE, { orderedIds: [b, a] });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+  });
+
+  it('epic.write: po は Epic 作成できる (epic.write = po/admin)', async () => {
+    const res = await createEpic(repo, ctxRole('po'), { name: 'PO Epic' });
+    expect(res.ok).toBe(true);
+  });
+  it('epic.write: sm は Epic 作成不可 (403 / マトリクス境界)', async () => {
+    const res = await createEpic(repo, ctxRole('sm'), { name: 'SM Epic' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('forbidden');
+  });
+  it('epic.write: dev は Epic 作成不可 (403)', async () => {
+    const res = await createEpic(repo, ctxRole('dev'), { name: 'Dev Epic' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+  });
+  it('epic.write: patchEpic も dev は 403 (IDOR 通過後にゲート)', async () => {
+    // 同一 ws の実在 Epic を admin で作り、dev が patch を試みる → IDOR は通過し epic.write で 403。
+    const created = await createEpic(repo, CTX, { name: 'E' });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await patchEpic(repo, ctxRole('dev'), created.body.id, { rationale: 'x' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
   });
 });

@@ -9,7 +9,7 @@
 // - IDOR ガード: get → workspaceId 照合、別 workspace のものは 404 扱い
 
 import { z } from 'zod';
-import type { Status, Ticket } from '@belvedere/shared';
+import type { Status, Ticket, WorkspaceRole } from '@belvedere/shared';
 import {
   PrioritySchema,
   RitualSchema,
@@ -22,13 +22,14 @@ import {
   computeReorderUpdates,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
+import { can, forbidden } from '../permissions';
 
 export interface HandlerContext {
   workspaceId: string;
   /** authMiddleware で確定したログインユーザ (createdBy 採番 + audit 用) */
   user: { userId: string; email: string };
-  /** workspaceMiddleware が解決した role (見積もりポーカーの開示/採用ゲート用、T6)。省略時は権限なし扱い */
-  role?: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
+  /** workspaceMiddleware が normalize 済の正準 role (権限ゲート用)。省略時 (workspace 未解決) は権限なし扱い */
+  role?: WorkspaceRole;
 }
 
 export type HandlerResult<T = unknown> =
@@ -212,6 +213,10 @@ export async function reorderTickets(
   ctx: HandlerContext,
   body: unknown,
 ): Promise<HandlerResult<Ticket[]>> {
+  // バックログの並び順 = 優先順位は PO の専権 (admin は bypass / permissions.ts)。
+  if (!can('backlog.reorder', ctx)) {
+    return { ok: false, status: 403, body: forbidden('backlog.reorder') };
+  }
   const parsed = TicketReorderBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };

@@ -9,16 +9,15 @@
 // - 純粋関数 (repo / ctx / body → HandlerResult)。Hono 非依存で vitest 可能。
 // - workspaceId は認証経由で確定したものを使う (body 経由の偽装を防ぐ)。
 // - IDOR ガード: get → workspaceId 照合、別 workspace は 404 扱い。
-// - 編集/開始は儀式ファシリテータ (owner/sm/po) のみ (estimation と同じ PRIVILEGED ゲート)。
+// - 権限ゲートは permissions.ts の can() に集約 (2026-06-23 再設計)。
+//   Sprint 作成/開始 = sprint.manage (admin/sm)、goal/期間編集 = sprint.goal (admin/po/sm)。
 
 import { z } from 'zod';
 import type { Sprint } from '@belvedere/shared';
 import { generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
-
-const PRIVILEGED: ReadonlyArray<string> = ['owner', 'sm', 'po'];
-const isPrivileged = (ctx: HandlerContext) => !!ctx.role && PRIVILEGED.includes(ctx.role);
+import { can, forbidden } from '../permissions';
 
 // POST /api/sprints body — ゴール先行で planned スプリントを新規作成する。
 // c社が 0 から計画を始めるための入口 (まだ active も planned も無い状態に対応)。
@@ -40,8 +39,9 @@ export async function createSprint(
   ctx: HandlerContext,
   body: unknown,
 ): Promise<HandlerResult<Sprint>> {
-  if (!isPrivileged(ctx)) {
-    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // Sprint 作成は儀式運営 = SM の専権 (admin は bypass / permissions.ts)。
+  if (!can('sprint.manage', ctx)) {
+    return { ok: false, status: 403, body: forbidden('sprint.manage') };
   }
   const parsed = SprintCreateBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -153,8 +153,9 @@ export async function patchSprint(
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
-  if (!isPrivileged(ctx)) {
-    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // goal/期間の編集は Sprint Goal 系 = PO/SM (admin は bypass / permissions.ts)。
+  if (!can('sprint.goal', ctx)) {
+    return { ok: false, status: 403, body: forbidden('sprint.goal') };
   }
   // 完了/中止済スプリントは編集不可 (履歴の不変性を守る)。
   if (existing.status === 'completed' || existing.status === 'cancelled') {
@@ -194,8 +195,9 @@ export async function startSprint(
   if (!target || target.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
-  if (!isPrivileged(ctx)) {
-    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // Sprint 開始 (= 現完了 + 繰上げ) は儀式運営 = SM の専権 (admin は bypass)。
+  if (!can('sprint.manage', ctx)) {
+    return { ok: false, status: 403, body: forbidden('sprint.manage') };
   }
   if (target.status !== 'planned') {
     return { ok: false, status: 409, body: { error: 'sprint_not_planned' } };

@@ -11,13 +11,11 @@
 //   ctx.workspaceId / ctx.role を使う。
 
 import { z } from 'zod';
-import type { Member, Workspace } from '@belvedere/shared';
+import type { Member, Workspace, WorkspaceRole } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerResult } from './ticket-handlers';
 import { inviteSentinelId, isInviteSentinel } from '../config/invite-bind';
-
-/** 招待を実行できる role (owner / sm)。 */
-const INVITE_PRIVILEGED: ReadonlyArray<string> = ['owner', 'sm'];
+import { can, forbidden } from '../permissions';
 
 /** workspace 未確定でも呼べるハンドラ用の最小 ctx (認証のみ)。 */
 export interface AuthCtx {
@@ -27,7 +25,7 @@ export interface AuthCtx {
 /** workspace 確定後に呼ばれるハンドラ用の ctx。 */
 export interface WorkspaceCtx extends AuthCtx {
   workspaceId: string;
-  role?: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
+  role?: WorkspaceRole;
 }
 
 // ------- body schema -------
@@ -37,10 +35,10 @@ export const WorkspaceCreateBodySchema = z.object({
   productGoal: z.string().max(280).optional(),
 });
 
-// owner は招待で付与できない (作成者のみが owner になる設計)。
+// admin は招待で付与できない (workspace 作成者だけが admin になる設計)。
 export const InviteBodySchema = z.object({
   email: z.string().email('valid email is required'),
-  role: z.enum(['sm', 'po', 'dev', 'guest']),
+  role: z.enum(['po', 'sm', 'dev']),
   displayName: z.string().min(1).max(80).optional(),
 });
 
@@ -101,7 +99,8 @@ export async function createWorkspace(
     workspaceId: id,
     email: ctx.user.email,
     displayName: localPart(ctx.user.email),
-    role: 'owner',
+    // 作成者は admin (= その workspace でなんでもできる / 全 action bypass)。
+    role: 'admin',
   };
   await repo.members.upsert(member);
 
@@ -149,7 +148,7 @@ export async function listMyWorkspaces(
 
 /**
  * POST /api/workspaces/members/invite — 当該 Workspace にメンバーを招待する。
- * owner/sm のみ実行可。owner role での招待は不可 (作成者のみが owner)。
+ * member.invite (PO/SM/admin) のみ実行可。admin role での招待は不可 (作成者のみが admin)。
  * 同 email が当該 ws に既存 (招待中含む) なら 409。
  *
  * Member doc を userId=`invite:<email>` のセンチネルで事前作成する。招待された人が
@@ -160,8 +159,8 @@ export async function inviteMember(
   ctx: WorkspaceCtx,
   body: unknown,
 ): Promise<HandlerResult<Member>> {
-  if (!ctx.role || !INVITE_PRIVILEGED.includes(ctx.role)) {
-    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  if (!can('member.invite', ctx)) {
+    return { ok: false, status: 403, body: forbidden('member.invite') };
   }
   const parsed = InviteBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -188,7 +187,7 @@ export async function inviteMember(
 
 /**
  * DELETE /api/workspaces/members/:userId — 招待を取り消す。
- * owner/sm のみ。招待センチネル (`invite:` 始まり) のみ削除可能 (加入済メンバーの
+ * member.invite (PO/SM/admin) のみ。招待センチネル (`invite:` 始まり) のみ削除可能 (加入済メンバーの
  * 退会は別途 Phase で扱う。ここで実 uid を消すと自分を消す事故が起きうるため塞ぐ)。
  * IDOR: 別 ws の Member は 404 扱い。
  */
@@ -197,8 +196,8 @@ export async function cancelInvite(
   ctx: WorkspaceCtx,
   paramUserId: string,
 ): Promise<HandlerResult<{ deleted: string }>> {
-  if (!ctx.role || !INVITE_PRIVILEGED.includes(ctx.role)) {
-    return { ok: false, status: 403, body: { error: 'forbidden' } };
+  if (!can('member.invite', ctx)) {
+    return { ok: false, status: 403, body: forbidden('member.invite') };
   }
   // paramUserId は招待センチネル userId。複合キー = `${ctx.workspaceId}:${paramUserId}`。
   const existing = await repo.members.get(ctx.workspaceId, paramUserId);

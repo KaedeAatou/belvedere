@@ -18,15 +18,15 @@ describe('createWorkspace', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
-  it('正常系: Workspace 作成 + 作成者を owner として Member 登録', async () => {
+  it('正常系: Workspace 作成 + 作成者を admin として Member 登録', async () => {
     const res = await createWorkspace(repo, ME, { name: 'C社', productGoal: '0 から回す' });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.workspace.name).toBe('C社');
     expect(res.body.workspace.ownerId).toBe('uid-me');
     expect(res.body.workspace.id.startsWith('ws-')).toBe(true);
-    // 作成者が owner として登録される
-    expect(res.body.member.role).toBe('owner');
+    // 作成者は admin として登録される (= 自分の部屋でなんでもできる / 権限再設計 2026-06-23)
+    expect(res.body.member.role).toBe('admin');
     expect(res.body.member.workspaceId).toBe(res.body.workspace.id);
     // displayName は email local part
     expect(res.body.member.displayName).toBe('Founder');
@@ -34,7 +34,7 @@ describe('createWorkspace', () => {
     const stored = await repo.workspaces.get(res.body.workspace.id);
     expect(stored?.name).toBe('C社');
     const mem = await repo.members.get(res.body.workspace.id, 'uid-me');
-    expect(mem?.role).toBe('owner');
+    expect(mem?.role).toBe('admin');
   });
 
   it('400: name 空は弾く', async () => {
@@ -94,12 +94,15 @@ describe('listMyWorkspaces', () => {
 
 describe('inviteMember / cancelInvite', () => {
   let repo: RepoContainer;
-  const OWNER = { workspaceId: 'ws-a', user: { userId: 'uid-owner', email: 'owner@x.com' }, role: 'owner' as const };
+  // 権限再設計 (2026-06-23): member.invite = admin/po/sm。dev は不可。
+  const ADMIN = { workspaceId: 'ws-a', user: { userId: 'uid-admin', email: 'admin@x.com' }, role: 'admin' as const };
+  const PO = { workspaceId: 'ws-a', user: { userId: 'uid-po', email: 'po@x.com' }, role: 'po' as const };
+  const SM = { workspaceId: 'ws-a', user: { userId: 'uid-sm', email: 'sm@x.com' }, role: 'sm' as const };
   const DEV = { workspaceId: 'ws-a', user: { userId: 'uid-dev', email: 'dev@x.com' }, role: 'dev' as const };
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
-  it('正常系: owner が招待 → センチネル Member 作成', async () => {
-    const res = await inviteMember(repo, OWNER, { email: 'New@X.com', role: 'dev' });
+  it('正常系: admin が招待 → センチネル Member 作成', async () => {
+    const res = await inviteMember(repo, ADMIN, { email: 'New@X.com', role: 'dev' });
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.email).toBe('new@x.com'); // 正規化
@@ -108,15 +111,37 @@ describe('inviteMember / cancelInvite', () => {
     expect(res.body.workspaceId).toBe('ws-a');
   });
 
-  it('403: dev は招待不可 (owner/sm のみ)', async () => {
+  it('正常系: po も招待できる (member.invite = admin/po/sm)', async () => {
+    const res = await inviteMember(repo, PO, { email: 'p-invitee@x.com', role: 'dev' });
+    expect(res.ok).toBe(true);
+  });
+
+  it('正常系: sm も招待できる (member.invite = admin/po/sm)', async () => {
+    const res = await inviteMember(repo, SM, { email: 's-invitee@x.com', role: 'po' });
+    expect(res.ok).toBe(true);
+  });
+
+  it('403: dev は招待不可 (member.invite は admin/po/sm のみ)', async () => {
     const res = await inviteMember(repo, DEV, { email: 'x@x.com', role: 'dev' });
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(403);
+    // メッセージが「誰なら可能か」を伝える。
+    expect(res.body.error).toBe('forbidden');
+    const details = res.body as { action?: string; message?: string };
+    expect(details.action).toBe('member.invite');
+    expect((details.message ?? '').length).toBeGreaterThan(0);
   });
 
-  it('400: role owner は招待で付与不可', async () => {
-    const res = await inviteMember(repo, OWNER, { email: 'x@x.com', role: 'owner' as 'dev' });
+  it('400: role admin は招待で付与不可 (作成者のみが admin)', async () => {
+    const res = await inviteMember(repo, ADMIN, { email: 'x@x.com', role: 'admin' as 'dev' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('400: 旧 role owner も招待で付与不可 (enum 外)', async () => {
+    const res = await inviteMember(repo, ADMIN, { email: 'x@x.com', role: 'owner' as 'dev' });
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(400);
@@ -124,24 +149,24 @@ describe('inviteMember / cancelInvite', () => {
 
   it('409: 同 email が当該 ws に既存なら重複招待不可', async () => {
     await repo.members.upsert({ userId: 'uid-exist', workspaceId: 'ws-a', email: 'dup@x.com', displayName: 'D', role: 'dev' });
-    const res = await inviteMember(repo, OWNER, { email: 'dup@x.com', role: 'dev' });
+    const res = await inviteMember(repo, ADMIN, { email: 'dup@x.com', role: 'dev' });
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(409);
   });
 
   it('cancelInvite: owner は招待センチネルを取消できる', async () => {
-    const inv = await inviteMember(repo, OWNER, { email: 'pending@x.com', role: 'dev' });
+    const inv = await inviteMember(repo, ADMIN, { email: 'pending@x.com', role: 'dev' });
     expect(inv.ok).toBe(true);
     if (!inv.ok) return;
-    const res = await cancelInvite(repo, OWNER, inv.body.userId);
+    const res = await cancelInvite(repo, ADMIN, inv.body.userId);
     expect(res.ok).toBe(true);
-    expect(await repo.members.get(OWNER.workspaceId, inv.body.userId)).toBeNull();
+    expect(await repo.members.get(ADMIN.workspaceId, inv.body.userId)).toBeNull();
   });
 
   it('cancelInvite 409: 加入済メンバー (実 uid) は取消対象外', async () => {
     await repo.members.upsert({ userId: 'uid-real', workspaceId: 'ws-a', email: 'real@x.com', displayName: 'R', role: 'dev' });
-    const res = await cancelInvite(repo, OWNER, 'uid-real');
+    const res = await cancelInvite(repo, ADMIN, 'uid-real');
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(409);
@@ -152,7 +177,7 @@ describe('inviteMember / cancelInvite', () => {
       userId: inviteSentinelId('ws-other', 'p@x.com'),
       workspaceId: 'ws-other', email: 'p@x.com', displayName: 'p', role: 'dev',
     });
-    const res = await cancelInvite(repo, OWNER, inviteSentinelId('ws-other', 'p@x.com'));
+    const res = await cancelInvite(repo, ADMIN, inviteSentinelId('ws-other', 'p@x.com'));
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(404);

@@ -9,13 +9,16 @@
 
 import type { MiddlewareHandler } from 'hono';
 import type { RepoContainer } from '@belvedere/repo';
+import type { WorkspaceRole } from '@belvedere/shared';
 import type { AuthenticatedUser } from './auth';
 import { buildMemberFromAllowlist } from '../config/email-allowlist';
 import { planInviteBind } from '../config/invite-bind';
+import { normalizeRole } from '../permissions';
 
 export interface WorkspaceContext {
   workspaceId: string;
-  role: 'owner' | 'sm' | 'po' | 'dev' | 'guest';
+  /** normalize 済の正準ロール (owner→admin / guest→dev は normalizeRole で変換済)。 */
+  role: WorkspaceRole;
 }
 
 /**
@@ -124,7 +127,9 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
     }
 
     c.set('workspaceId', selected.workspaceId);
-    c.set('role', selected.role);
+    // 永続値 (owner/guest を含みうる) を正準 4 値に正規化してから ctx に載せる。
+    // 以降 handler が見る ctx.role は admin/po/sm/dev のいずれか。
+    c.set('role', normalizeRole(selected.role));
     await next();
     return;
   };
