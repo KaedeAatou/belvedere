@@ -13,7 +13,7 @@ import {
 
 const WS = 'ws-belvedere';
 const DEV = { workspaceId: WS, user: { userId: 'u-dev', email: 'dev@example.com' }, role: 'dev' as const };
-const OTHER = { workspaceId: 'ws-other', user: { userId: 'u-x', email: 'x@example.com' }, role: 'owner' as const };
+const OTHER = { workspaceId: 'ws-other', user: { userId: 'u-x', email: 'x@example.com' }, role: 'admin' as const };
 
 describe('createRetroTry', () => {
   let repo: RepoContainer;

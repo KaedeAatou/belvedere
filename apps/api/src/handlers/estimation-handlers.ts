@@ -1,6 +1,8 @@
 // Phase 1-C 見積もりポーカー handler (T6 / 2026-06-11)。
 // 隠蔽投票 → 一斉開示 → 採用。隠蔽はサーバ側で強制する (§4-3): voting 中の GET は
-// 他人の value を一切返さない。開示/採用は owner/sm/po のみ。
+// 他人の value を一切返さない。権限ゲートは permissions.ts の can() に集約 (2026-06-23 再設計):
+//   開始/開示 = estimation.facilitate (admin/sm) / 投票 = estimation.vote (admin/dev) /
+//   採用 = estimation.adopt (admin/sm/dev)。
 // ticket-handlers と同じ純粋関数 + workspaceId IDOR ガードのパターン。
 
 import { z } from 'zod';
@@ -8,8 +10,8 @@ import type { EstimationSession, EstimationValue } from '@belvedere/shared';
 import { FIBONACCI_POINTS, generateId } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
+import { can, forbidden } from '../permissions';
 
-const PRIVILEGED: ReadonlyArray<string> = ['owner', 'sm', 'po'];
 /** voting / revealed = まだ生きているセッション (adopted / discarded は終了済) */
 const ACTIVE_STATUS: ReadonlyArray<EstimationSession['status']> = ['voting', 'revealed'];
 
@@ -59,9 +61,6 @@ async function ensureTicket(repo: RepoContainer, ctx: HandlerContext, ticketId: 
   if (!t || t.workspaceId !== ctx.workspaceId) return null; // IDOR: 別 workspace は「無い」
   return t;
 }
-function isPrivileged(ctx: HandlerContext): boolean {
-  return !!ctx.role && PRIVILEGED.includes(ctx.role);
-}
 async function activeSession(repo: RepoContainer, ctx: HandlerContext, ticketId: string): Promise<EstimationSession | null> {
   const list = await repo.estimations.list({ workspaceId: ctx.workspaceId, ticketId });
   return list.find((s) => ACTIVE_STATUS.includes(s.status)) ?? null;
@@ -84,7 +83,8 @@ export async function startEstimation(
   now: string,
 ): Promise<HandlerResult<EstimationView>> {
   if (!(await ensureTicket(repo, ctx, ticketId))) return { ok: false, status: 404, body: { error: 'not_found' } };
-  if (!isPrivileged(ctx)) return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // 見積もりの開始は SM のファシリテーション (admin は bypass / permissions.ts)。
+  if (!can('estimation.facilitate', ctx)) return { ok: false, status: 403, body: forbidden('estimation.facilitate') };
 
   const existing = await activeSession(repo, ctx, ticketId);
   if (existing?.status === 'voting') {
@@ -127,6 +127,8 @@ export async function voteEstimation(
   now: string,
 ): Promise<HandlerResult<EstimationView>> {
   if (!(await ensureTicket(repo, ctx, ticketId))) return { ok: false, status: 404, body: { error: 'not_found' } };
+  // 投票は見積もる当事者 = Dev の専権 (PO/SM は進行役で投票しない / admin は bypass)。
+  if (!can('estimation.vote', ctx)) return { ok: false, status: 403, body: forbidden('estimation.vote') };
   const s = await activeSession(repo, ctx, ticketId);
   if (!s) return { ok: false, status: 404, body: { error: 'no_active_session' } };
   if (s.status !== 'voting') return { ok: false, status: 409, body: { error: 'voting_closed' } };
@@ -150,7 +152,8 @@ export async function revealEstimation(
   now: string,
 ): Promise<HandlerResult<EstimationView>> {
   if (!(await ensureTicket(repo, ctx, ticketId))) return { ok: false, status: 404, body: { error: 'not_found' } };
-  if (!isPrivileged(ctx)) return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // 開示も開始と同じ SM のファシリテーション権限。
+  if (!can('estimation.facilitate', ctx)) return { ok: false, status: 403, body: forbidden('estimation.facilitate') };
   const s = await activeSession(repo, ctx, ticketId);
   if (!s || s.status !== 'voting') return { ok: false, status: 404, body: { error: 'no_voting_session' } };
   if (s.votes.length === 0) return { ok: false, status: 409, body: { error: 'no_votes' } };
@@ -169,7 +172,8 @@ export async function adoptEstimation(
 ): Promise<HandlerResult<EstimationView>> {
   const ticket = await ensureTicket(repo, ctx, ticketId);
   if (!ticket) return { ok: false, status: 404, body: { error: 'not_found' } };
-  if (!isPrivileged(ctx)) return { ok: false, status: 403, body: { error: 'forbidden' } };
+  // 採用 (確定) は SM・Dev が行える (合意値の確定にチームが関与する / admin は bypass)。
+  if (!can('estimation.adopt', ctx)) return { ok: false, status: 403, body: forbidden('estimation.adopt') };
   const s = await activeSession(repo, ctx, ticketId);
   if (!s || s.status !== 'revealed') return { ok: false, status: 409, body: { error: 'not_revealed' } };
   const parsed = AdoptBodySchema.safeParse(body);

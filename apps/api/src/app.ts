@@ -30,6 +30,7 @@ import {
   type HandlerContext,
   type HandlerResult,
 } from './handlers/ticket-handlers';
+import { can, forbidden } from './permissions';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
@@ -417,6 +418,11 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   // ------- /api/agents/:name (エージェント実行) -------
   app.post('/api/agents/:name', async (c) => {
     const workspaceId = c.get('workspaceId');
+    // AI Agent 実行は全メンバー (admin/po/sm/dev) が可。role 未確定 (workspace 未解決) のみ弾く。
+    // 全ロール許可なので実質 defense-in-depth だが、ゲートを通すことで「未認可で agent を回す」経路を塞ぐ。
+    if (!can('agent.invoke', { role: c.get('role') })) {
+      return c.json(forbidden('agent.invoke'), 403);
+    }
     const name = c.req.param('name') as AgentName;
     if (!VALID_AGENTS.includes(name)) {
       return c.json({ error: `unknown agent: ${name}`, valid: VALID_AGENTS }, 400);
