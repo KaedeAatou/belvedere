@@ -9,6 +9,7 @@
 
 import {
   signInWithPopup,
+  signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
   type User,
@@ -52,6 +53,18 @@ export const useAuth = () => {
     await signInWithPopup(fb.auth, fb.googleProvider);
   }
 
+  /**
+   * メール/パスワードでログイン (ハッカソン審査員用デモアカウント / 2026-06-23)。
+   * Google アカウント連携を強いずに触ってもらうための経路。
+   * ユーザーは Firebase Console で事前作成済の前提 (サインアップは提供しない —
+   * allowlist に無いメアドは workspaceMiddleware が 403 で弾くため新規登録は無意味)。
+   */
+  async function signInWithEmailPassword(email: string, password: string): Promise<void> {
+    const fb = useFirebase();
+    if (!fb) throw new Error('Firebase not initialized (server side?)');
+    await signInWithEmailAndPassword(fb.auth, email, password);
+  }
+
   async function signOut(): Promise<void> {
     const fb = useFirebase();
     if (!fb) return;
@@ -65,5 +78,13 @@ export const useAuth = () => {
     return await fb.auth.currentUser.getIdToken();
   }
 
-  return { user, isAuthenticated, isInitialized, signInWithGoogle, signOut, idToken };
+  return {
+    user,
+    isAuthenticated,
+    isInitialized,
+    signInWithGoogle,
+    signInWithEmailPassword,
+    signOut,
+    idToken,
+  };
 };
