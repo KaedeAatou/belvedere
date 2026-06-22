@@ -46,7 +46,7 @@ Data [label: "Data"] {
 // ===== まわす: CI/CD 鍵レス (DevOps テーマ直結) =====
 CICD [label: "まわす: CI/CD 鍵レスデプロイ"] {
   GitHub [icon: github, label: "GitHub\nKaedeAatou/belvedere"]
-  Actions [icon: github-actions, label: "GitHub Actions + WIF\n(鍵レス / 462 テスト gate)"]
+  Actions [icon: github-actions, label: "GitHub Actions + WIF\n(鍵レス / 462 テスト + agent eval gate)"]
   CloudBuild [icon: gcp-cloud-build, label: "Cloud Build"]
 }
 
@@ -58,6 +58,7 @@ Orchestrator > Agents: agent.invoke で協議招集
 Agents > Gemini: LLM 推論
 Agents > Firestore: read / write
 Agents > Elastic: 意味検索 (過去 Try / Scrum Guide)
+Elastic > Agents: 検出ルール強化 (まわす: 使うほど賢く)
 API > Firestore: CRUD
 ClaudeCode > MCP: stdio / HTTP
 MCP > API: HTTPS (service token / IDOR ガード)
