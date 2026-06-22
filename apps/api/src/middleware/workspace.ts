@@ -1,17 +1,18 @@
 // Phase 1-B Workspace 解決ミドルウェア (2026-06-10)。
 // authMiddleware で確定した req.user.userId から、その人が member として登録されている
 // Workspace を探し出し、最初の 1 件 (将来は X-Workspace-Id ヘッダで切替可) を current に set する。
-// member ゼロ件は 403 (invitation_required) で弾く = 招待制 SaaS の入口防衛。
+// member ゼロ件は 403 で弾く = 招待制 SaaS の入口防衛 (allowlist 該当なら needs_workspace で
+// onboarding 誘導、非該当なら invitation_required)。
 //
-// Phase 1-B 拡張 (2026-06-10): email allowlist による初回 owner 自動登録
-// (config/email-allowlist.ts 参照)。allowlist 該当者は最初のリクエストで
-// 自動的に Workspace の owner として members に upsert される。
+// Phase 1-B 拡張 (2026-06-10): email allowlist による初回メンバー自動登録
+// (config/email-allowlist.ts 参照)。allowlist の assign 該当者は最初のリクエストで
+// 自動的に Workspace の member として upsert される (role は allowlist で指定 / 本人は admin)。
 
 import type { MiddlewareHandler } from 'hono';
 import type { RepoContainer } from '@belvedere/repo';
 import type { WorkspaceRole } from '@belvedere/shared';
 import type { AuthenticatedUser } from './auth';
-import { buildMemberFromAllowlist } from '../config/email-allowlist';
+import { buildMemberFromAllowlist, isLoginAllowed } from '../config/email-allowlist';
 import { planInviteBind } from '../config/invite-bind';
 import { normalizeRole } from '../permissions';
 
@@ -100,11 +101,24 @@ export function workspaceMiddleware(repo: RepoContainer): MiddlewareHandler {
     }
 
     if (memberships.length === 0) {
+      // ログイン許可済 (allowlist の login-only / assign 該当だが bootstrap 不能だった) で所属ゼロ
+      // → needs_workspace。web はこれを受けて onboarding (自分の Workspace を作る画面) へ誘導する。
+      if (isLoginAllowed(user.email)) {
+        return c.json(
+          {
+            error: 'needs_workspace',
+            email: user.email,
+            hint: '自分の Workspace を作成してください (/settings/profile?onboard=1)',
+          },
+          403,
+        );
+      }
+      // 全くの未招待 → 招待制 SaaS の入口防衛。
       return c.json(
         {
           error: 'invitation_required',
           email: user.email,
-          hint: 'Workspace owner にメンバ追加を依頼してください',
+          hint: 'Workspace 管理者にメンバ追加を依頼してください',
         },
         403,
       );
