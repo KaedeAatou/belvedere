@@ -33,8 +33,8 @@ graph TB
         U3[GitHub]
     end
 
-    subgraph CICD["🔧 Build & Deploy (鍵レス CI/CD)"]
-        GH["GitHub Actions<br/>(deploy-api.yml + deploy-web.yml)"]
+    subgraph CICD["🔧 まわす: Build & Deploy (鍵レス CI/CD + AI改善)"]
+        GH["GitHub Actions<br/>(deploy-api/web + 462 テスト & agent eval gate)"]
         WIF["Workload Identity<br/>belvedere-ci-pool<br/>belvedere-ci-github"]
         CB["Cloud Build<br/>(_TAG = short SHA)"]
         AR["Artifact Registry<br/>belvedere/api"]
@@ -45,11 +45,11 @@ graph TB
         IAP["Identity-Aware Proxy<br/>(Phase 4 計画 / 現状は Firebase Auth)"]
     end
 
-    subgraph Frontend["Frontend (Cloud Run)"]
+    subgraph Frontend["とどける: Frontend (Cloud Run)"]
         WEB["apps/web<br/>Nuxt 3 (Vue 3 SSR / Nitro)"]
     end
 
-    subgraph Backend["Backend Services (Cloud Run)"]
+    subgraph Backend["つくる: Backend Services (Cloud Run)"]
         API["apps/api<br/>Hono CRUD<br/>belvedere-api-dev"]
         ORC["orchestrator = SM/単一窓口<br/>(gemini-2.5-flash)"]
         AG_P["agent-planner<br/>FLOOR 01"]
@@ -66,10 +66,10 @@ graph TB
         CUR["Cursor / 他 MCP クライアント"]
     end
 
-    subgraph AI["AI Layer"]
+    subgraph AI["つくる: AI Layer"]
         GEM["Gemini API<br/>= Bedrock Claude"]
-        ADK["Agent Dev Kit<br/>= Bedrock AgentCore"]
-        VS["Vector Search<br/>= OpenSearch k-NN"]
+        ADK["ADK マルチエージェント<br/>宣言的編成<br/>= Bedrock AgentCore"]
+        VS["Elastic RAG 意味検索<br/>= OpenSearch / Bedrock KB<br/>(まわす: 使うほど賢くなる)"]
     end
 
     subgraph Data["Data"]
@@ -107,13 +107,18 @@ graph TB
 
     %% --- Agent オーケストレーション (画面操作 = 単一窓口。スケジュール/Pub-Sub トリガは不採用) ---
     WEB -->|画面操作 = 単一窓口| ORC
+    ORC -.ADK 宣言的編成.-> ADK
     ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
     AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
     AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
     TOOL --> U3
     AG_P & AG_D & AG_F & AG_R & AG_X --> FS
-    AG_P & AG_D & AG_F & AG_R & AG_X --> VS
+    AG_P & AG_D & AG_F & AG_R & AG_X -->|意味検索: 過去 Try / Scrum Guide| VS
     AG_P & AG_D & AG_F & AG_R & AG_X -.協議.-> ORC
+
+    %% --- まわす: AI 継続改善ループ (Retro の Try を蓄積 → 次スプリントの検出を強化) ---
+    AG_X -.Try 蓄積.-> VS
+    VS -.検出ルール強化.-> AG_F
 
     %% --- 共通インフラ ---
     Backend --> LOG & TR & ER
@@ -151,7 +156,7 @@ graph TB
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
 | ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
 | 🟡 implemented | GEM | Gemini provider 実装済 (`packages/llm/src/gemini.ts` / REST 直叩き / functionCall マッピング済)。`LLM_PROVIDER=gemini` 切替だけで Mock→Gemini 成立。残: API キー注入 + 疎通検証 (Phase A) |
-| ⚪ planned | ADK / VS | ADK = Orchestrator 編成デモ (Phase C) / Vector Search (RAG) は Phase E |
+| ⚪ planned | ADK / VS | ADK = Orchestrator のマルチエージェント宣言的編成デモ (Phase C) / **Elastic RAG 意味検索層 = 「まわす」AI 継続改善ループ** (Retro の Try を蓄積 → 次スプリントの検出ルールを強化)。土台+配線は実装済 (`SEARCH_BACKEND` 未設定=無効で本番ゼロ変更)、Elastic Cloud 接続は提出前トライアルで点灯 / 設計は `docs/continuous-improvement-design.md` |
 | ⚪ planned | SM | Phase 3 (Gemini API key) |
 | ⚪ 不採用 | PUBSUB / SCHED | **儀式トリガに使わない**（全 agent は画面操作で同期起動 / `AGENT_DESIGN.md §6`）|
 | ⚪ planned | TR / ER | Phase 4 (本番監視) |
@@ -181,7 +186,7 @@ graph TB
 | **VPC / 専用線** | VPC + Serverless VPC Access | VPC + PrivateLink | サーバーレスからVPCに繋ぐ |
 | **WAF** | Cloud Armor | WAF | DDoS / OWASPルール |
 | **DNS** | Cloud DNS | Route 53 | 同等 |
-| **Vector DB** | Vertex AI Vector Search | OpenSearch k-NN / Bedrock KB | Belvedere では過去ふりかえり検索に使う |
+| **意味検索 / RAG** | Elastic (Elastic Cloud) | OpenSearch k-NN / Bedrock KB | Belvedere では過去ふりかえり (Try) と Scrum Guide の意味検索に使う。Firestore=正本 / Elastic=意味検索層 |
 
 ---
 
