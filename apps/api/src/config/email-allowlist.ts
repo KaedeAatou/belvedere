@@ -45,6 +45,18 @@ export const emailAllowlist: Record<string, AllowlistEntry> = {
     role: 'owner',
     displayName: 'E2E Robot',
   },
+  // ハッカソン審査員用デモアカウント (2026-06-23): Google アカウント連携を強いずに
+  // メール/パスワードで本番デモを触ってもらうための共有アカウント。
+  // - Firebase Console で Email/Password ユーザー (demo@belvedere.demo) を事前作成しておく
+  //   (パスワードは PITCH / Proto Pedia の提出メモに記載 → 審査員に共有)。
+  // - role は dev: 本番 seed (ws-belvedere) 上でチケット CRUD / 5 儀式 Agent の起動は試せるが、
+  //   workspace 削除・member 管理は owner/sm 専用なので破壊できない。
+  // - 個人参加要件: ダミードメイン (@belvedere.demo) のみ。会社メアドは絶対に入れない。
+  'demo@belvedere.demo': {
+    workspaceId: 'ws-belvedere',
+    role: 'dev',
+    displayName: 'Hackathon Demo',
+  },
 };
 
 /**

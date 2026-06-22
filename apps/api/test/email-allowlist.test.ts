@@ -24,10 +24,10 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
     // ハッカソンは個人参加要件があるので、会社ドメインは絶対入れない。
     // 実在の会社メアドを公開 repo に書くこと自体が個人↔会社の紐付け露出になるため、
     // 「許可ドメイン以外が入っていない」を検証する。
-    // 許可: 個人 Gmail / e2e robot (@belvedere.test) / MCP サービスプリンシパル (@belvedere.svc)。
-    // いずれも会社ドメインではない (.svc は内部サービス用の擬似ドメイン)。
+    // 許可: 個人 Gmail / e2e robot (@belvedere.test) / MCP サービスプリンシパル (@belvedere.svc) /
+    // ハッカソン審査員デモ (@belvedere.demo)。いずれも会社ドメインではない (擬似ドメイン)。
     expect(emailAllowlist['someone@company.example']).toBeUndefined();
-    const allowedDomains = ['@gmail.com', '@belvedere.test', '@belvedere.svc'];
+    const allowedDomains = ['@gmail.com', '@belvedere.test', '@belvedere.svc', '@belvedere.demo'];
     const cleanDomains = Object.keys(emailAllowlist).every((e) =>
       allowedDomains.some((d) => e.endsWith(d)),
     );
@@ -41,6 +41,16 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
     expect(m).not.toBeNull();
     expect(m?.workspaceId).toBe('ws-belvedere');
     expect(m?.role).toBe('po');
+  });
+
+  it('審査員デモ demo@belvedere.demo は ws-belvedere の dev (破壊不可 / 2026-06-23)', () => {
+    // ハッカソン審査員が触る共有アカウント。本番 seed (ws-belvedere) 上で儀式/Agent を試せるが、
+    // dev role なので workspace 削除・member 管理 (owner/sm 専用) はできない。
+    const m = buildMemberFromAllowlist('firebase-uid-demo', 'demo@belvedere.demo');
+    expect(m).not.toBeNull();
+    expect(m?.workspaceId).toBe('ws-belvedere');
+    expect(m?.role).toBe('dev');
+    expect(m?.role).not.toBe('owner'); // 破壊操作を持たせない
   });
 
   it('robot-e2e@belvedere.test は ws-e2e-test owner として登録される (Stage 2)', () => {

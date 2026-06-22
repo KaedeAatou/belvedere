@@ -1,14 +1,17 @@
 <script setup lang="ts">
 // Belvedere ログイン画面 (Phase 1-B / 2026-06-10)
-// Google でログインボタン 1 つ + 招待制の説明文。
+// Google でログイン + メール/パスワード (ハッカソン審査員用デモアカウント / 2026-06-23)。
 // auth.global.ts middleware の対象外 (path === '/login' で skip される)。
 
 definePageMeta({ layout: false });
 
-const { signInWithGoogle, isAuthenticated, isInitialized } = useAuth();
+const { signInWithGoogle, signInWithEmailPassword, isAuthenticated, isInitialized } = useAuth();
 const router = useRouter();
 const errorMessage = ref<string | null>(null);
 const isLoading = ref(false);
+
+const email = ref('');
+const password = ref('');
 
 // 既にログイン済なら自動で / にリダイレクト (B→ログインボタン→/login の URL 直叩き等)
 watch([isAuthenticated, isInitialized], ([authed, ready]) => {
@@ -17,6 +20,24 @@ watch([isAuthenticated, isInitialized], ([authed, ready]) => {
   }
 }, { immediate: true });
 
+function describeAuthError(e: unknown): string {
+  const err = e as { code?: string; message?: string };
+  switch (err.code) {
+    case 'auth/popup-closed-by-user':
+      return 'ログインをキャンセルしました。';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found':
+      return 'メールアドレスまたはパスワードが違います。';
+    case 'auth/invalid-email':
+      return 'メールアドレスの形式が正しくありません。';
+    case 'auth/too-many-requests':
+      return '試行回数が多すぎます。しばらく待って再試行してください。';
+    default:
+      return `ログインに失敗しました: ${err.message ?? '不明なエラー'}`;
+  }
+}
+
 async function loginWithGoogle(): Promise<void> {
   errorMessage.value = null;
   isLoading.value = true;
@@ -24,12 +45,24 @@ async function loginWithGoogle(): Promise<void> {
     await signInWithGoogle();
     // onAuthStateChanged → watch でリダイレクトが走るので、ここでは push しない
   } catch (e) {
-    const err = e as { code?: string; message?: string };
-    if (err.code === 'auth/popup-closed-by-user') {
-      errorMessage.value = 'ログインをキャンセルしました。';
-    } else {
-      errorMessage.value = `ログインに失敗しました: ${err.message ?? '不明なエラー'}`;
-    }
+    errorMessage.value = describeAuthError(e);
+  } finally {
+    isLoading.value = false;
+  }
+}
+
+async function loginWithEmail(): Promise<void> {
+  errorMessage.value = null;
+  if (!email.value || !password.value) {
+    errorMessage.value = 'メールアドレスとパスワードを入力してください。';
+    return;
+  }
+  isLoading.value = true;
+  try {
+    await signInWithEmailPassword(email.value.trim(), password.value);
+    // onAuthStateChanged → watch でリダイレクトが走るので、ここでは push しない
+  } catch (e) {
+    errorMessage.value = describeAuthError(e);
   } finally {
     isLoading.value = false;
   }
@@ -56,6 +89,30 @@ async function loginWithGoogle(): Promise<void> {
         <span v-if="isLoading">サインイン中…</span>
         <span v-else>Google でログイン</span>
       </button>
+
+      <div class="divider"><span>または</span></div>
+
+      <form class="email-form" @submit.prevent="loginWithEmail">
+        <input
+          v-model="email"
+          type="email"
+          autocomplete="username"
+          placeholder="メールアドレス"
+          class="text-input"
+          :disabled="isLoading"
+        />
+        <input
+          v-model="password"
+          type="password"
+          autocomplete="current-password"
+          placeholder="パスワード"
+          class="text-input"
+          :disabled="isLoading"
+        />
+        <button type="submit" class="email-button" :disabled="isLoading">
+          メール / パスワードでログイン
+        </button>
+      </form>
 
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
@@ -126,6 +183,75 @@ async function loginWithGoogle(): Promise<void> {
 }
 
 .google-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 24px 0;
+  color: var(--ink-3);
+  font-family: var(--sans);
+  font-size: 12px;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: var(--hairline);
+  background: var(--line-2);
+}
+
+.email-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 13px 14px;
+  background: var(--bg-0);
+  border: var(--hairline) solid var(--line-2);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--ink-0);
+  box-sizing: border-box;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.text-input:disabled {
+  opacity: 0.6;
+}
+
+.email-button {
+  width: 100%;
+  padding: 14px 20px;
+  background: transparent;
+  color: var(--ink-0);
+  border: var(--hairline) solid var(--ink-0);
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.email-button:hover:not(:disabled) {
+  background: var(--ink-0);
+  color: var(--bg-0);
+}
+
+.email-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }
