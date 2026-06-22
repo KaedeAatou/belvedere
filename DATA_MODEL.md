@@ -35,7 +35,7 @@
 > **実装メモ (Phase 1-B / 2026-06-09)**: 上表のコレクションパスは論理設計 (将来のマルチテナント本格化時の目標形)。`packages/repo/src/firestore.ts` の Phase 1-B 実装は、`RepoContainer` インタフェースを無変更で memory backend と即 swap できることを優先し、**サブコレクションではなくトップレベルのフラットコレクション** (`/tickets/{id}` 等) を採用した。各ドキュメントは `workspaceId` / `projectId` をフィールドで保持し、ワークスペース分離は `where('workspaceId', '==', X)` で実現する (equality-only の AND は composite index 不要)。サブコレクション (`/workspaces/{wsId}/...`) への移行は、`RepoContainer` に `wsId` 引数を通す全層 (repo / tools / agent / mcp) 改修を伴うため Phase 4 以降に再検討する。
 - 既存 seed (`EP-1..4` / `US-101..US-402` / `WC-101..112`) は **デフォルト Project (Belvedere Core, idPrefix=BV)** 配下と解釈し、ID 値は変更しない
 
-> **実装メモ (Phase 1-E 前倒し / 2026-06-12)**: Workspace 作成 + メンバー招待 + Workspace 切替を実装した。Workspace は他エンティティと同じくフラットコレクション `/workspaces/{wsId}` に書き込む (`WorkspaceRepository.upsert`)。新規 Workspace は `POST /api/workspaces` で作成し作成者を `owner` Member に登録、`GET /api/workspaces` で所属一覧を返す (この 2 ルートのみ `workspaceMiddleware` を skip = 所属ゼロでも呼べる)。**招待は実 uid 未確定なので Member doc を `userId = invite:<workspaceId>:<email>` のセンチネルで事前作成**し、招待された人が初回ログインした時に `workspaceMiddleware` が email 一致でセンチネルを実 uid に bind する (旧センチネル doc 削除 + 実 uid doc 作成)。doc id に `workspaceId` を含めるのは同 email を複数 Workspace が招待しても doc id が衝突しないため。seed の `ws-belvedere` は Workspace doc を持たない (members のみ) ため、一覧では `{ id, name: id }` にフォールバックする。
+> **実装メモ (Phase 1-E 前倒し / 2026-06-12)**: Workspace 作成 + メンバー招待 + Workspace 切替を実装した。Workspace は他エンティティと同じくフラットコレクション `/workspaces/{wsId}` に書き込む (`WorkspaceRepository.upsert`)。新規 Workspace は `POST /api/workspaces` で作成し作成者を `admin` Member に登録 (2026-06-23 再設計 / 旧 `owner` / §7 参照)、`GET /api/workspaces` で所属一覧を返す (この 2 ルートのみ `workspaceMiddleware` を skip = 所属ゼロでも呼べる)。**招待は実 uid 未確定なので Member doc を `userId = invite:<workspaceId>:<email>` のセンチネルで事前作成**し、招待された人が初回ログインした時に `workspaceMiddleware` が email 一致でセンチネルを実 uid に bind する (旧センチネル doc 削除 + 実 uid doc 作成)。doc id に `workspaceId` を含めるのは同 email を複数 Workspace が招待しても doc id が衝突しないため。seed の `ws-belvedere` は Workspace doc を持たない (members のみ) ため、一覧では `{ id, name: id }` にフォールバックする。
 
 ---
 
@@ -296,3 +296,45 @@ export interface CeremonyHealthScore {
 - `members.ts` — 5名 (会社メアドは `@example.com` ダミー化済 / 2026-05-04)
 
 User Story (US-101..US-402) は実装移行中: 旧 `apps/web/lib/data.ts` (Next.js 時代) は **削除済**。`useDemoData.ts` は R3 (2026-06-11) で削除し全画面 shared Ticket + 実 API に統一。US-* は Mock LLM 出力のみで参照。将来 `seed/stories.ts` に移管予定。
+
+---
+
+## 7. 権限モデル (ロールと操作マトリクス / 2026-06-23 再設計)
+
+`Member.role` の正準値は **`admin | po | sm | dev`** (`WorkspaceRole`)。旧 `owner` / `guest` は廃止し、
+永続値に残る移行期は middleware の `normalizeRole` が `owner→admin` / `guest→dev` に読み替える
+(handler が見る `ctx.role` は常にこの 4 値)。
+
+| ロール | 位置づけ |
+|---|---|
+| **admin** | その Workspace の全権者。**全操作を bypass**。Workspace を作った人が自動で admin (1 人運用 / 審査員デモはこれ)。 |
+| **po** | プロダクトオーナー。価値・優先順位・バックログ整序を司る。 |
+| **sm** | スクラムマスター。儀式運営 (Sprint 作成/開始、見積もり進行) を司る。 |
+| **dev** | 開発者。チケット編集と見積もり投票に参加する。 |
+
+> **owner はワークスペース内の役割ではない** — プラットフォーム全体で「人を Belvedere に招待する
+> (ログイン許可を出す)」だけの本人 (`owner@example.com`)。実装上は `config/email-allowlist.ts`
+> に `login-only` エントリを足すこと = 招待。所属ゼロでログインした人は `needs_workspace` で自分の
+> Workspace 作成へ誘導され、作成すればその部屋の admin になる。
+
+### 操作マトリクス (`apps/api/src/permissions.ts` の `MATRIX` が単一ソース)
+
+admin は全 ✅ (bypass)。下表は po/sm/dev の許可。`forbidden(action)` が 403 時に「どの操作が・誰なら
+可能か」を日本語 message で返す。
+
+| 操作 (Action) | admin | po | sm | dev |
+|---|:--:|:--:|:--:|:--:|
+| メンバー招待 `member.invite` | ✅ | ✅ | ✅ | ❌ |
+| バックログ並び替え `backlog.reorder` | ✅ | ✅ | ❌ | ❌ |
+| Epic/Story 価値・優先度 `epic.write` | ✅ | ✅ | ❌ | ❌ |
+| Sprint Goal `sprint.goal` | ✅ | ✅ | ✅ | ❌ |
+| Sprint 作成/開始/終了 `sprint.manage` | ✅ | ❌ | ✅ | ❌ |
+| 見積 開始/開示 `estimation.facilitate` | ✅ | ❌ | ✅ | ❌ |
+| 見積 投票 `estimation.vote` | ✅ | ❌ | ❌ | ✅ |
+| 見積 採用 `estimation.adopt` | ✅ | ❌ | ✅ | ✅ |
+| Ticket CRUD `ticket.write` | ✅ | ✅ | ✅ | ✅ |
+| AI Agent 実行 `agent.invoke` | ✅ | ✅ | ✅ | ✅ |
+
+> この表と `permissions.ts` の `MATRIX` がドリフトしたら `apps/api/test/permissions.test.ts` /
+> `permission-enforcement.test.ts` が落ちる (action×role を実際に handler で踏むため)。表を直す時は
+> 両方を直す。本番 Firestore の役割 migration (`owner→admin` 等) と zod enum の締めは提出後。

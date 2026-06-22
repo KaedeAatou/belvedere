@@ -85,6 +85,26 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 
 ---
 
+## 権限モデル (ロール)
+
+Workspace ベースのマルチテナント。`Member.role` は **`admin | po | sm | dev`** の 4 値
+(2026-06-23 再設計 / 旧 `owner` `guest` は廃止)。
+
+| ロール | できること |
+|---|---|
+| **admin** | その Workspace の全権者 (= 作成者 / 全操作 bypass)。1 人運用・審査員デモはこれ。 |
+| **po** | プロダクトオーナー。バックログ並び替え / Epic・Story 価値設定 / Sprint Goal / 招待。 |
+| **sm** | スクラムマスター。Sprint 作成・開始 / 見積もり進行 / Sprint Goal / 招待。 |
+| **dev** | 開発者。チケット編集 / 見積もり投票・採用 / AI Agent 実行。 |
+
+> **owner はワークスペース内の役割ではない** — プラットフォーム全体で「人を招待する (ログイン許可を出す)」
+> だけの本人。招待された人はログイン後、所属ゼロなら自分の Workspace 作成へ誘導され、作れば admin になる。
+
+権限ゲートは `apps/api/src/permissions.ts` の `can()` 純粋関数に集約。操作ごとの許可ロール
+(操作マトリクス) は [`DATA_MODEL.md` §7](./DATA_MODEL.md#7-権限モデル-ロールと操作マトリクス--2026-06-23-再設計) を単一ソースとする。
+
+---
+
 ## ドキュメント
 
 | ファイル | 役割 |
