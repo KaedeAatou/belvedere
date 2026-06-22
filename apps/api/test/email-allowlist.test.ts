@@ -4,27 +4,34 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer } from '@belvedere/repo';
 import type { RepoContainer } from '@belvedere/repo';
-import { buildMemberFromAllowlist, emailAllowlist } from '../src/config/email-allowlist';
+import { buildMemberFromAllowlist, emailAllowlist, isLoginAllowed } from '../src/config/email-allowlist';
 
 describe('buildMemberFromAllowlist - 純粋関数', () => {
-  it('allowlist 該当 email は Member object を返す', () => {
+  it('allowlist 該当 (assign) email は Member object を返す (本人 = admin)', () => {
     const m = buildMemberFromAllowlist('firebase-uid-xyz', 'mygolanglearn@gmail.com');
     expect(m).not.toBeNull();
     expect(m?.userId).toBe('firebase-uid-xyz');
     expect(m?.email).toBe('mygolanglearn@gmail.com');
     expect(m?.workspaceId).toBe('ws-belvedere');
-    expect(m?.role).toBe('owner');
+    expect(m?.role).toBe('admin'); // 固定 ws の作成者相当 = 全権 (旧 owner → 正準 admin)
   });
 
   it('allowlist 非該当 email は null を返す', () => {
     expect(buildMemberFromAllowlist('uid-1', 'not-allowed@example.com')).toBeNull();
   });
 
+  it('login-only エントリは Member を作らない (null / onboarding 経路へ回す)', () => {
+    // login-only = ログイン許可だけ。member は作らず needs_workspace で onboarding に誘導する。
+    const entry = emailAllowlist['onboard-e2e@belvedere.test'];
+    expect(entry?.mode).toBe('login-only');
+    expect(buildMemberFromAllowlist('uid-onboard', 'onboard-e2e@belvedere.test')).toBeNull();
+  });
+
   it('会社メアドは allowlist に絶対入れない (PII / 個人参加要件)', () => {
     // ハッカソンは個人参加要件があるので、会社ドメインは絶対入れない。
     // 実在の会社メアドを公開 repo に書くこと自体が個人↔会社の紐付け露出になるため、
     // 「許可ドメイン以外が入っていない」を検証する。
-    // 許可: 個人 Gmail / e2e robot (@belvedere.test) / MCP サービスプリンシパル (@belvedere.svc) /
+    // 許可: 個人 Gmail / e2e robot + onboarding (@belvedere.test) / MCP (@belvedere.svc) /
     // ハッカソン審査員デモ (@belvedere.demo)。いずれも会社ドメインではない (擬似ドメイン)。
     expect(emailAllowlist['someone@company.example']).toBeUndefined();
     const allowedDomains = ['@gmail.com', '@belvedere.test', '@belvedere.svc', '@belvedere.demo'];
@@ -34,30 +41,30 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
     expect(cleanDomains).toBe(true);
   });
 
-  it('MCP サービスプリンシパルは ws-belvedere の po (最小権限 / owner ではない)', () => {
+  it('MCP サービスプリンシパルは ws-belvedere の po (admin ではない)', () => {
     // 機械認証パス (config/service-token.ts) で認証された MCP は、この allowlist 経由で
-    // ws-belvedere の po member に bootstrap される。owner ではない (member 招待 / workspace 削除不可)。
+    // ws-belvedere の po member に bootstrap される。admin ではない (workspace 全権 bypass なし)。
     const m = buildMemberFromAllowlist('svc:mcp', 'mcp@belvedere.svc');
     expect(m).not.toBeNull();
     expect(m?.workspaceId).toBe('ws-belvedere');
     expect(m?.role).toBe('po');
   });
 
-  it('審査員デモ demo@belvedere.demo は ws-belvedere の dev (破壊不可 / 2026-06-23)', () => {
-    // ハッカソン審査員が触る共有アカウント。本番 seed (ws-belvedere) 上で儀式/Agent を試せるが、
-    // dev role なので workspace 削除・member 管理 (owner/sm 専用) はできない。
+  it('審査員デモ demo@belvedere.demo は ws-belvedere の admin (全儀式を体験 / 2026-06-23 再設計)', () => {
+    // ハッカソン審査員が触る共有アカウント。本番 seed (ws-belvedere) 上で全 5 儀式 + Agent を
+    // 体験できるよう admin にする (旧 dev では reorder / sprint 等が 403 で「形だけ」しか見せられなかった)。
+    // seed が崩れても seed-firestore-dev.ts で戻せるので許容。
     const m = buildMemberFromAllowlist('firebase-uid-demo', 'demo@belvedere.demo');
     expect(m).not.toBeNull();
     expect(m?.workspaceId).toBe('ws-belvedere');
-    expect(m?.role).toBe('dev');
-    expect(m?.role).not.toBe('owner'); // 破壊操作を持たせない
+    expect(m?.role).toBe('admin');
   });
 
-  it('robot-e2e@belvedere.test は ws-e2e-test owner として登録される (Stage 2)', () => {
+  it('robot-e2e@belvedere.test は ws-e2e-test の admin として登録される (Stage 2)', () => {
     const m = buildMemberFromAllowlist('firebase-uid-robot', 'robot-e2e@belvedere.test');
     expect(m).not.toBeNull();
     expect(m?.workspaceId).toBe('ws-e2e-test'); // 本番 ws-belvedere を汚さない
-    expect(m?.role).toBe('owner');
+    expect(m?.role).toBe('admin'); // 自分の部屋の作成者 = 全権
     expect(m?.displayName).toBe('E2E Robot');
   });
 
@@ -87,10 +94,10 @@ describe('workspace bootstrap シミュレーション (memory backend)', () => 
     if (!m) return;
     await repo.members.upsert(m);
 
-    // 結果: 1 件登録され、owner として確定
+    // 結果: 1 件登録され、admin として確定
     const memberships = await repo.members.listByUserId(uid);
     expect(memberships.length).toBe(1);
-    expect(memberships[0]?.role).toBe('owner');
+    expect(memberships[0]?.role).toBe('admin');
     expect(memberships[0]?.workspaceId).toBe('ws-belvedere');
   });
 
@@ -105,6 +112,16 @@ describe('workspace bootstrap シミュレーション (memory backend)', () => 
 
     // 結果: 依然 0 件 → middleware 側で 403 invitation_required
     expect((await repo.members.listByUserId(uid)).length).toBe(0);
+  });
+
+  it('login-only ユーザー → member 作られず 0 件のまま (= needs_workspace へ)', async () => {
+    const uid = 'firebase-uid-onboard';
+    const email = 'onboard-e2e@belvedere.test';
+    const m = buildMemberFromAllowlist(uid, email);
+    expect(m).toBeNull(); // login-only は member を作らない
+    expect((await repo.members.listByUserId(uid)).length).toBe(0);
+    // この後 middleware は isLoginAllowed=true を見て needs_workspace を返す。
+    expect(isLoginAllowed(email)).toBe(true);
   });
 
   it('既に登録済ユーザー → bootstrap は実行されない (allowlist が ignore される設計)', async () => {
@@ -124,5 +141,17 @@ describe('workspace bootstrap シミュレーション (memory backend)', () => 
     const memberships = await repo.members.listByUserId(uid);
     expect(memberships.length).toBe(1);
     expect(memberships[0]?.role).toBe('sm'); // ← 既存 role が維持される
+  });
+});
+
+describe('isLoginAllowed - ログイン許可判定 (needs_workspace vs invitation_required 分岐)', () => {
+  it('assign / login-only どちらの allowlist エントリも true', () => {
+    expect(isLoginAllowed('mygolanglearn@gmail.com')).toBe(true); // assign
+    expect(isLoginAllowed('demo@belvedere.demo')).toBe(true); // assign
+    expect(isLoginAllowed('onboard-e2e@belvedere.test')).toBe(true); // login-only
+  });
+  it('allowlist 非該当は false (= invitation_required)', () => {
+    expect(isLoginAllowed('stranger@example.com')).toBe(false);
+    expect(isLoginAllowed('')).toBe(false);
   });
 });
