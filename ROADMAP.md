@@ -122,7 +122,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 ### Phase 1-E マルチテナント完成 (招待 UI 最小実装) / 6/25 〜 6/26 (2 日)
 (2026-06-12 前倒し完了 — Phase 1-C 中に実装。Workspace 作成 + 切替 UI も追加)
 - [x] Workspace owner 画面に「メンバ招待」セクション追加
-- [x] email 入力 → Firestore に Member レコード作成 (role: 'sm' / 'po' / 'dev' / 'guest' から選択)
+- [x] email 入力 → Firestore に Member レコード作成 (role: 'po' / 'sm' / 'dev' から選択 / 'guest' は 2026-06-23 権限再設計で廃止)
 - [x] 招待された人がログインすると自動加入
 - [x] (最小実装: 招待メール送信は手動コピペ通知で OK / Cloud Function 不要)
 
