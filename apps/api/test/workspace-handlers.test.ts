@@ -59,25 +59,25 @@ describe('listMyWorkspaces', () => {
 
   it('スコープ: 自分が Member の ws のみ返す', async () => {
     // 自分が owner の ws-a、他人だけの ws-b
-    await repo.members.upsert({ userId: 'uid-me', workspaceId: 'ws-a', email: 'me@x.com', displayName: 'Me', role: 'owner' });
+    await repo.members.upsert({ userId: 'uid-me', workspaceId: 'ws-a', email: 'me@x.com', displayName: 'Me', role: 'admin' });
     await repo.workspaces.upsert({ id: 'ws-a', name: 'A社', slug: 'a', productGoal: '', ownerId: 'uid-me', createdAt: '2026-06-12T00:00:00Z' });
-    await repo.members.upsert({ userId: 'uid-other', workspaceId: 'ws-b', email: 'o@x.com', displayName: 'O', role: 'owner' });
+    await repo.members.upsert({ userId: 'uid-other', workspaceId: 'ws-b', email: 'o@x.com', displayName: 'O', role: 'admin' });
 
     const res = await listMyWorkspaces(repo, ME);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.map((w) => w.id)).toEqual(['ws-a']);
     expect(res.body[0]?.name).toBe('A社');
-    expect(res.body[0]?.role).toBe('owner');
+    expect(res.body[0]?.role).toBe('admin');
   });
 
   it('Workspace doc が無い既存 ws は id を name にフォールバック (壊さない)', async () => {
     // ws-belvedere は seed に Workspace doc が無い (members のみ)
-    await repo.members.upsert({ userId: 'uid-me', workspaceId: 'ws-belvedere', email: 'me@x.com', displayName: 'Me', role: 'owner' });
+    await repo.members.upsert({ userId: 'uid-me', workspaceId: 'ws-belvedere', email: 'me@x.com', displayName: 'Me', role: 'admin' });
     const res = await listMyWorkspaces(repo, ME);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.body).toEqual([{ id: 'ws-belvedere', name: 'ws-belvedere', role: 'owner' }]);
+    expect(res.body).toEqual([{ id: 'ws-belvedere', name: 'ws-belvedere', role: 'admin' }]);
   });
 
   it('招待中 (センチネル) は listByUserId に引っかからない = 招待された人には表示されない', async () => {
@@ -200,7 +200,7 @@ describe('planInviteBind (純粋関数)', () => {
   });
 
   it('既存メンバー (実 uid) は bind しない (null)', () => {
-    const existing: Member = { userId: 'uid-real', workspaceId: 'ws-a', email: 'a@x.com', displayName: 'A', role: 'owner' };
+    const existing: Member = { userId: 'uid-real', workspaceId: 'ws-a', email: 'a@x.com', displayName: 'A', role: 'admin' };
     const plan = planInviteBind('uid-real', 'a@x.com', [existing]);
     expect(plan).toBeNull();
   });

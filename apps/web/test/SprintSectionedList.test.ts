@@ -176,9 +176,6 @@ describe('SprintSectionedList reorder の role ゲート (:disabled)', () => {
   it('admin は drag 有効 (disabled=false)', async () => {
     expect((await disabledFlags('admin')).every((d) => d === false)).toBe(true);
   });
-  it('owner(legacy) も admin 相当で drag 有効', async () => {
-    expect((await disabledFlags('owner')).every((d) => d === false)).toBe(true);
-  });
   it('sm は drag 無効 (disabled=true) — reorder は PO の専権', async () => {
     expect((await disabledFlags('sm')).every((d) => d === true)).toBe(true);
   });

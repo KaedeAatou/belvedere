@@ -337,10 +337,9 @@ export interface AgentRun {
  * - admin: その workspace の全権者 (作成者 = なんでもできる / 全 action を bypass)
  * - po/sm/dev: スクラム役割。権限はマトリクスで分担 (apps/api/src/permissions.ts)
  *
- * 旧 'owner'/'guest' は廃止。Member.role には移行期だけ残り、middleware の
- * normalizeRole が owner→admin / guest→dev に変換するため、handler が見る ctx.role は
- * 常にこの 4 値。プラットフォーム全体の「招待だけする owner」は member role ではない
- * (config/email-allowlist.ts の PLATFORM_OWNER)。
+ * 旧 'owner'/'guest' は廃止。本番 Firestore は migrate-roles.ts で owner→admin / guest→dev に
+ * 移行済 (2026-06-23) のため、型・schema とも正準 4 値に締めた。プラットフォーム全体の
+ * 「招待だけする owner」は member role ではない (config/email-allowlist.ts の login-only)。
  */
 export type WorkspaceRole = 'admin' | 'po' | 'sm' | 'dev';
 
@@ -349,8 +348,8 @@ export interface Member {
   workspaceId: string;
   displayName: string;
   email: string;
-  /** 永続値。新規書き込みは WorkspaceRole。'owner'/'guest' は legacy (normalizeRole で変換)。 */
-  role: WorkspaceRole | 'owner' | 'guest';
+  /** 正準 4 値。旧 'owner'/'guest' は migration 済で廃止 (middleware の normalizeRole は防御として残置)。 */
+  role: WorkspaceRole;
   githubUsername?: string;
 }
 

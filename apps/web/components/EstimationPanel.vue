@@ -16,13 +16,7 @@ const session = ref<EstimationView>(null);
 
 // 権限再設計 (2026-06-23): 見積もりは操作ごとに許可ロールが違う (permissions.ts の MATRIX と一致)。
 //   facilitate(開始/開示/再投票)=admin/sm、vote(投票)=admin/dev、adopt(採用)=admin/sm/dev。
-// /api/me は normalize 前の永続 role を返しうる (移行期) ので owner→admin / guest→dev を吸収する。
-const role = computed(() => {
-  const r = me.value?.role;
-  if (r === 'owner') return 'admin';
-  if (r === 'guest') return 'dev';
-  return r ?? '';
-});
+const role = computed(() => me.value?.role ?? '');
 const canFacilitate = computed(() => ['admin', 'sm'].includes(role.value)); // 開始 / 開示 / 再投票
 const canVote = computed(() => ['admin', 'dev'].includes(role.value));      // 投票 (見積もる当事者)
 const canAdopt = computed(() => ['admin', 'sm', 'dev'].includes(role.value)); // 採用 (確定)

@@ -155,9 +155,9 @@ export const MemberSchema = z.object({
   workspaceId: z.string(),
   displayName: z.string(),
   email: z.string(),
-  // 後方互換 enum (admin/po/sm/dev が正準 / owner・guest は legacy で normalizeRole が変換)。
-  // 本番 migration 後に ['admin','po','sm','dev'] へ締める (2026-06-23 再設計)。
-  role: z.enum(['admin', 'po', 'sm', 'dev', 'owner', 'guest']),
+  // 正準 4 値。本番 Firestore は migrate-roles.ts で owner→admin / guest→dev 移行済のため締めた
+  // (2026-06-23)。firestore repo は読み取り時にこの schema で検証するので、これ以外の値は弾く。
+  role: z.enum(['admin', 'po', 'sm', 'dev']),
   githubUsername: z.string().optional(),
 });
 

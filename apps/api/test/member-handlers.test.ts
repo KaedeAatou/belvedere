@@ -18,7 +18,7 @@ async function seed(repo: RepoContainer): Promise<{ me: Member; other: Member }>
     workspaceId: WS,
     email: 'me@example.com',
     displayName: 'Me',
-    role: 'owner',
+    role: 'admin',
   };
   const other: Member = {
     userId: OTHER_USERID,
@@ -47,7 +47,7 @@ describe('getMe', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.userId).toBe(MY_USERID);
-    expect(res.body.role).toBe('owner');
+    expect(res.body.role).toBe('admin');
     expect(res.body.workspaceId).toBe(WS);
   });
 
@@ -66,7 +66,7 @@ describe('getMe', () => {
       workspaceId: ATTACK_WS,
       email: 'me@example.com',
       displayName: 'Me',
-      role: 'owner',
+      role: 'admin',
     });
     const res = await getMe(repo, CTX);
     expect(res.ok).toBe(false);
@@ -85,7 +85,7 @@ describe('patchMember', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.displayName).toBe('加賀谷');
-    expect(res.body.role).toBe('owner');     // 不変
+    expect(res.body.role).toBe('admin');     // 不変
     expect(res.body.workspaceId).toBe(WS);   // 不変
     expect(res.body.email).toBe('me@example.com'); // 不変
   });
@@ -112,7 +112,7 @@ describe('patchMember', () => {
     } as unknown);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.body.role).toBe('owner');
+    expect(res.body.role).toBe('admin');
     expect(res.body.workspaceId).toBe(WS);
     expect(res.body.userId).toBe(MY_USERID);
     expect(res.body.email).toBe('me@example.com');
@@ -142,7 +142,7 @@ describe('patchMember', () => {
       workspaceId: ATTACK_WS,
       email: 'me@example.com',
       displayName: 'Me',
-      role: 'owner',
+      role: 'admin',
     });
     const res = await patchMember(repo, CTX, MY_USERID, { displayName: 'x' });
     expect(res.ok).toBe(false);
