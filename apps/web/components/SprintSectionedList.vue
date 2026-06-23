@@ -67,6 +67,19 @@ const { findingsFor } = useFindings();
 const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
 const { selectableEpics, fetchEpics, createEpic, error: epicsError } = useEpics();
+const { me } = useMe();
+
+// 並び替え (= backlog.reorder) は PO/admin のみ (permissions.ts MATRIX)。非 PO がドラッグして
+// サーバで 403 → 無言 revert する紛らわしさを防ぐため、UI 側でも drag を無効化する。
+// /api/me は normalize 前の永続 role を返しうるので owner→admin を吸収。me 未取得 (初期ロード) の間は
+// 許可側に倒して admin を誤って止めない (server 側 can('backlog.reorder') が最終防衛線)。
+const canReorder = computed(() => {
+  const r = me.value?.role;
+  if (!r) return true;
+  return r === 'admin' || r === 'owner' || r === 'po';
+});
+// フィルタ中 (props.reorderDisabled) または並び替え権限なしのとき d&d を無効化する。
+const reorderBlocked = computed(() => props.reorderDisabled || !canReorder.value);
 
 // 複数選択 (全区画跨ぎ選択可)。BulkActionBar は上部に 1 つ。
 const sel = useTicketSelection();
@@ -465,7 +478,7 @@ async function submitSplit(): Promise<void> {
         </div>
       </div>
       <VueDraggable v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
-                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="current" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in currentList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
@@ -497,7 +510,7 @@ async function submitSplit(): Promise<void> {
         </div>
       </div>
       <VueDraggable v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
-                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="next" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in nextList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
@@ -531,7 +544,7 @@ async function submitSplit(): Promise<void> {
                 @click="openCreate"><Icon name="plus" /> New issue</button>
       </div>
       <VueDraggable v-model="backlogList" :group="backlogGroup" handle=".trow-drag-grab"
-                    :disabled="reorderDisabled" :animation="150" :force-fallback="true"
+                    :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="backlog" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in backlogList" :key="t.id" :t="t" data-testid="live-ticket"
                    :selected="selectedId === t.id" drag-handle reorderable
