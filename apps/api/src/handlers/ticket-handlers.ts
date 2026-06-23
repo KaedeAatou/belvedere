@@ -97,6 +97,11 @@ export async function createTicket(
   ctx: HandlerContext,
   body: unknown,
 ): Promise<HandlerResult<Ticket>> {
+  // Ticket CRUD は全役割可 (足场) だが role 未確定 (workspace 未解決) は弾く = MATRIX を honest に保つ
+  // 防御の深さ (admin/po/sm/dev は通過 / undefined のみ 403 / permissions.ts)。
+  if (!can('ticket.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('ticket.write') };
+  }
   const parsed = TicketCreateBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
@@ -157,6 +162,10 @@ export async function patchTicket(
   // IDOR: 別 workspace のものは「存在しない」扱い (情報漏えい防止)
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  // Ticket 編集も ticket.write (全役割可 / undefined のみ弾く)。IDOR(404) を先に。
+  if (!can('ticket.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('ticket.write') };
   }
   const parsed = TicketPatchBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -262,6 +271,10 @@ export async function changeTicketStatus(
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
   }
+  // ステータス変更も ticket.write (全役割可 / undefined のみ弾く)。
+  if (!can('ticket.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('ticket.write') };
+  }
   const parsed = TicketStatusChangeBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
@@ -280,6 +293,10 @@ export async function deleteTicket(
   const existing = await repo.tickets.get(id);
   if (!existing || existing.workspaceId !== ctx.workspaceId) {
     return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  // 削除も ticket.write (全役割可 / undefined のみ弾く)。
+  if (!can('ticket.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('ticket.write') };
   }
   await repo.tickets.delete(id);
   return { ok: true, status: 200, body: { deleted: id } };

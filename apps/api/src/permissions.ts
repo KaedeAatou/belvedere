@@ -90,8 +90,10 @@ const FORBIDDEN_MESSAGE: Record<Action, string> = {
   'estimation.facilitate': '見積もりの開始・開示は SM・管理者のみが行えます。',
   'estimation.vote': '見積もりへの投票は開発者 (Dev)・管理者のみが行えます。',
   'estimation.adopt': '見積もりの採用 (確定) は SM・開発者 (Dev)・管理者のみが行えます。',
-  'ticket.write': 'チケットの編集は全メンバーに許可されていますが、現在のロールでは許可されていません。',
-  'agent.invoke': 'AI エージェントの実行は全メンバーに許可されていますが、現在のロールでは許可されていません。',
+  // ticket.write / agent.invoke は admin/po/sm/dev 全ロール許可。can() が false を返すのは role 未確定
+  // (= Workspace 未解決) のときだけなので、メッセージもそれを正確に伝える (旧「全メンバーに許可〜」は矛盾的だった)。
+  'ticket.write': 'チケットの操作には Workspace への所属 (ロールの確定) が必要です。',
+  'agent.invoke': 'AI エージェントの実行には Workspace への所属 (ロールの確定) が必要です。',
 };
 
 /** 403 レスポンス body の構造化された形。respond() がそのまま JSON 化し、web がトーストで message を出す。 */

@@ -213,6 +213,19 @@ describe('見積もり権限マトリクス境界 (vote / adopt)', () => {
     expect(res.status).toBe(403);
   });
 
+  it('reveal: sm も開示できる (facilitate = admin/sm)', async () => {
+    await voteEstimation(repo, dev, 'WC-EST', { value: 5 }, NOW);
+    const res = await revealEstimation(repo, sm, 'WC-EST', NOW);
+    expect(res.ok).toBe(true);
+  });
+  it('reveal: po は 403 (開示は SM の進行 / facilitate 境界)', async () => {
+    await voteEstimation(repo, dev, 'WC-EST', { value: 5 }, NOW);
+    const res = await revealEstimation(repo, po, 'WC-EST', NOW);
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(403);
+  });
+
   it('adopt: dev も採用できる (estimation.adopt = admin/sm/dev)', async () => {
     await voteEstimation(repo, dev, 'WC-EST', { value: 5 }, NOW);
     await revealEstimation(repo, admin, 'WC-EST', NOW);
