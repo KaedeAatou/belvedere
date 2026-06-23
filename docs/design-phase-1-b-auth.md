@@ -329,7 +329,7 @@ service cloud.firestore {
 const { fetch } = useApiClient();
 const members = await fetch<Member[]>('/members');
 const newEmail = ref('');
-const newRole = ref<'sm' | 'po' | 'dev' | 'guest'>('dev');
+const newRole = ref<'po' | 'sm' | 'dev'>('dev'); // 'guest' は 2026-06-23 権限再設計で廃止
 
 async function invite() {
   await fetch('/members', {
