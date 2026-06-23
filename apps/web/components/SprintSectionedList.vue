@@ -71,12 +71,11 @@ const { me } = useMe();
 
 // 並び替え (= backlog.reorder) は PO/admin のみ (permissions.ts MATRIX)。非 PO がドラッグして
 // サーバで 403 → 無言 revert する紛らわしさを防ぐため、UI 側でも drag を無効化する。
-// /api/me は normalize 前の永続 role を返しうるので owner→admin を吸収。me 未取得 (初期ロード) の間は
-// 許可側に倒して admin を誤って止めない (server 側 can('backlog.reorder') が最終防衛線)。
+// me 未取得 (初期ロード) の間は許可側に倒して admin を誤って止めない (server 側 can('backlog.reorder') が最終防衛線)。
 const canReorder = computed(() => {
   const r = me.value?.role;
   if (!r) return true;
-  return r === 'admin' || r === 'owner' || r === 'po';
+  return r === 'admin' || r === 'po';
 });
 // フィルタ中 (props.reorderDisabled) または並び替え権限なしのとき d&d を無効化する。
 const reorderBlocked = computed(() => props.reorderDisabled || !canReorder.value);

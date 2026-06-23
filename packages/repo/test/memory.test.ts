@@ -60,11 +60,11 @@ describe('memory backend - listByUserId (workspace 解決 middleware 用)', () =
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
-  it('seed の owner (kaede) は 1 件の Workspace に所属', async () => {
+  it('seed の admin (kaede) は 1 件の Workspace に所属', async () => {
     const memberships = await repo.members.listByUserId('kaede');
     expect(memberships.length).toBe(1);
     expect(memberships[0]?.workspaceId).toBe(WS);
-    expect(memberships[0]?.role).toBe('owner');
+    expect(memberships[0]?.role).toBe('admin');
   });
   it('未登録 user は 0 件を返す (= invitation_required 403)', async () => {
     const memberships = await repo.members.listByUserId('unknown-user-xyz');
@@ -72,7 +72,7 @@ describe('memory backend - listByUserId (workspace 解決 middleware 用)', () =
   });
 });
 
-describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)', () => {
+describe('memory backend - Member upsert (Phase 1-B / 初回メンバー自動登録)', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
@@ -82,12 +82,12 @@ describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)
       workspaceId: WS,
       email: 'test1@example.com',
       displayName: 'Test 1',
-      role: 'owner' as const,
+      role: 'admin' as const,
     };
     await repo.members.upsert(newMember);
     const found = await repo.members.listByUserId('firebase-uid-test-1');
     expect(found.length).toBe(1);
-    expect(found[0]?.role).toBe('owner');
+    expect(found[0]?.role).toBe('admin');
     expect(found[0]?.workspaceId).toBe(WS);
   });
 
@@ -100,10 +100,10 @@ describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)
       role: 'dev' as const,
     };
     await repo.members.upsert(m1);
-    await repo.members.upsert({ ...m1, role: 'owner' });
+    await repo.members.upsert({ ...m1, role: 'admin' });
     const found = await repo.members.listByUserId('firebase-uid-test-2');
     expect(found.length).toBe(1);
-    expect(found[0]?.role).toBe('owner');
+    expect(found[0]?.role).toBe('admin');
   });
 
   it('別 workspace で upsert しても listByUserId は跨いで全件返す', async () => {
@@ -132,7 +132,7 @@ describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)
       displayName: 'Multi',
       role: 'dev' as const,
     };
-    await repo.members.upsert({ ...base, workspaceId: WS, role: 'owner' });
+    await repo.members.upsert({ ...base, workspaceId: WS, role: 'admin' });
     await repo.members.upsert({ ...base, workspaceId: 'ws-second' });
 
     // 同じ userId で 2 つの Workspace に所属できる (= 後の upsert が前を上書きしない)。
@@ -141,7 +141,7 @@ describe('memory backend - Member upsert (Phase 1-B / 初回 owner 自動登録)
     expect(new Set(all.map((m) => m.workspaceId))).toEqual(new Set([WS, 'ws-second']));
 
     // 複合キー get は workspace ごとに別 doc を返す (role も独立)。
-    expect((await repo.members.get(WS, 'firebase-uid-multi'))?.role).toBe('owner');
+    expect((await repo.members.get(WS, 'firebase-uid-multi'))?.role).toBe('admin');
     expect((await repo.members.get('ws-second', 'firebase-uid-multi'))?.role).toBe('dev');
 
     // list({ workspaceId }) は当該 ws の 1 件だけにスコープされる。

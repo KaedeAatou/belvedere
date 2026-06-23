@@ -9,8 +9,8 @@
 export interface MyWorkspace {
   id: string;
   name: string;
-  // 正準 role (admin/po/sm/dev) + 移行期の legacy (owner/guest)。API は normalize 前の永続値を返しうる。
-  role: 'admin' | 'po' | 'sm' | 'dev' | 'owner' | 'guest';
+  // 正準 role (admin/po/sm/dev)。旧 owner/guest は migration 済で廃止 (2026-06-23)。
+  role: 'admin' | 'po' | 'sm' | 'dev';
 }
 
 /** localStorage key (useApiClient と共有)。 */

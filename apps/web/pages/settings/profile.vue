@@ -10,11 +10,10 @@ const { members, fetchMembers, isPendingInvite, invite, cancelInvite } = useMemb
 const editName = ref('');
 const saveSuccess = ref(false);
 
-// 管理操作 (招待 / 取消) = member.invite は admin/po/sm。me.role で判定。
-// 旧 'owner' は admin 相当 (normalize 前の永続値が /api/me に出る移行期のため legacy alias も許可)。
+// 管理操作 (招待 / 取消) = member.invite は admin/po/sm。me.role で判定 (旧 owner は migration 済で廃止)。
 const canManage = computed(() => {
   const r = me.value?.role;
-  return r === 'admin' || r === 'owner' || r === 'po' || r === 'sm';
+  return r === 'admin' || r === 'po' || r === 'sm';
 });
 
 // onboarding 誘導: 所属 Workspace ゼロ (needs_workspace) で誘導されてきた時に作成フォームを強調する。
