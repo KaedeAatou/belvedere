@@ -23,7 +23,11 @@ const mocks = vi.hoisted(() => {
   // createEpic は新 Epic を返すスパイ。インライン Epic 作成 (Story を作る儀式で Epic も追加) の配線を固定。
   const createEpic = vi.fn((input: { name: string }) =>
     Promise.resolve({ id: 'EP-NEW', workspaceId: 'ws-belvedere', name: input.name, status: 'planned', createdAt: '2026-06-01T00:00:00Z' }));
+  // 並び替え権限 (canReorder) を切替えるための me。template/script は me.value?.role を読む。
+  // テストごとに value を差し替えて remount し、reorderBlocked (= VueDraggable :disabled) を踏む。
+  const me = { value: null as null | { role: string } };
   return {
+    me,
     reorderTickets,
     createTicket,
     createEpic,
@@ -64,6 +68,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+mockNuxtImport('useMe', () => () => ({ me: mocks.me }));
 mockNuxtImport('useTickets', () => mocks.useTickets);
 mockNuxtImport('useFindings', () => mocks.useFindings);
 mockNuxtImport('useStoryCheck', () => mocks.useStoryCheck);
@@ -150,6 +155,39 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
       { item: el('data-ticket-id', 'GHOST'), from: el('data-section', 'backlog'), to: el('data-section', 'backlog') },
     );
     expect(mocks.reorderTickets).not.toHaveBeenCalled();
+  });
+});
+
+// 並び替え権限 (backlog.reorder = PO/admin) の UI ゲート (2026-06-23 レビュー指摘)。
+// 非 PO がドラッグ → サーバ 403 → 無言 revert する紛らわしさを防ぐため、3 区画の VueDraggable の
+// :disabled を role で切替える。ここでは me.role を差替えて disabled prop が期待通り反転するかを固定する。
+describe('SprintSectionedList reorder の role ゲート (:disabled)', () => {
+  const props = { ...baseProps, current: [t('A')], next: [], backlog: [t('B')] };
+
+  async function disabledFlags(role: string | null): Promise<boolean[]> {
+    mocks.me.value = role ? { role } : null;
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    return wrapper.findAllComponents(VueDraggable).map((d) => d.props('disabled') as boolean);
+  }
+
+  it('po は全区画で drag 有効 (disabled=false)', async () => {
+    expect((await disabledFlags('po')).every((d) => d === false)).toBe(true);
+  });
+  it('admin は drag 有効 (disabled=false)', async () => {
+    expect((await disabledFlags('admin')).every((d) => d === false)).toBe(true);
+  });
+  it('owner(legacy) も admin 相当で drag 有効', async () => {
+    expect((await disabledFlags('owner')).every((d) => d === false)).toBe(true);
+  });
+  it('sm は drag 無効 (disabled=true) — reorder は PO の専権', async () => {
+    expect((await disabledFlags('sm')).every((d) => d === true)).toBe(true);
+  });
+  it('dev は drag 無効 (disabled=true)', async () => {
+    expect((await disabledFlags('dev')).every((d) => d === true)).toBe(true);
+  });
+  it('me 未取得 (初期ロード / null) は許可側に倒す (admin を誤って止めない)', async () => {
+    expect((await disabledFlags(null)).every((d) => d === false)).toBe(true);
+    mocks.me.value = null; // 後続テストへ漏らさない (既定 null へ戻す)
   });
 });
 
