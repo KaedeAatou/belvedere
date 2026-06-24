@@ -77,11 +77,12 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 | 役割 | GCP | AWS で言うと |
 |---|---|---|
 | コンテナ実行 | **Cloud Run** | Fargate / App Runner |
-| AI 推論 | **Gemini API + ADK** (Phase 3) | Bedrock Claude + AgentCore |
-| Multimodal (動画→指摘) | **Gemini 2.5 Pro Multimodal** | Bedrock (動画入力なし) |
+| AI 推論 | **Gemini API** (本番実推論) | Bedrock Claude |
+| マルチエージェント | **ADK** (`orchestrator-py` / Refinement を A2A で招集) + 自前 TS Orchestrator | AgentCore |
+| RAG 意味検索 | **Firestore Vector** (Gemini 埋め込み) ⇄ **Elastic** 切替可 | Bedrock KB / OpenSearch |
 | NoSQL | Firestore | DynamoDB |
 | 鍵レス CI/CD | **Workload Identity Federation** | IAM OIDC Provider |
-| MCP integration | stdio / Streamable HTTP | (固有概念なし) |
+| MCP / A2A | MCP (垂直=ツール) + A2A (水平=エージェント間) | (固有概念なし) |
 
 ---
 
