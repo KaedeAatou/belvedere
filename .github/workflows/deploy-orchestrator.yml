@@ -1,0 +1,88 @@
+name: Deploy Orchestrator (ADK/A2A) to Cloud Run
+
+# Refinement を ADK エージェントとして A2A 公開する orchestrator-py を Cloud Run へデプロイする。
+#
+# トリガは **手動 (workflow_dispatch) のみ**。push 自動デプロイにしないのは、本サービスが
+# 以下の前提 (ユーザー専権 / docs参照) を要するため、push CI を赤くしないように手動に留める:
+#   - Secret Manager: GEMINI_API_KEY (ADK の Gemini 推論) + BELVEDERE_SERVICE_TOKEN
+#     (Refinement tool が Belvedere API を service token で叩く) が存在し、runtime SA が secretAccessor
+#   - API → orchestrator の到達: 簡便のため --allow-unauthenticated (公開) でデプロイ
+#     (Refinement の A2A エンドポイントのみ / 機密データは持たない)。認証付きにするなら run.invoker 付与に変更
+#   - BELVEDERE_API_URL = デプロイ済 api の URL
+#
+# 認証は Workload Identity Federation 経由 (鍵レス / deploy-api.yml と同じ Pool/Provider/SA)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "deploy target env"
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  GCP_PROJECT_DEV: belvedere-dev-atrium
+  GCP_PROJECT_PROD: belvedere-prod-atrium
+  GCP_REGION: asia-northeast1
+  SERVICE: belvedere-orchestrator
+  WIF_PROVIDER: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
+  RUNTIME_SA: belvedere-runtime@belvedere-dev-atrium.iam.gserviceaccount.com
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve target project
+        id: target
+        run: |
+          if [ "${{ github.event.inputs.env || 'dev' }}" = "prod" ]; then
+            echo "project=$GCP_PROJECT_PROD" >> $GITHUB_OUTPUT
+          else
+            echo "project=$GCP_PROJECT_DEV" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Authenticate to Google Cloud (Workload Identity)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.WIF_SA }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ steps.target.outputs.project }}
+
+      - name: Deploy to Cloud Run (--source ビルド / USE_REAL_ADK=true で A2A 公開)
+        run: |
+          ENV="${{ github.event.inputs.env || 'dev' }}"
+          PROJECT="${{ steps.target.outputs.project }}"
+          API_URL=$(gcloud run services describe belvedere-api-$ENV \
+            --region=${{ env.GCP_REGION }} --project=$PROJECT --format='value(status.url)' 2>/dev/null || echo "")
+          gcloud run deploy ${{ env.SERVICE }}-$ENV \
+            --source apps/orchestrator-py \
+            --region ${{ env.GCP_REGION }} \
+            --project $PROJECT \
+            --service-account ${{ env.RUNTIME_SA }} \
+            --allow-unauthenticated \
+            --set-env-vars USE_REAL_ADK=true,GOOGLE_CLOUD_PROJECT=$PROJECT,BELVEDERE_API_URL=$API_URL \
+            --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest,BELVEDERE_SERVICE_TOKEN=BELVEDERE_SERVICE_TOKEN:latest
+
+      - name: Output service URL
+        run: |
+          ENV="${{ github.event.inputs.env || 'dev' }}"
+          URL=$(gcloud run services describe ${{ env.SERVICE }}-$ENV \
+            --region=${{ env.GCP_REGION }} --project=${{ steps.target.outputs.project }} \
+            --format='value(status.url)')
+          echo "🤖 Orchestrator (ADK/A2A) deployed to: $URL"
+          echo "→ Belvedere API に ORCHESTRATOR_A2A_URL=$URL と REFINEMENT_VIA_ADK=true を設定すると Refinement が A2A 経由になります"
