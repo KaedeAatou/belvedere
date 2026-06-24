@@ -11,8 +11,9 @@ import { GeminiLLMProvider } from '@belvedere/llm';
 import type { EmbedQueryFn, VectorNearestFn, KnowledgeHit } from '@belvedere/tools';
 
 const KB_COLLECTION = 'belvedere-kb-scrum';
-// 埋め込みは投入時 (index-knowledge.ts) と同じモデルを使うこと (次元・空間が一致しないと検索が壊れる)。
-const EMBED_MODEL = 'text-embedding-004';
+// 埋め込みは投入時 (index-knowledge.ts) と同じモデル・同じ次元を使うこと (一致しないと検索が壊れる)。
+const EMBED_MODEL = 'gemini-embedding-001';
+const EMBED_DIM = 768; // Firestore Vector 上限 2048 内 / 投入側と一致必須
 
 /**
  * createKnowledgeSearcher('firestore', cfg) に渡す { embed, nearest } を構成する。
@@ -27,7 +28,8 @@ export function buildFirestoreRagConfig(): { embed: EmbedQueryFn; nearest: Vecto
   }
   const llm = new GeminiLLMProvider({ apiKey });
 
-  const embed: EmbedQueryFn = (q) => llm.embedText(q, { model: EMBED_MODEL, taskType: 'RETRIEVAL_QUERY' });
+  const embed: EmbedQueryFn = (q) =>
+    llm.embedText(q, { model: EMBED_MODEL, taskType: 'RETRIEVAL_QUERY', outputDimensionality: EMBED_DIM });
 
   const nearest: VectorNearestFn = async (queryEmbedding, opts) => {
     const db = getFirestore();

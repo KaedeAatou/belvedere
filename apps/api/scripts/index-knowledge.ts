@@ -24,7 +24,10 @@ import { GeminiLLMProvider } from '@belvedere/llm';
 
 const PROJECT_PATTERN = /^belvedere-(dev|prod)-atrium$/;
 const KB_COLLECTION = 'belvedere-kb-scrum';
-const EMBED_MODEL = 'text-embedding-004'; // 768 次元 / Firestore Vector 上限 2048 内 / generativelanguage で安定
+// generativelanguage で利用可能なのが gemini-embedding 系のみ。既定 3072 次元を Firestore Vector 上限
+// (2048) 内に収めるため 768 次元に切り詰める (COSINE 検索なので正規化不要)。投入と検索で同次元必須。
+const EMBED_MODEL = 'gemini-embedding-001';
+const EMBED_DIM = 768;
 
 // コーパス場所: repo ルートの references/agile-knowledge-base/ (このファイルから ../../../references)
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -126,7 +129,11 @@ async function main(): Promise<void> {
   let written = 0;
   for (const c of chunks) {
     // 投入は RETRIEVAL_DOCUMENT (検索時のクエリは RETRIEVAL_QUERY) で出し分けると検索品質が上がる。
-    const embedding = await llm.embedText(c.text, { model: EMBED_MODEL, taskType: 'RETRIEVAL_DOCUMENT' });
+    const embedding = await llm.embedText(c.text, {
+      model: EMBED_MODEL,
+      taskType: 'RETRIEVAL_DOCUMENT',
+      outputDimensionality: EMBED_DIM,
+    });
     const docId = c.sourceId.replace(/[/#.]/g, '_').slice(0, 1400);
     await col.doc(docId).set({
       sourceId: c.sourceId,
