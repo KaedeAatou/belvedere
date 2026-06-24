@@ -32,15 +32,18 @@ Backend [label: "つくる: Backend (Cloud Run)"] {
 }
 MCP [icon: gcp-cloud-run, label: "MCP Server\n(stdio + HTTP / 14 Tools)"]
 
+// ADK ピア (Refinement を A2A 越しに招集 / 自前くるくるは本体のまま = Strangler Fig)
+ADKPeer [icon: gcp-cloud-run, label: "ADK Refinement ピア\n(orchestrator-py / Gemini+ADK)\nA2A で招集"]
+
 // ===== AI 層 =====
 AI [label: "つくる: AI"] {
-  Gemini [icon: gcp-vertex-ai, label: "Gemini API + ADK\nマルチエージェント宣言的編成"]
+  Gemini [icon: gcp-vertex-ai, label: "Gemini API\n(本番実推論で稼働)"]
 }
 
 // ===== データ + まわす(改善) =====
 Data [label: "Data"] {
-  Firestore [icon: gcp-firestore, label: "Firestore (正本)\nWorkspace>Project>Epic>Story>Task"]
-  Elastic [icon: elasticsearch, label: "Elastic RAG (意味検索 / 設計済)\nまわす: 使うほど賢くなる"]
+  Firestore [icon: gcp-firestore, label: "Firestore (正本 + Vector)\nWorkspace>Project>Epic>Story>Task"]
+  RAG [icon: gcp-firestore, label: "RAG 意味検索 (差し込み式)\nFirestore Vector ⇄ Elastic 切替可\nまわす: 使うほど賢くなる"]
 }
 
 // ===== まわす: CI/CD 鍵レス (DevOps テーマ直結) =====
@@ -54,11 +57,14 @@ CICD [label: "まわす: CI/CD 鍵レスデプロイ"] {
 User > Web: 画面操作
 Web > API: REST
 Web > Orchestrator: 画面操作 = 単一窓口
-Orchestrator > Agents: agent.invoke で協議招集
+Orchestrator > Agents: agent.invoke で協議招集 (TS / 本体)
+Orchestrator > ADKPeer: A2A で Refinement を委譲 (flag / 不達は TS へ fallback)
+ADKPeer > Gemini: ADK 推論
+ADKPeer > API: 6観点を tool で取得
 Agents > Gemini: LLM 推論
 Agents > Firestore: read / write
-Agents > Elastic: 意味検索 (過去 Try / Scrum Guide)
-Elastic > Agents: 検出ルール強化 (まわす: 使うほど賢く)
+Agents > RAG: 意味検索 (Scrum 標準 / 過去 Try)
+RAG > Agents: 根拠 (sourceId) を引用 → 検出強化 (まわす)
 API > Firestore: CRUD
 ClaudeCode > MCP: stdio / HTTP
 MCP > API: HTTPS (service token / IDOR ガード)
@@ -72,12 +78,19 @@ CloudBuild > Web: deploy
 
 ---
 
-## ノード一覧 (12) と「描かないもの」
+## ノード一覧 (13) と「描かないもの」
 
-**描く (12)**: User / ClaudeCode / Web / API / Orchestrator / 5 Agents / MCP / Gemini+ADK / Firestore / Elastic RAG / GitHub / Actions+WIF / Cloud Build
-→ 厳密には 13 だが、Agents を 1 箱に畳んでいるので体感 12。**つくる (Agent) / まわす (CI/CD + agent eval + Elastic) / とどける (Cloud Run)** がラベルで一目で読める。
+**描く (13)**: User / ClaudeCode / Web / API / Orchestrator / 5 Agents / MCP / ADK Refinement ピア / Gemini / Firestore / RAG(Firestore Vector⇄Elastic) / GitHub / Actions+WIF / Cloud Build
+→ **つくる (Agent + ADK) / まわす (CI/CD + agent eval + RAG) / とどける (Cloud Run)** がラベルで一目で読める。
 
-> **注 (overclaim 回避)**: 図中の **Elastic RAG と agent eval は設計済・実装は次セッション**。図は到達構成を示す (実装ステータス色分けは省略)。「まわす」= CI/CD レーンで **462 テスト + agent eval (設計済) をゲート** + Elastic で使うほど賢くなる (設計済)。本番で現に動いているのは CI/CD と Retro→Agent 改善ループ。
+> **注 (overclaim 回避 / 2026-06-25 更新)**: 実装ステータスを正確に:
+> - **Gemini API = 本番実推論で稼働** (`/health` llm=gemini)。
+> - **ADK = 実体化済** (orchestrator-py が google-adk 1.31 LlmAgent + FunctionTool / `to_a2a` で A2A 公開)。
+>   本体の協議は TS runAgent (自前くるくる)、Refinement だけ A2A 越しに ADK ピアへ委譲 (flag / 不達は TS へ fallback)。
+> - **RAG = 差し込み式**。本番は GCP ネイティブ **Firestore Vector** (Gemini 埋め込み / 無料・無期限)、
+>   協賛 **Elastic** にも env 1 つで切替可能 (両者とも実装済 / コーパス点火は運用手順)。
+> - **agent eval = CI ゲートで稼働**。
+> 図は到達構成 (全 flag OFF で本番は安全に保ちつつ、デモで ADK/A2A/RAG を点火して見せる)。
 
 **描かない (詳細図に委ねる)**: Artifact Registry 単独箱 / belvedere-deployer・belvedere-runtime SA とロール数 / Cloud Logging・Trace・Error Reporting / Secret Manager / Load Balancer / IAP / Cloud Storage / Vector Search / 実装ステータス色分け。
 → これらは `ARCHITECTURE.md` の詳細図にあり、GitHub 上で実装力として見せる。提出図に盛ると「フローが読めない」減点になる。
