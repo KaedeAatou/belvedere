@@ -41,6 +41,7 @@ export {
 export {
   MockKnowledgeSearcher,
   ElasticKnowledgeSearcher,
+  FirestoreKnowledgeSearcher,
   createKnowledgeSearcher,
   type KnowledgeSearcher,
   type KnowledgeHit,
@@ -48,6 +49,8 @@ export {
   type MockKnowledgeDoc,
   type KnowledgeBackend,
   type KnowledgeFactoryConfig,
+  type EmbedQueryFn,
+  type VectorNearestFn,
 } from './knowledge';
 
 // Orchestrator 協議ツールの引数検証 (純粋関数) を re-export (apps/api / 直接 unit テスト用)。

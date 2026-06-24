@@ -163,28 +163,78 @@ export class ElasticKnowledgeSearcher implements KnowledgeSearcher {
   }
 }
 
+// ===== Firestore Vector Search (GCP ネイティブ / 2026-06-25) =====
+// Elastic 不要・GCP クレジットで無料・無期限の RAG。Firestore findNearest (ベクトル KNN) を使う。
+// packages/tools を firebase-admin 非依存に保つため、埋め込み関数 (embed) と近傍検索関数 (nearest) を
+// 注入する。Firestore SDK の実呼出 (FieldValue.vector / collection.findNearest) は apps/api 側 (SDK が
+// ある所) に閉じ込める。ElasticKnowledgeSearcher が fetchImpl を注入するのと同じ「依存注入でテスト可能」思想。
+
+/** クエリ文字列 → 埋め込みベクトル (Gemini text-embedding 等。RETRIEVAL_QUERY は注入側で指定)。 */
+export type EmbedQueryFn = (query: string) => Promise<number[]>;
+/** 埋め込みベクトルで近傍検索する (Firestore findNearest 等。workspaceId スコープは注入側が担保)。 */
+export type VectorNearestFn = (
+  queryEmbedding: number[],
+  opts: { workspaceId: string; topK: number },
+) => Promise<KnowledgeHit[]>;
+
+/**
+ * GCP ネイティブの意味検索層。embed (クエリ埋め込み) → nearest (Firestore 近傍検索) を連結する薄い seam。
+ * 実 Firestore 呼出は注入された nearest に閉じるので、本クラスは fake 注入で決定的に単体テストできる。
+ */
+export class FirestoreKnowledgeSearcher implements KnowledgeSearcher {
+  readonly name = 'firestore';
+  constructor(
+    private readonly embed: EmbedQueryFn,
+    private readonly nearest: VectorNearestFn,
+  ) {
+    if (typeof embed !== 'function' || typeof nearest !== 'function') {
+      throw new Error(
+        '[knowledge:firestore] embed / nearest 関数が未注入です。apps/api の SEARCH_BACKEND=firestore 配線 (Gemini 埋め込み + Firestore findNearest) を確認してください。',
+      );
+    }
+  }
+
+  async search(query: string, opts: KnowledgeSearchOpts): Promise<KnowledgeHit[]> {
+    const topK = opts.topK ?? 3;
+    const queryEmbedding = await this.embed(query);
+    return this.nearest(queryEmbedding, { workspaceId: opts.workspaceId, topK });
+  }
+}
+
 // ===== factory (env switch は呼出側 apps/api が process.env を渡す) =====
 
-export type KnowledgeBackend = 'none' | 'elastic' | 'mock';
+export type KnowledgeBackend = 'none' | 'elastic' | 'firestore' | 'mock';
 
 export interface KnowledgeFactoryConfig {
   url?: string;
   apiKey?: string;
   mockDocs?: MockKnowledgeDoc[];
+  /** firestore backend 用: クエリ埋め込み関数 (Gemini)。 */
+  embed?: EmbedQueryFn;
+  /** firestore backend 用: 近傍検索関数 (Firestore findNearest)。 */
+  nearest?: VectorNearestFn;
 }
 
 /**
  * backend で KnowledgeSearcher を切り替える (LLM_PROVIDER / REPO_BACKEND と同じ思想)。
  * - `none` (既定): undefined を返す → buildTools が knowledge.search ツールを出さない
+ * - `firestore`: FirestoreKnowledgeSearcher (GCP ネイティブ / embed+nearest を注入。未注入なら throw)
  * - `elastic`: ElasticKnowledgeSearcher (URL/APIキー未設定なら constructor が throw)
  * - `mock`: MockKnowledgeSearcher (キーワード一致)
- * env (`SEARCH_BACKEND` / `ELASTIC_URL` / `ELASTIC_API_KEY`) の読取は呼出側で行い、値を渡す。
+ * env (`SEARCH_BACKEND` / `ELASTIC_URL` / `ELASTIC_API_KEY` / GCP) の読取は呼出側で行い、値を渡す。
  */
 export function createKnowledgeSearcher(
   backend: KnowledgeBackend | string | undefined,
   cfg: KnowledgeFactoryConfig = {},
 ): KnowledgeSearcher | undefined {
   switch (backend) {
+    case 'firestore':
+      if (!cfg.embed || !cfg.nearest) {
+        throw new Error(
+          '[knowledge:firestore] embed / nearest を渡してください (apps/api が Gemini 埋め込み + Firestore findNearest を構成する)。',
+        );
+      }
+      return new FirestoreKnowledgeSearcher(cfg.embed, cfg.nearest);
     case 'elastic':
       return new ElasticKnowledgeSearcher({ url: cfg.url ?? '', apiKey: cfg.apiKey ?? '' });
     case 'mock':
@@ -194,6 +244,6 @@ export function createKnowledgeSearcher(
     case '':
       return undefined;
     default:
-      throw new Error(`[knowledge] unknown backend: ${backend} (none / elastic / mock)`);
+      throw new Error(`[knowledge] unknown backend: ${backend} (none / firestore / elastic / mock)`);
   }
 }

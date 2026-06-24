@@ -146,6 +146,45 @@ describe('GeminiLLMProvider', () => {
   });
 });
 
+describe('GeminiLLMProvider.embedText (RAG 埋め込み / 2026-06-25)', () => {
+  const embedResponse = { embedding: { values: [0.1, 0.2, 0.3, 0.4] } };
+
+  it('embedContent を叩き values を返す (model は URL / taskType は body / キーはヘッダ)', async () => {
+    const { impl, captured } = fakeFetch(embedResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'secret-key', fetchImpl: impl });
+    const vec = await provider.embedText('DoD とは', { taskType: 'RETRIEVAL_QUERY' });
+    expect(vec).toEqual([0.1, 0.2, 0.3, 0.4]);
+    expect(captured.url).toContain('text-embedding-004:embedContent'); // 既定モデル
+    expect(captured.url).not.toContain('secret-key'); // キーは URL に載せない
+    expect((captured.init!.headers as Record<string, string>)['x-goog-api-key']).toBe('secret-key');
+    expect(captured.body.content.parts[0].text).toBe('DoD とは');
+    expect(captured.body.taskType).toBe('RETRIEVAL_QUERY');
+  });
+
+  it('opts.model / outputDimensionality を尊重する (gemini-embedding-001 への切替)', async () => {
+    const { impl, captured } = fakeFetch(embedResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl });
+    await provider.embedText('x', { model: 'gemini-embedding-001', outputDimensionality: 768, taskType: 'RETRIEVAL_DOCUMENT' });
+    expect(captured.url).toContain('gemini-embedding-001:embedContent');
+    expect(captured.body.outputDimensionality).toBe(768);
+    expect(captured.body.taskType).toBe('RETRIEVAL_DOCUMENT');
+  });
+
+  it('空の embedding は throw する (silent fallback しない)', async () => {
+    const { impl } = fakeFetch({ embedding: { values: [] } });
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl });
+    await expect(provider.embedText('x')).rejects.toThrow(/空の embedding/);
+  });
+
+  it('429/503 は generate と同じく指数バックオフでリトライする', async () => {
+    const { impl, calls } = sequencedFetch([503, 200], embedResponse);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl, retryBaseMs: 0 });
+    const vec = await provider.embedText('x');
+    expect(vec).toHaveLength(4);
+    expect(calls.count).toBe(2);
+  });
+});
+
 describe('toGeminiContents', () => {
   it('assistant.toolCalls を model の functionCall に、連続 tool 結果を 1 user ターンに集約する', () => {
     const messages: LLMMessage[] = [
