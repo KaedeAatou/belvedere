@@ -239,4 +239,54 @@ export class GeminiLLMProvider implements LLMProvider {
     const data = (await res.json()) as GeminiGenerateResponse;
     return parseGeminiResponse(data, req.model);
   }
+
+  /**
+   * テキストを埋め込みベクトルに変換する (RAG / Firestore Vector Search 用 / 2026-06-25)。
+   * generateContent と同じ REST + x-goog-api-key + リトライ方針。LLMProvider interface には載せない
+   * (埋め込みは Gemini 固有機能。FirestoreKnowledgeSearcher 等が EmbedFn として注入して使う)。
+   *
+   * 既定モデルは text-embedding-004 (768 次元ネイティブ / generativelanguage で安定 / Firestore Vector の
+   * 上限 2048 次元内)。gemini-embedding-001 (3072 既定) を使う場合は opts.model + outputDimensionality を指定。
+   * taskType は検索品質向上のため document/query で出し分ける (RETRIEVAL_DOCUMENT 投入 / RETRIEVAL_QUERY 検索)。
+   */
+  async embedText(text: string, opts: EmbedTextOpts = {}): Promise<number[]> {
+    const model = opts.model ?? 'text-embedding-004';
+    const body: Record<string, unknown> = {
+      content: { parts: [{ text }] },
+      ...(opts.taskType !== undefined && { taskType: opts.taskType }),
+      ...(opts.outputDimensionality !== undefined && { outputDimensionality: opts.outputDimensionality }),
+    };
+    const url = `${this.baseUrl}/models/${encodeURIComponent(model)}:embedContent`;
+    const init: RequestInit = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
+      body: JSON.stringify(body),
+    };
+
+    let res = await this.fetchImpl(url, init);
+    for (let attempt = 0; !res.ok && RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries; attempt++) {
+      await sleep(this.retryBaseMs * 2 ** attempt);
+      res = await this.fetchImpl(url, init);
+    }
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`[llm:gemini] embedText ${res.status} ${res.statusText}: ${errText.slice(0, 500)}`);
+    }
+    const data = (await res.json()) as { embedding?: { values?: number[] } };
+    const values = data.embedding?.values;
+    if (!values || values.length === 0) {
+      throw new Error('[llm:gemini] embedText: 空の embedding が返りました (model/taskType を確認)');
+    }
+    return values;
+  }
+}
+
+/** Gemini 埋め込みの出し分けオプション (taskType で document/query を区別すると検索品質が上がる)。 */
+export type EmbedTaskType = 'RETRIEVAL_DOCUMENT' | 'RETRIEVAL_QUERY' | 'SEMANTIC_SIMILARITY';
+export interface EmbedTextOpts {
+  /** 既定 'text-embedding-004' (768 次元)。'gemini-embedding-001' に上げる時は outputDimensionality も指定。 */
+  model?: string;
+  taskType?: EmbedTaskType;
+  /** gemini-embedding-001 等で次元を切り詰める (Firestore Vector 上限 2048)。text-embedding-004 では不要。 */
+  outputDimensionality?: number;
 }

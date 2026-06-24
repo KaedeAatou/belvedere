@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   MockKnowledgeSearcher,
   ElasticKnowledgeSearcher,
+  FirestoreKnowledgeSearcher,
   createKnowledgeSearcher,
   type MockKnowledgeDoc,
+  type KnowledgeHit,
 } from '../src/knowledge';
 
 const DOCS: MockKnowledgeDoc[] = [
@@ -115,6 +117,39 @@ describe('ElasticKnowledgeSearcher', () => {
   });
 });
 
+describe('FirestoreKnowledgeSearcher (GCP ネイティブ / embed→nearest 注入)', () => {
+  it('embed→nearest を連結し topK を渡す (注入で決定的にテスト可能)', async () => {
+    const embedCalls: string[] = [];
+    let nearestArgs: { vec: number[]; opts: { workspaceId: string; topK: number } } | null = null;
+    const hit: KnowledgeHit = { sourceId: 'refinement.md#INVEST', title: 'Refinement', text: 'INVEST', score: 0.9 };
+    const s = new FirestoreKnowledgeSearcher(
+      async (q) => { embedCalls.push(q); return [0.1, 0.2, 0.3]; },
+      async (vec, opts) => { nearestArgs = { vec, opts }; return [hit]; },
+    );
+    const hits = await s.search('Story の分割', { workspaceId: 'ws-belvedere', topK: 4 });
+    expect(s.name).toBe('firestore');
+    expect(embedCalls).toEqual(['Story の分割']); // クエリを埋め込みに通す
+    expect(nearestArgs!.vec).toEqual([0.1, 0.2, 0.3]); // 埋め込み結果で近傍検索
+    expect(nearestArgs!.opts).toEqual({ workspaceId: 'ws-belvedere', topK: 4 });
+    expect(hits).toEqual([hit]);
+  });
+
+  it('topK 既定は 3', async () => {
+    let topK = -1;
+    const s = new FirestoreKnowledgeSearcher(
+      async () => [0],
+      async (_v, opts) => { topK = opts.topK; return []; },
+    );
+    await s.search('x', { workspaceId: 'ws' });
+    expect(topK).toBe(3);
+  });
+
+  it('embed / nearest 未注入は constructor が throw (signpost)', () => {
+    // @ts-expect-error 故意に未注入
+    expect(() => new FirestoreKnowledgeSearcher(undefined, undefined)).toThrow(/未注入/);
+  });
+});
+
 describe('createKnowledgeSearcher', () => {
   it('none / undefined / 空文字 は undefined (knowledge.search を出さない)', () => {
     expect(createKnowledgeSearcher('none')).toBeUndefined();
@@ -129,6 +164,15 @@ describe('createKnowledgeSearcher', () => {
 
   it('elastic は config 不足なら throw (signpost)', () => {
     expect(() => createKnowledgeSearcher('elastic', {})).toThrow(/未設定/);
+  });
+
+  it('firestore は embed/nearest を渡せば FirestoreKnowledgeSearcher', () => {
+    const s = createKnowledgeSearcher('firestore', { embed: async () => [0], nearest: async () => [] });
+    expect(s?.name).toBe('firestore');
+  });
+
+  it('firestore は embed/nearest 不足なら throw (signpost)', () => {
+    expect(() => createKnowledgeSearcher('firestore', {})).toThrow(/embed \/ nearest/);
   });
 
   it('未知の backend は throw', () => {

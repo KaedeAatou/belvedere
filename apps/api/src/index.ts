@@ -13,14 +13,18 @@ import { createLLMProvider } from '@belvedere/llm';
 import { createRepoContainer } from '@belvedere/repo';
 import { createKnowledgeSearcher } from '@belvedere/tools';
 import { createApp } from './app';
+import { buildFirestoreRagConfig } from './config/firestore-rag';
 
 const repo = await createRepoContainer(process.env.REPO_BACKEND);
 const llm = createLLMProvider(process.env.LLM_PROVIDER);
-// RAG 検索層 (Elastic)。SEARCH_BACKEND=elastic + ELASTIC_URL/ELASTIC_API_KEY で有効化。
+// RAG 検索層。SEARCH_BACKEND で切替: firestore (GCP ネイティブ / 既定推奨) / elastic (協賛) / mock / none。
 // 未設定なら undefined → knowledge.search ツールは出ない (signpost / 既定無効)。
-const knowledge = createKnowledgeSearcher(process.env.SEARCH_BACKEND, {
+// firestore は Gemini 埋め込み + Firestore findNearest を apps/api 側で構成して注入する (firestore-rag.ts)。
+const searchBackend = process.env.SEARCH_BACKEND;
+const knowledge = createKnowledgeSearcher(searchBackend, {
   ...(process.env.ELASTIC_URL !== undefined && { url: process.env.ELASTIC_URL }),
   ...(process.env.ELASTIC_API_KEY !== undefined && { apiKey: process.env.ELASTIC_API_KEY }),
+  ...(searchBackend === 'firestore' ? buildFirestoreRagConfig() : {}),
 });
 const app = createApp({ repo, llm, ...(knowledge && { knowledge }) });
 
