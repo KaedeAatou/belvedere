@@ -53,6 +53,9 @@ export {
   type VectorNearestFn,
 } from './knowledge';
 
+// A2A クライアント (ADK ピアを A2A 越しに招集 / Refinement-ADK 経路 / 2026-06-25)
+export { a2aInvoke, extractA2AText, type A2AInvokeResult, type A2AInvokeOpts } from './a2a-client';
+
 // Orchestrator 協議ツールの引数検証 (純粋関数) を re-export (apps/api / 直接 unit テスト用)。
 export {
   validateInvocation,
