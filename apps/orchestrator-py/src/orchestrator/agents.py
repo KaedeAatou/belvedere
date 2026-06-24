@@ -15,13 +15,13 @@ TS 側 packages/agent/src/prompts.ts と表現を 1:1 同期している。
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
-# NOTE: ADK は GCP セットアップ後に有効化する。それまではこのファイルは
-# import されないようにし、main.py からは graceful skip される。
-#
-# from google.adk.agents import Agent
-# from google.adk.tools import FunctionTool
+import httpx
+
+# ADK は use_real_adk=True の経路でのみ lazy import する (USE_REAL_ADK=false のスタブ経路を
+# 重い ADK/Gemini import から守る = 既定 OFF で回帰ゼロ)。実装は build_agents 内で import。
 
 
 # ============= 共通プロンプト構成要素 (XML 構造化) =============
@@ -293,24 +293,80 @@ INSTRUCTIONS: dict[str, str] = {
 }
 
 
+# 儀式ごとの Gemini モデル (TS 側 packages/shared/src/constants.ts の AGENT_MODEL と 1:1)。
+_AGENT_MODEL: dict[str, str] = {
+    "orchestrator": "gemini-2.5-flash",
+    "daily": "gemini-2.5-flash",
+    "planner": "gemini-2.5-pro",
+    "refinement": "gemini-2.5-pro",
+    "reviewer": "gemini-2.5-pro",
+    "retrospective": "gemini-2.5-pro",
+}
+
+
+def fetch_refinement_findings(sprint_id: str) -> dict[str, Any]:
+    """スプリントのバックログ品質を Belvedere Refinement ルールエンジンで診断し findings を返す。
+
+    6観点 (粒度過大SP>8 / 依存未整理 / valueImpact 未設定 / priority×valueImpact /
+    SP分散 / 戦略整合性=Epic.rationale 欠落) + 種別ルールを返す。6観点ロジックは
+    Belvedere 本体 (TypeScript / packages/tools/src/refinement.ts) が単一ソース。ADK 側は
+    この tool 経由で結果を受け取り推論する (ロジック二重持ちしない)。fabricated ID を避け、
+    必ず tool が返した ID だけを引用すること。
+
+    Args:
+        sprint_id: 診断対象スプリント ID (例 'sprint-14')。
+
+    Returns:
+        findings / ruleFindings を含む dict。未設定・失敗時は error を含む dict。
+    """
+    base = os.getenv("BELVEDERE_API_URL", "").rstrip("/")
+    token = os.getenv("BELVEDERE_SERVICE_TOKEN", "")
+    if not base or not token:
+        return {
+            "error": "BELVEDERE_API_URL / BELVEDERE_SERVICE_TOKEN 未設定。",
+            "findings": [],
+        }
+    try:
+        resp = httpx.get(
+            f"{base}/api/refinement",
+            params={"sprintId": sprint_id},
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=20.0,
+        )
+        resp.raise_for_status()
+        return dict(resp.json())
+    except Exception as exc:  # noqa: BLE001 — tool は例外を投げず error を返す (Agent が graceful に扱う)
+        return {"error": f"Refinement データ取得失敗: {exc}", "findings": []}
+
+
 def build_agents(use_real_adk: bool = False) -> dict[str, Any]:
     """エージェント辞書を返す。
-    use_real_adk=True で ADK 実装、False ではプレースホルダ dict を返す。
+
+    use_real_adk=False (既定): プレースホルダ dict (スタブ応答用 / ADK・Gemini を import しない)。
+    use_real_adk=True: 実 ADK LlmAgent を構築 (google-adk 1.31)。Refinement には 6観点取得の
+    FunctionTool を装着し Gemini が tool 結果を根拠に推論する。他儀式は instruction-only。
+    INSTRUCTION は TS prompts.ts と 1:1 同期した文字列を流用する。
     """
     if not use_real_adk:
         return {
-            name: {"name": name, "instruction": instr, "model": "gemini-2.5-pro", "stub": True}
+            name: {"name": name, "instruction": instr, "model": _AGENT_MODEL[name], "stub": True}
             for name, instr in INSTRUCTIONS.items()
         }
 
-    # ADK 接続版 (GCP セットアップ完了後にコメントアウト解除):
-    #
-    # from google.adk.agents import Agent
-    # return {
-    #     "planner": Agent(name="planner", model="gemini-2.5-pro",
-    #                       instruction=PLANNER_INSTRUCTION, tools=[...]),
-    #     ...
-    # }
-    raise NotImplementedError(
-        "ADK実装は GCP セットアップ後に有効化します (docs/setup-gcp.md 参照)。"
-    )
+    # 実 ADK 経路: ここでのみ重い import (既定 OFF の回帰ゼロを守る)。
+    from google.adk.agents import LlmAgent
+    from google.adk.tools.function_tool import FunctionTool
+
+    refinement_tool = FunctionTool(fetch_refinement_findings)
+    tools_by_name: dict[str, list[Any]] = {"refinement": [refinement_tool]}
+
+    agents: dict[str, Any] = {}
+    for name, instr in INSTRUCTIONS.items():
+        agents[name] = LlmAgent(
+            name=name,
+            model=os.getenv("GEMINI_MODEL_OVERRIDE") or _AGENT_MODEL[name],
+            description=f"Belvedere {name} ceremony agent (ADK / Gemini)",
+            instruction=instr,
+            tools=tools_by_name.get(name, []),
+        )
+    return agents

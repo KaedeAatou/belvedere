@@ -31,6 +31,7 @@ import {
   type HandlerResult,
 } from './handlers/ticket-handlers';
 import { can, forbidden } from './permissions';
+import { tryRefinementViaAdk } from './config/refinement-adk';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember } from './handlers/member-handlers';
@@ -429,6 +430,13 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     }
     const body: { prompt?: string } = await c.req.json<{ prompt?: string }>().catch(() => ({}));
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
+
+    // Refinement を ADK + A2A ピアへ委譲する flag ルート (既定 OFF / 自前くるくるは本体のまま)。
+    // ADK 不達/エラーは null が返り、そのまま下の TS runAgent へ自動 fallback する (退避路)。
+    if (name === 'refinement') {
+      const adkRun = await tryRefinementViaAdk(prompt, workspaceId);
+      if (adkRun) return c.json(adkRun);
+    }
 
     // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
     // 他 5 agent は素の buildTools (agent.invoke なし = 子になっても再協議できない / 深さ 1 固定)。
