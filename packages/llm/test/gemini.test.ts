@@ -154,7 +154,7 @@ describe('GeminiLLMProvider.embedText (RAG 埋め込み / 2026-06-25)', () => {
     const provider = new GeminiLLMProvider({ apiKey: 'secret-key', fetchImpl: impl });
     const vec = await provider.embedText('DoD とは', { taskType: 'RETRIEVAL_QUERY' });
     expect(vec).toEqual([0.1, 0.2, 0.3, 0.4]);
-    expect(captured.url).toContain('text-embedding-004:embedContent'); // 既定モデル
+    expect(captured.url).toContain('gemini-embedding-001:embedContent'); // 既定モデル
     expect(captured.url).not.toContain('secret-key'); // キーは URL に載せない
     expect((captured.init!.headers as Record<string, string>)['x-goog-api-key']).toBe('secret-key');
     expect(captured.body.content.parts[0].text).toBe('DoD とは');
