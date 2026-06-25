@@ -9,9 +9,9 @@
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { GeminiLLMProvider } from '@belvedere/llm';
 import type { EmbedQueryFn, VectorNearestFn, KnowledgeHit } from '@belvedere/tools';
+import { KB_COLLECTION, triesCollectionFor, mergeHitsTopK } from './rag-collections';
 
-const KB_COLLECTION = 'belvedere-kb-scrum';
-// 埋め込みは投入時 (index-knowledge.ts) と同じモデル・同じ次元を使うこと (一致しないと検索が壊れる)。
+// 埋め込みは投入時 (index-knowledge.ts / index-tries.ts) と同じモデル・同じ次元を使うこと (一致しないと検索が壊れる)。
 const EMBED_MODEL = 'gemini-embedding-001';
 const EMBED_DIM = 768; // Firestore Vector 上限 2048 内 / 投入側と一致必須
 
@@ -33,27 +33,38 @@ export function buildFirestoreRagConfig(): { embed: EmbedQueryFn; nearest: Vecto
 
   const nearest: VectorNearestFn = async (queryEmbedding, opts) => {
     const db = getFirestore();
-    // belvedere-kb-scrum は全社共通 Scrum 知識ベース (テナント横断で同じ。tenant Try RAG は将来拡張)。
-    const snap = await db
-      .collection(KB_COLLECTION)
-      .findNearest({
-        vectorField: 'embedding',
-        queryVector: FieldValue.vector(queryEmbedding),
-        limit: opts.topK,
-        distanceMeasure: 'COSINE',
-        distanceResultField: '_distance',
-      })
-      .get();
-    return snap.docs.map((d): KnowledgeHit => {
-      const data = d.data();
-      const distance = typeof data._distance === 'number' ? data._distance : 1;
-      return {
-        sourceId: typeof data.sourceId === 'string' ? data.sourceId : d.id,
-        title: typeof data.title === 'string' ? data.title : '',
-        text: typeof data.text === 'string' ? data.text : '',
-        score: 1 - distance, // COSINE distance(0=同一) → score(高いほど近い / Elastic _score と整合)
-      };
-    });
+    const qVec = FieldValue.vector(queryEmbedding);
+    const runNearest = async (collectionName: string): Promise<KnowledgeHit[]> => {
+      const snap = await db
+        .collection(collectionName)
+        .findNearest({
+          vectorField: 'embedding',
+          queryVector: qVec,
+          limit: opts.topK,
+          distanceMeasure: 'COSINE',
+          distanceResultField: '_distance',
+        })
+        .get();
+      return snap.docs.map((d): KnowledgeHit => {
+        const data = d.data();
+        const distance = typeof data._distance === 'number' ? data._distance : 1;
+        return {
+          sourceId: typeof data.sourceId === 'string' ? data.sourceId : d.id,
+          title: typeof data.title === 'string' ? data.title : '',
+          text: typeof data.text === 'string' ? data.text : '',
+          score: 1 - distance, // COSINE distance(0=同一) → score(高いほど近い / Elastic _score と整合)
+        };
+      });
+    };
+
+    // 全社 KB (belvedere-kb-scrum) + テナント別「過去 Try」(belvedere-kb-tries-{ws}) の 2 コーパスを
+    // 引き score 降順で topK にマージする (Elastic の KB+Try index マージと同じ意味論 = まわす軸の継続改善)。
+    // Try collection は点火前で未作成のことがあるため失敗を許容する (KB は主コーパスなので throw 維持)。
+    const [kbHits, triesHits] = await Promise.all([
+      runNearest(KB_COLLECTION),
+      runNearest(triesCollectionFor(opts.workspaceId)).catch(() => [] as KnowledgeHit[]),
+    ]);
+    return mergeHitsTopK([kbHits, triesHits], opts.topK);
   };
 
   return { embed, nearest };
