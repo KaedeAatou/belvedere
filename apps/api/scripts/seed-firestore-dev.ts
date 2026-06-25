@@ -17,34 +17,15 @@
 //   - API と同一の createRepoContainer('firestore') を使うため schema が必ず一致する。
 
 import { createRepoContainer } from '@belvedere/repo';
-import { seedTickets, seedSprints, seedMembers, seedEpics } from '@belvedere/seed';
-import type { RetroTry, RetroNote } from '@belvedere/shared';
+import { seedTickets, seedSprints, seedMembers, seedEpics, seedRetroTries } from '@belvedere/seed';
+import type { RetroNote } from '@belvedere/shared';
 
 const TARGET_PROJECT = 'belvedere-dev-atrium';
 const WORKSPACE = 'ws-belvedere';
 
-// Retro Try 積み上げ (carry-forward stack) の初期 fixture。過去スプリント由来の継続改善アクション。
-// seed package は immutable fixture のため、dev 専用のこのスクリプトに直接定義する。
-const seedRetroTries: RetroTry[] = [
-  {
-    id: 'try-s11-review-24h',
-    workspaceId: WORKSPACE,
-    text: 'PR レビューは依頼から 24h 以内に着手する。',
-    sprintNumber: 11,
-    done: true,
-    createdAt: '2026-04-21T10:00:00+09:00',
-    createdBy: 'kagayayuuki',
-  },
-  {
-    id: 'try-s12-daily-blocked',
-    workspaceId: WORKSPACE,
-    text: 'デイリーで前日の停滞チケットを必ず 1 件共有する。',
-    sprintNumber: 12,
-    done: false,
-    createdAt: '2026-05-05T10:00:00+09:00',
-    createdBy: 'uehara',
-  },
-];
+// Retro Try 積み上げ (carry-forward stack) は packages/seed の seedRetroTries を単一ソースとして使う
+// (memory backend / RAG コーパス投入 index-tries.ts / この firestore seed が同じ Try を共有し、
+//  retro.tries.list と knowledge.search が同じ過去 Try を指すようにする = ズレ防止)。
 
 // Retro KPT ボードのノート初期 fixture (Sprint 13 のレトロ)。レトロを実データで開催できる状態にする。
 // 旧 RetroScreen にハードコードされていた demo テキストを流用 (各列 2-3 件)。votes は実 member userId。
