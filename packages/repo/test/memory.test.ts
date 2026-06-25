@@ -2,7 +2,7 @@
 // 全 Agent / Tools / UI が repo.tickets.list({...}) や repo.epics.list({projectId}) を呼ぶため、
 // where フィルタが壊れると Refinement の 6 観点や Daily の停滞検出が静かに誤動作する。
 // 同インタフェースの Firestore backend (firestore.ts) も同じ where 契約を満たす想定。
-// 関連 seed: 12 tickets / 3 sprints / 1 project / 4 epics / 5 members (immutable fixture)。
+// 関連 seed: 13 tickets / 3 sprints / 1 project / 4 epics / 5 members (immutable fixture)。
 //
 // Phase 1-B (2026-06-10): IDOR fix で全 list は workspaceId 必須化。
 // 関連 entity の workspaceId は seed 全件 'ws-belvedere'。
@@ -18,8 +18,8 @@ describe('memory backend - seed counts', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
 
-  it('tickets seed = 12 (workspace=ws-belvedere)', async () => {
-    expect((await repo.tickets.list({ workspaceId: WS })).length).toBe(12);
+  it('tickets seed = 13 (workspace=ws-belvedere)', async () => {
+    expect((await repo.tickets.list({ workspaceId: WS })).length).toBe(13);
   });
   it('sprints seed = 3', async () => {
     expect((await repo.sprints.list({ workspaceId: WS })).length).toBe(3);
@@ -201,9 +201,9 @@ describe('memory backend - tickets where filters', () => {
     expect(xs.every((t) => t.assigneeId === someAssignee)).toBe(true);
   });
 
-  it('workspaceId のみ指定 = 全 12 件', async () => {
+  it('workspaceId のみ指定 = 全 13 件', async () => {
     const all = await repo.tickets.list({ workspaceId: WS });
-    expect(all.length).toBe(12);
+    expect(all.length).toBe(13);
   });
 
   // F1: firestore.ts との契約一致 (memory ⇔ firestore TicketQuery divergence 修正)

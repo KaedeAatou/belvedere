@@ -92,9 +92,9 @@ const cases: SmokeCase[] = [
     },
   },
   {
-    label: 'belvedere_ticket_list returns 12 tickets from seed',
+    label: 'belvedere_ticket_list returns 13 tickets from seed',
     run: () => callTool('belvedere_ticket_list', {}),
-    expect: (r) => parse(r).parsed.count === 12,
+    expect: (r) => parse(r).parsed.count === 13,
   },
   {
     label: 'belvedere_ticket_list filtered by sprintId=sprint-13',
