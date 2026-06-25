@@ -37,7 +37,7 @@ on:
         options: [gemini-2.5-flash, gemini-2.5-pro]
         default: gemini-2.5-flash
       search_backend:
-        description: "RAG 検索 backend (none=OFF既定/本番不変 / firestore=GCPネイティブ Vector / elastic / mock)"
+        description: "RAG 検索 backend (手動 deploy 用 / 既定 none=OFF。push 自動 deploy は dev=firestore 固定)"
         type: choice
         options: [none, firestore, elastic, mock]
         default: none
@@ -91,10 +91,12 @@ jobs:
           # _LLM_PROVIDER / _GEMINI_MODEL_OVERRIDE / _REPO_BACKEND は cloudbuild.yaml のデフォルトに依存せず明示的に渡す
           # (silent な default 切替で本番挙動が変わる事故を防止)。
           # push 時は gemini + flash 既定 (無料枠で安全)。手動実行は workflow_dispatch のドロップダウンで provider/model を選ぶ。
+          # SEARCH_BACKEND: 手動 deploy は入力値、push (= dev ショーケース) は firestore 固定で RAG を常時 ON に保つ
+          # (push のたび OFF に戻る footgun を回避)。prod は workflow_dispatch (env=prod) 経由のみで入力既定 none = 本番ゼロ変更。
           # 前提: 対象プロジェクトの Secret Manager に GEMINI_API_KEY が存在し、ランタイム SA が secretAccessor を持つこと (docs/setup-gcp.md)。
           gcloud builds submit \
             --config infra/cloudbuild.yaml \
-            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=${{ github.event.inputs.llm_provider || 'gemini' }},_GEMINI_MODEL_OVERRIDE=${{ github.event.inputs.gemini_model || 'gemini-2.5-flash' }},_REPO_BACKEND=firestore,_SEARCH_BACKEND=${{ github.event.inputs.search_backend || 'none' }},_TAG=$SHORT_SHA \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=${{ github.event.inputs.llm_provider || 'gemini' }},_GEMINI_MODEL_OVERRIDE=${{ github.event.inputs.gemini_model || 'gemini-2.5-flash' }},_REPO_BACKEND=firestore,_SEARCH_BACKEND=${{ github.event.inputs.search_backend || 'firestore' }},_TAG=$SHORT_SHA \
             --project=${{ steps.target.outputs.project }} \
             .
 
