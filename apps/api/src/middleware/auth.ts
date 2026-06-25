@@ -83,6 +83,10 @@ export function authMiddleware(repo: RepoContainer): MiddlewareHandler {
       }
       const user: AuthenticatedUser = { userId: key.userId, email: key.ownerEmail };
       c.set('user', user);
+      // キーは発行元 workspace に固定する (ユーザ×ワークスペース scope / 2026-06-26)。
+      // workspaceMiddleware がこの値を見て X-Workspace-Id 横断を禁止 → 漏洩時の blast radius を
+      // 発行元 1 workspace に限定する。人間の Firebase ログインはこの値を持たないので従来通り切替可。
+      c.set('apiKeyWorkspaceId', key.workspaceId);
       // lastUsedAt は best-effort 更新 (await せず、失敗してもリクエストは通す)。
       void repo.apiKeys.upsert({ ...key, lastUsedAt: new Date().toISOString() });
       await next();
