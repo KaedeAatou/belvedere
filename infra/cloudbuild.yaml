@@ -18,6 +18,7 @@ substitutions:
   _LLM_PROVIDER: mock      # mock / gemini。gemini の時だけ Secret Manager の GEMINI_API_KEY をマウントする (deploy step 参照)
   _GEMINI_MODEL_OVERRIDE: gemini-2.5-flash  # flash↔pro 切替の単一つまみ。全 agent をこのモデルに上書き。無料枠キーは pro=limit0 のため flash 既定。有料キーで per-agent mix にしたい時は空文字 (AGENT_MODEL を正とする)
   _REPO_BACKEND: firestore # Phase 1-B (2026-06-09) で memory → firestore に切替。runtime SA は datastore.user 保有
+  _SEARCH_BACKEND: none    # RAG 検索層 (none=OFF 既定/本番不変 / firestore=GCP Vector / elastic / mock)。firestore 時は GEMINI_API_KEY が埋め込みに必要
   _TAG: latest             # CI から GITHUB_SHA::7 を渡す。SHORT_SHA は gcloud builds submit 経由では空のため _TAG で代替
 
 # image tag は _TAG (= short SHA) を使う
@@ -69,7 +70,7 @@ steps:
           --platform=managed \
           --allow-unauthenticated \
           --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com \
-          --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=${_REPO_BACKEND},GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION},GEMINI_MODEL_OVERRIDE=${_GEMINI_MODEL_OVERRIDE} \
+          --set-env-vars=LLM_PROVIDER=${_LLM_PROVIDER},REPO_BACKEND=${_REPO_BACKEND},GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION},GEMINI_MODEL_OVERRIDE=${_GEMINI_MODEL_OVERRIDE},SEARCH_BACKEND=${_SEARCH_BACKEND} \
           --memory=512Mi \
           --cpu=1 \
           --timeout=300s \
