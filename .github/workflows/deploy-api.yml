@@ -52,8 +52,11 @@ env:
   GCP_REGION: asia-northeast1
   REPO: belvedere
   SERVICE: belvedere-api
-  WIF_PROVIDER: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
-  WIF_SA: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
+  # WIF は env 別 (dev=projectNumber 876087923874 / prod=909552127234)。Resolve step が env=prod 時に PROD を選ぶ。
+  WIF_PROVIDER_DEV: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_PROVIDER_PROD: projects/909552127234/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA_DEV: belvedere-deployer@belvedere-dev-atrium.iam.gserviceaccount.com
+  WIF_SA_PROD: belvedere-deployer@belvedere-prod-atrium.iam.gserviceaccount.com
   RUNTIME_SA_NAME: belvedere-runtime
 
 jobs:
@@ -70,15 +73,19 @@ jobs:
         run: |
           if [ "${{ github.event.inputs.env || 'dev' }}" = "prod" ]; then
             echo "project=$GCP_PROJECT_PROD" >> $GITHUB_OUTPUT
+            echo "wif_provider=$WIF_PROVIDER_PROD" >> $GITHUB_OUTPUT
+            echo "wif_sa=$WIF_SA_PROD" >> $GITHUB_OUTPUT
           else
             echo "project=$GCP_PROJECT_DEV"  >> $GITHUB_OUTPUT
+            echo "wif_provider=$WIF_PROVIDER_DEV" >> $GITHUB_OUTPUT
+            echo "wif_sa=$WIF_SA_DEV" >> $GITHUB_OUTPUT
           fi
 
       - name: Authenticate to Google Cloud (Workload Identity)
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.WIF_SA }}
+          workload_identity_provider: ${{ steps.target.outputs.wif_provider }}
+          service_account: ${{ steps.target.outputs.wif_sa }}
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
