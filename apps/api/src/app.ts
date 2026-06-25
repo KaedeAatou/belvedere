@@ -135,9 +135,15 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   app.use(
     '/api/*',
     cors({
+      // dev/prod 両 web origin + prod のクリーン URL を許可。CORS は認証境界ではない
+      // (auth は Bearer ID token / credentials:false) ため、正当な web origin を列挙で安全。
       origin: [
-        'https://belvedere-web-dev-cpszmcqmuq-an.a.run.app',
-        'http://localhost:3000',
+        'https://belvedere-web-dev-cpszmcqmuq-an.a.run.app', // dev web (Cloud Run)
+        'https://belvedere-web-prod-iuep3t4nma-an.a.run.app', // prod web (Cloud Run)
+        'https://belvedere-scrum.web.app', // prod 公開 URL (Firebase Hosting → Cloud Run rewrite)
+        'https://belvedere-prod-atrium.web.app', // prod Firebase Hosting 既定ドメイン
+        'https://belvedere-prod-atrium.firebaseapp.com', // prod Firebase 既定ドメイン
+        'http://localhost:3000', // ローカル開発
       ],
       allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowHeaders: ['Authorization', 'Content-Type', 'X-Workspace-Id'],
