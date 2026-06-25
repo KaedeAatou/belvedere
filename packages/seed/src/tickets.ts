@@ -235,6 +235,8 @@ export const seedTickets: Ticket[] = [
     sprintId: 'sprint-14',
     assigneeId: 'hayashi',
     estimatePt: 8,
+    // WC-108 (CB→CD パイプライン分離) の完了が前提。リリースゲートは CD 上で動くため依存を明示。
+    blockedBy: ['WC-108'],
     acceptanceCriteria: [
       'Cloud Deploy のリリースゲートで実行',
       '違反時にレポートが Slack に投稿',
