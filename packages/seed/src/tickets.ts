@@ -293,4 +293,27 @@ export const seedTickets: Ticket[] = [
     updatedAt: NOW,
     createdBy: 'human',
   },
+  {
+    id: 'WC-113',
+    workspaceId: 'ws-belvedere',
+    projectId: DEFAULT_PROJECT_ID,
+    type: 'story',
+    title: 'スプリントゴール未達アラートのしきい値設計',
+    description: '残SPと残日数からゴール未達を予測し、Daily で早期アラートする。しきい値とメッセージ文面は要相談。',
+    status: 'backlog',
+    priority: 'high',
+    valueImpact: 'high',
+    ritual: 'planning',
+    sprintId: 'sprint-14',
+    assigneeId: 'uehara',
+    // estimatePt は意図的に未設定 → STORY_SP_MISSING + 見積もりポーカーの起点 (EP-3 rationale 欠落と同じデモ仕込み)
+    acceptanceCriteria: [
+      '残SP×残日数からゴール未達を予測する',
+      'Daily 画面で早期アラートする',
+    ],
+    labels: ['differentiator'],
+    createdAt: NOW,
+    updatedAt: NOW,
+    createdBy: 'human',
+  },
 ];

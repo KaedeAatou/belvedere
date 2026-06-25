@@ -53,11 +53,11 @@ describe('MCP HTTP ↔ API: 認証 (service token)', () => {
     repo = createMemoryRepoContainer();
   });
 
-  it('正しいサービストークン → ticket_list が seed 12 件を返す', async () => {
+  it('正しいサービストークン → ticket_list が seed 13 件を返す', async () => {
     const mcp = makeMcp(repo);
     const res = read(await mcp.callTool('belvedere_ticket_list', {}));
     expect(res.isError).toBe(false);
-    expect(res.parsed.count).toBe(12);
+    expect(res.parsed.count).toBe(13);
   });
 
   it('トークン未設定 → HTTP を投げる前にガードエラー (Firebase 経路に行かない)', async () => {
