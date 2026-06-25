@@ -1,0 +1,16 @@
+{
+  "hosting": {
+    "site": "belvedere-scrum",
+    "public": "infra/hosting-public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "belvedere-web-prod",
+          "region": "asia-northeast1"
+        }
+      }
+    ]
+  }
+}
