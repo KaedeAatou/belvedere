@@ -67,9 +67,9 @@ graph TB
     end
 
     subgraph AI["つくる: AI Layer"]
-        GEM["Gemini API<br/>= Bedrock Claude"]
-        ADK["ADK マルチエージェント<br/>宣言的編成<br/>= Bedrock AgentCore"]
-        VS["Elastic RAG 意味検索<br/>= OpenSearch / Bedrock KB<br/>(まわす: 使うほど賢くなる)"]
+        GEM["Gemini API<br/>(本番実推論で稼働)<br/>= Bedrock Claude"]
+        ADK["ADK Refinement ピア<br/>orchestrator-py / to_a2a で A2A 公開<br/>(自前TSが本体 / Strangler Fig)<br/>= Bedrock AgentCore"]
+        VS["RAG 意味検索 (差し込み式)<br/>Firestore Vector ⇄ Elastic 切替可<br/>(まわす: 使うほど賢くなる)"]
     end
 
     subgraph Data["Data"]
@@ -107,8 +107,11 @@ graph TB
 
     %% --- Agent オーケストレーション (画面操作 = 単一窓口。スケジュール/Pub-Sub トリガは不採用) ---
     WEB -->|画面操作 = 単一窓口| ORC
-    ORC -.ADK 宣言的編成.-> ADK
     ORC --> AG_P & AG_D & AG_F & AG_R & AG_X
+    %% Refinement だけ flag で A2A 越しに ADK ピアへ委譲 (不達は TS へ自動 fallback = 退避路)
+    AG_F -.REFINEMENT_VIA_ADK / A2A.-> ADK
+    ADK --> GEM
+    ADK -.6観点 tool.-> API
     AG_P & AG_D & AG_F & AG_R & AG_X --> GEM
     AG_P & AG_D & AG_F & AG_R & AG_X --> TOOL
     TOOL --> U3
@@ -130,14 +133,14 @@ graph TB
     classDef implemented fill:#F9A825,stroke:#C77800,color:#000,stroke-width:2px
     classDef planned fill:#90A4AE,stroke:#546E7A,color:#fff,stroke-dasharray: 5 5
 
-    %% 🟢 Deployed (今日 Cloud Run + CI/CD で動作確認)
-    class API,GH,WIF,CB,AR,LOG deployed
+    %% 🟢 Deployed (Cloud Run + CI/CD で本番動作確認 / Gemini 本番実推論 / Secret Manager 使用中)
+    class API,GH,WIF,CB,AR,LOG,WEB,FS,GEM,SM deployed
 
-    %% 🟡 Implemented (コードあり / ローカル動作 / 空 instance)
-    class WEB,MCP,ORC,AG_P,AG_D,AG_F,AG_R,AG_X,FS,GCS,GEM implemented
+    %% 🟡 Implemented (コードあり・テスト緑 / ADK は実体化+ローカル A2A 確認・Cloud Run は手動デプロイ待ち)
+    class MCP,ORC,AG_P,AG_D,AG_F,AG_R,AG_X,GCS,ADK,VS implemented
 
-    %% ⚪ Planned (Phase 1-B 以降に実装)
-    class LB,IAP,TOOL,ADK,VS,SM,PUBSUB,SCHED,TR,ER planned
+    %% ⚪ Planned / 不採用
+    class LB,IAP,TOOL,PUBSUB,SCHED,TR,ER planned
 ```
 
 ### 実装ステータス対応表 (2026-05-06 時点)
@@ -155,9 +158,9 @@ graph TB
 | ⚪ planned | TOOL | GitHub / Calendar Tool server (Phase 3)。**Slack は不採用**（agent 出力は AI パネル / `AGENT_DESIGN.md §6`）|
 | ⚪ planned | IAP | Phase 4 (本番ドメイン取得後) |
 | ⚪ planned | LB | カスタムドメイン or マルチリージョン化時 |
-| 🟡 implemented | GEM | Gemini provider 実装済 (`packages/llm/src/gemini.ts` / REST 直叩き / functionCall マッピング済)。`LLM_PROVIDER=gemini` 切替だけで Mock→Gemini 成立。残: API キー注入 + 疎通検証 (Phase A) |
-| ⚪ planned | ADK / VS | ADK = Orchestrator のマルチエージェント宣言的編成デモ (Phase C) / **Elastic RAG 意味検索層 = 「まわす」AI 継続改善ループ** (Retro の Try を蓄積 → 次スプリントの検出ルールを強化)。土台+配線は実装済 (`SEARCH_BACKEND` 未設定=無効で本番ゼロ変更)、Elastic Cloud 接続は提出前トライアルで点灯 / 設計は `docs/continuous-improvement-design.md` |
-| ⚪ planned | SM | Phase 3 (Gemini API key) |
+| 🟢 deployed | GEM | **本番 Cloud Run が `/health` で `llm=gemini` を返し実推論で稼働** (`packages/llm/src/gemini.ts` REST 直叩き + 埋め込み `embedText`)。deploy ワークフローが Secret 経由で `GEMINI_API_KEY` 注入 |
+| 🟡 implemented | ADK / VS | **ADK 実体化** (`orchestrator-py` google-adk 1.31 `LlmAgent`×6 + Refinement に 6観点 `FunctionTool` / `to_a2a` で A2A 公開 / ローカルで Agent Card 200 配信確認 / Cloud Run は手動 deploy)。Refinement のみ `REFINEMENT_VIA_ADK` で A2A 委譲・不達は TS へ fallback。**RAG = 差し込み式** (`SEARCH_BACKEND`): 本番 GCP ネイティブ **Firestore Vector** (gemini-embedding-001 768次元) ⇄ 協賛 **Elastic** 切替可。全 flag OFF で本番ゼロ変更、コーパス点火は運用手順 |
+| 🟢 deployed | SM | Secret Manager に `GEMINI_API_KEY` 等を格納し runtime SA が参照中 (本番稼働) |
 | ⚪ 不採用 | PUBSUB / SCHED | **儀式トリガに使わない**（全 agent は画面操作で同期起動 / `AGENT_DESIGN.md §6`）|
 | ⚪ planned | TR / ER | Phase 4 (本番監視) |
 
