@@ -19,7 +19,7 @@ import type {
   RetroNote,
 } from '@belvedere/shared';
 import { stripUndefined, compareTicketOrder } from '@belvedere/shared';
-import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects } from '@belvedere/seed';
+import { seedTickets, seedSprints, seedMembers, seedEpics, seedProjects, seedRetroTries } from '@belvedere/seed';
 import { applyEquFilters } from './query';
 import type {
   WorkspaceRepository,
@@ -234,6 +234,9 @@ class MemEstimationRepo implements EstimationRepository {
 
 class MemRetroTryRepo implements RetroTryRepository {
   private store = new Map<string, RetroTry>();
+  constructor(seed: RetroTry[] = []) {
+    for (const t of seed) this.store.set(t.id, stripUndefined({ ...t }));
+  }
   async list(opts: { workspaceId: string }): Promise<RetroTry[]> {
     // createdAt 昇順 (firestore.ts と契約一致: 古い積み上げから順に並ぶ)
     return [...this.store.values()]
@@ -272,7 +275,7 @@ export function createMemoryRepoContainer(): RepoContainer {
     agentRuns: new MemAgentRunRepo(),
     ceremonyHealth: new MemCeremonyHealthRepo(),
     estimations: new MemEstimationRepo(),
-    retroTries: new MemRetroTryRepo(),
+    retroTries: new MemRetroTryRepo(seedRetroTries),
     retroNotes: new MemRetroNoteRepo(),
   };
 }

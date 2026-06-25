@@ -68,8 +68,11 @@ describe('listRetroTries', () => {
     const res = await listRetroTries(repo, DEV);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.body).toHaveLength(1);
-    expect(res.body[0]?.text).toBe('A');
+    // seed (seedRetroTries) も WS に属するため件数固定ではなく scope 性質で検証する:
+    // 返却は全て自 WS / try-a を含む / 別 WS の try-b を含まない。
+    expect(res.body.every((t) => t.workspaceId === WS)).toBe(true);
+    expect(res.body.some((t) => t.id === 'try-a')).toBe(true);
+    expect(res.body.some((t) => t.id === 'try-b')).toBe(false);
   });
 
   it('createdAt 昇順で返る', async () => {
@@ -79,7 +82,11 @@ describe('listRetroTries', () => {
     const res = await listRetroTries(repo, DEV);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.body.map((t) => t.text)).toEqual(['1st', '2nd']);
+    // seed Try も混在するため、投入した 2 件に絞って相対順 (createdAt 昇順) を検証する。
+    expect(res.body.filter((t) => t.id === 'try-1' || t.id === 'try-2').map((t) => t.text)).toEqual(['1st', '2nd']);
+    // 全体としても createdAt は非減少 (昇順契約 / ISO8601 は辞書順=時系列)。
+    const dates = res.body.map((t) => t.createdAt);
+    expect([...dates].sort()).toEqual(dates);
   });
 });
 
