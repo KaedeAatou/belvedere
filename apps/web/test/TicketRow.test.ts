@@ -47,6 +47,22 @@ describe('TicketRow', () => {
     expect(wrapper.find('.trow-flags').exists()).toBe(true);
   });
 
+  // WC-d019fd94: 長いタイトルで警告ピルが見切れる不具合の修正のガード。
+  // タイトルは専用 .trow-title-text に入り (ここだけ省略 …)、長くても .trow-flags は残る
+  // (flex-shrink:0 で常時表示)。CSS の見切れ自体は実機で確認するが、DOM 契約はここで固定する。
+  it('タイトルが長くても title-text と flags が両方描画される', async () => {
+    const longTitle = 'チケット名が長いと再現手順なしとかアイコンが見切れている問題を再現する非常に長いタイトルです'.repeat(2);
+    const wrapper = await mountSuspended(TicketRow, {
+      props: { t: ticket({ id: 'WC-FLAG', title: longTitle }) },
+    });
+    // タイトル文字列は専用 span に入る (省略の対象)
+    const titleText = wrapper.find('.trow-title-text');
+    expect(titleText.exists()).toBe(true);
+    expect(titleText.text()).toBe(longTitle);
+    // 長いタイトルでも flags 列は残る (押し出されて消えない)
+    expect(wrapper.find('.trow-flags').exists()).toBe(true);
+  });
+
   it('selectable prop でチェックボックス列を出す', async () => {
     const wrapper = await mountSuspended(TicketRow, {
       props: { t: ticket({ id: 'WC-2' }), selectable: true },

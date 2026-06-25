@@ -67,7 +67,9 @@ const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.messag
     <TypeMark :type="t.type" />
     <span class="trow-id t-mono">{{ t.id }}</span>
     <span class="trow-title">
-      {{ t.title }}
+      <!-- タイトルは専用 span で省略 (…)。長いタイトルでも下の .trow-flags を押し出さない
+           (WC-d019fd94: 長いタイトルで警告ピルが見切れる不具合の修正)。 -->
+      <span class="trow-title-text">{{ t.title }}</span>
       <span v-if="findings.length > 0" class="trow-flags">
         <FindingPill v-for="f in shown" :key="f.ruleId" :finding="f" />
         <span v-if="overflow > 0" class="finding-badge sev-more" :title="overflowTitle">+{{ overflow }}</span>

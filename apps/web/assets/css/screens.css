@@ -50,10 +50,14 @@
 .trow-id { font-family: var(--mono); font-size: 11px; font-weight: 500; color: var(--ink-3); letter-spacing: 0.08em; }
 .trow-title {
   font-size: 14px; color: var(--ink-0); letter-spacing: 0.03em;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   display: flex; align-items: center; gap: 10px;
+  min-width: 0; /* grid 1fr セルを内容より縮められるように → タイトルが省略される (WC-d019fd94) */
+  overflow: hidden;
 }
-.trow-flags { display: inline-flex; gap: 4px; align-items: center; }
+/* タイトル文字列。長くてもここだけが省略 (…) され、隣の .trow-flags は縮まない。 */
+.trow-title-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 警告ピル列。flex-shrink:0 で常に全幅を保ち、長いタイトルでも見切れない (WC-d019fd94)。 */
+.trow-flags { display: inline-flex; gap: 4px; align-items: center; flex-shrink: 0; }
 /* #extra スロットのラッパ (TicketRow)。中身が何個でも grid 1 列に収める。
    裸で置くと 9 列 grid を溢れて Avatar が 2 行目に折り返し、行下に円がはみ出す。
    空 (slot 未使用 / v-if 全 false = コメントノードのみ) なら列ごと消す。 */
