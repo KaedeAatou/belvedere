@@ -98,6 +98,35 @@ describe('API 認証 (per-user API キー)', () => {
     expect(((await res.json()) as { error: string }).error).toBe('invalid_token');
   });
 
+  // WC-3a8bb53c: API キーは発行元 workspace に固定 (ユーザ×ワークスペース scope)。
+  // svc:mcp を 2 workspace 所属にし、ws-belvedere で発行したキーが X-Workspace-Id=ws-second を
+  // 渡しても ws-belvedere に固定されること / 一方サービストークン (非 API キー) は切替できることを確認。
+  async function joinSecond(): Promise<void> {
+    await repo.members.upsert({ userId: 'svc:mcp', workspaceId: 'ws-belvedere', email: 'mcp@belvedere.svc', displayName: 'MCP', role: 'po' });
+    await repo.members.upsert({ userId: 'svc:mcp', workspaceId: 'ws-second', email: 'mcp@belvedere.svc', displayName: 'MCP', role: 'dev' });
+  }
+
+  it('API キーは発行元 workspace に固定され X-Workspace-Id を無視する', async () => {
+    await joinSecond();
+    const key = await mintKey('pinned'); // X-Workspace-Id=ws-belvedere で発行 = key.workspaceId=ws-belvedere
+    // 別 workspace を X-Workspace-Id で要求しても、キーは発行元 (ws-belvedere) に固定される
+    const res = await app.fetch(req('/api/whoami', { token: key, workspaceId: 'ws-second' }));
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { workspaceId: string; role: string };
+    expect(json.workspaceId).toBe('ws-belvedere'); // ws-second ではなく発行元に固定
+    expect(json.role).toBe('po');
+  });
+
+  it('サービストークン (非 API キー) は X-Workspace-Id で切替できる (固定は API キー限定)', async () => {
+    await joinSecond();
+    // 対比: 同じ svc:mcp でもサービストークン経路は apiKeyWorkspaceId を持たないので切替可。
+    const res = await app.fetch(req('/api/whoami', { token: TOKEN, workspaceId: 'ws-second' }));
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { workspaceId: string; role: string };
+    expect(json.workspaceId).toBe('ws-second');
+    expect(json.role).toBe('dev');
+  });
+
   it('発行 → list に出る / tokenHash は API レスポンスに含まれない', async () => {
     await mintKey('visible');
     const res = await app.fetch(req('/api/api-keys', { token: TOKEN }));
