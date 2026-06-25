@@ -79,7 +79,7 @@
    - 🔴 WC-108「Cloud Build → Deploy 分離」は **種別未設定** → 形骸化サイン
    - 🟡 WC-105 は **進行中のまま 4 日停滞** (着手時刻 startedAt 基準で検出)
    - そして **見積もりポーカー**: SP 未設定の Story で「見積もりセッション開始」→ メンバが**互いに見えない状態で投票** → 一斉開示 → 8 と 2 に割れる → **AI が「認識ズレの可能性、スコープを話し合って再投票を」と運営** (スプレッドシートも外部サイトも不要)
-6. **(12秒)** ふりかえり画面 → 前スプリントの Try 3件のうち 2件が **翌スプリントWIPに自動転記済** (parentTicketIdで紐付き)。(現実装: Try を積み上げへ d&d → Firestore 永続 → 次の儀式で AI が参照。自動転記は Phase 3-A)
+6. **(12秒)** ふりかえり画面 → **AI が前スプリントの Try を RAG (Firestore Vector の意味検索) で引いて評価**:「S12 の Try『AC に完了予定日を入れる』は今スプリントで守られたか?」を **sourceId 付きで講評** (= 使うほど賢くなる「まわす」)。Try は積み上げへ d&d → Firestore 永続 → 次の儀式で AI が参照 (自動チケット転記は Phase 3-A)
 7. **(8秒)** Daily 画面で停滞検出が AI パネルに提示される (「WC-105 が 4 日停滞 → 林 へ確認を」/ L2 提案。投稿は人間が判断)
 
 > 「全部、**司令塔 (Orchestrator) が単一窓口として複数 AI を協議招集して統括した結果**です。見積もりの会も AI が回します。ボタンを押したのは Apply だけ。」
@@ -107,7 +107,7 @@
 - **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で儀式エージェントを協議招集・統括 (単一窓口)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
 - **チケット種別ルールエンジン**: Story / Task / Spike / Bug / Incident の 17 観点 (親なし Task / 価値の見えない DoD / 停滞 / 見積もり割れ…) を宣言的ルール表に集約、5 Agent が共有
 - **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション + Retro Try carry-forward + マルチテナント (Workspace 作成・招待・切替)
-- **「まわす」= AI を継続的に改善するループ**: ふりかえりの Try が Agent の検出基準に積み上がり、**使うほどチームに最適化**される (実装済 / `retro.tries.list`)。**Elastic RAG** で意味検索化してスケール (Elasticsearch = 公式 AI 技術リストの 1 つ / 設計済)。プロンプト改善は **agent eval を CI ゲート化 (設計済)** で後退防止 → CI/CD (WIF 鍵レスデプロイ) で本番へ届ける
+- **「まわす」= AI を継続的に改善するループ**: ふりかえりの Try が Agent の検出基準に積み上がり (`retro.tries.list`)、さらに **過去 Try を意味検索する RAG** で「前回の Try は守られたか」を AI が **sourceId 付きで参照** = 使うほどチームに賢くなる。RAG は **GCP ネイティブ Firestore Vector (Gemini 埋め込み 768 次元) で稼働、協賛 Elastic にも env 1 つで切替可** (両実装済 / 実 Gemini 埋め込み + findNearest をライブ実証)。プロンプト改善は **agent eval (golden) を CI で実行**して後退防止 → CI/CD (WIF 鍵レスデプロイ) で本番へ届ける
 - **Cloud Build / WIF**: 個人 GitHub (KaedeAatou/belvedere) からの鍵レスデプロイ
 - **MCP Server (stdio + HTTP)**: Claude Code / Cursor / 他 AI Agent クライアントから Belvedere を呼べる API。「Belvedere の開発自体を Claude Code 経由で Belvedere に管理させている」究極のドッグフード
 
