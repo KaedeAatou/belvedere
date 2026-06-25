@@ -1,0 +1,122 @@
+name: Promote to Prod (tested SHA)
+
+# dev→prod 昇格パイプライン (DevOps / 手動 Promote + テスト済み SHA + 承認ゲート)。
+#
+# 背景: push→CI(typecheck/test)+dev deploy+E2E は自動だが、prod は deploy-api/web の
+# workflow_dispatch(env=prod)で「任意の main HEAD」を出せてしまい、テストゲートも昇格概念も無い。
+# この workflow は **dev E2E を通過した “その SHA” だけ** を prod へ昇格する(promotion by tested SHA)。
+#
+# フロー:
+#   1. verify  : 指定 SHA が e2e.yml を success で完了済みか確認(未通過なら fail = テストゲート)
+#   2. promote : その SHA を checkout → prod へ api + web をデプロイ(web は prod Firebase 設定を env で注入)
+#
+# 承認ゲート: 手動トリガ(workflow_dispatch)= 人による承認。さらに promote job は environment:prod に
+#   紐付くので、GitHub の Environment protection で Required reviewers を足せば自動承認ゲート化できる。
+#
+# prod の正規昇格はこの workflow に一本化する(deploy-api/web の env=prod は break-glass として残す)。
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "昇格する commit SHA(dev E2E 通過済みであること。例: main HEAD の full/short SHA)"
+        required: true
+        type: string
+      gemini_model:
+        description: "Gemini モデル(flash=無料枠で安全 / pro=有料キー必須)"
+        type: choice
+        options: [gemini-2.5-flash, gemini-2.5-pro]
+        default: gemini-2.5-flash
+
+permissions:
+  contents: read
+  id-token: write   # WIF に必要
+  actions: read     # verify が gh run list で E2E 履歴を読む
+
+env:
+  GCP_PROJECT_PROD: belvedere-prod-atrium
+  GCP_REGION: asia-northeast1
+  REPO: belvedere
+  # prod の WIF / deployer SA(projectNumber 909552127234)
+  WIF_PROVIDER_PROD: projects/909552127234/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
+  WIF_SA_PROD: belvedere-deployer@belvedere-prod-atrium.iam.gserviceaccount.com
+  RUNTIME_SA_NAME: belvedere-runtime
+
+jobs:
+  # ---- テストゲート: 指定 SHA が dev E2E を通過済みか ----
+  verify:
+    name: Verify SHA passed dev E2E
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check e2e.yml success for SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha }}
+        # e2e.yml は deploy 完了後の workflow_run で起動し、その run の headSha は元の push commit を指す。
+        # success で完了した e2e run が指定 SHA に存在すれば「dev にデプロイされ E2E 緑」が確定する。
+        run: |
+          echo "▶ verifying commit $SHA passed dev E2E ..."
+          COUNT=$(gh run list --repo "${{ github.repository }}" --workflow=e2e.yml \
+            --json headSha,status,conclusion --limit 100 \
+            | jq -r --arg sha "$SHA" \
+                '[.[] | select((.headSha | startswith($sha)) and .status=="completed" and .conclusion=="success")] | length')
+          echo "matching successful e2e runs for $SHA: ${COUNT:-0}"
+          if [ "${COUNT:-0}" -lt 1 ]; then
+            echo "::error::commit $SHA は dev E2E を通過していません(success の e2e.yml run が無い)。先に main へ push し dev E2E を緑にしてから昇格してください。"
+            exit 1
+          fi
+          echo "✅ $SHA は dev E2E 通過済み → prod へ昇格可"
+
+  # ---- 昇格: テスト済み SHA を prod へデプロイ ----
+  promote:
+    name: Promote api + web to prod (same tested SHA)
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: prod   # 承認ゲートのフック(Required reviewers を足せば自動承認ゲート化)
+    steps:
+      - name: Checkout tested SHA
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha }}
+
+      - name: Authenticate to Google Cloud (Workload Identity / prod)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER_PROD }}
+          service_account: ${{ env.WIF_SA_PROD }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_PROD }}
+
+      - name: Deploy API to prod (gemini + firestore + RAG firestore = dev パリティ)
+        # prod 用イメージは prod project の Artifact Registry に、テスト済み SHA のソースから build する
+        # (= dev で E2E を通った commit と同一 SHA。プロジェクトをまたぐ image コピーは行わず同一ソース再build)。
+        run: |
+          SHORT_SHA="${{ inputs.sha }}"; SHORT_SHA="${SHORT_SHA::7}"
+          gcloud builds submit \
+            --config infra/cloudbuild.yaml \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=belvedere-api,_ENV=prod,_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_LLM_PROVIDER=gemini,_GEMINI_MODEL_OVERRIDE=${{ inputs.gemini_model || 'gemini-2.5-flash' }},_REPO_BACKEND=firestore,_SEARCH_BACKEND=firestore,_TAG=$SHORT_SHA \
+            --project=${{ env.GCP_PROJECT_PROD }} \
+            .
+
+      - name: Deploy Web to prod (prod 独立 Firebase 設定を env 注入)
+        # _FB_*/_API_BASE_URL は GitHub repo variables(公開情報。secret ではない)から渡す。
+        # cloudbuild.web.yaml が空でなければ NUXT_PUBLIC_FIREBASE_* を Cloud Run env に注入する。
+        run: |
+          SHORT_SHA="${{ inputs.sha }}"; SHORT_SHA="${SHORT_SHA::7}"
+          gcloud builds submit \
+            --config infra/cloudbuild.web.yaml \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=belvedere-web,_ENV=prod,_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_TAG=$SHORT_SHA,_FB_API_KEY=${{ vars.PROD_FIREBASE_API_KEY }},_FB_AUTH_DOMAIN=${{ vars.PROD_FIREBASE_AUTH_DOMAIN }},_FB_PROJECT_ID=${{ vars.PROD_FIREBASE_PROJECT_ID }},_FB_APP_ID=${{ vars.PROD_FIREBASE_APP_ID }},_API_BASE_URL=${{ vars.PROD_API_BASE_URL }} \
+            --project=${{ env.GCP_PROJECT_PROD }} \
+            .
+
+      - name: Output prod URLs
+        run: |
+          API_URL=$(gcloud run services describe belvedere-api-prod --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_PROD }} --format='value(status.url)')
+          WEB_URL=$(gcloud run services describe belvedere-web-prod --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_PROD }} --format='value(status.url)')
+          echo "🚀 promoted ${{ inputs.sha }} → prod"
+          echo "  API: $API_URL"
+          echo "  WEB: $WEB_URL"

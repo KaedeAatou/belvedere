@@ -136,11 +136,93 @@ echo "PROD_PROJECT_NUMBER=$PROJECT_NUMBER"
 
 ---
 
+## dev→prod 昇格パイプライン(2026-06-26 / `promote-prod.yml`)
+
+DevOps お題の核心。**dev で自動テスト → 人が承認 → 同一 SHA を prod へ昇格** を CI/CD で実体化する。
+
+```
+ push to main
+     │
+     ▼
+ ┌──────────────────────┐   ┌─────────────────────┐   ┌──────────────────────┐
+ │ CI (ci.yml)          │   │ Deploy dev          │   │ E2E (e2e.yml)        │
+ │ typecheck / test /   │──▶│ deploy-api/web      │──▶│ Playwright @ dev URL │
+ │ agent-evals          │   │ (env=dev / 自動)     │   │ (workflow_run / 自動) │
+ └──────────────────────┘   └─────────────────────┘   └──────────┬───────────┘
+                                                                   │ 緑 (conclusion=success)
+                                                                   ▼
+                                       ┌──────────────────────────────────────────┐
+                                       │ 👤 手動 Promote = 承認ゲート                 │
+                                       │ gh workflow run promote-prod.yml -f sha=…   │
+                                       └────────────────────┬───────────────────────┘
+                                                            ▼
+                          ┌──────────────────────────────────────────────────────┐
+                          │ promote-prod.yml                                       │
+                          │  ① verify : その SHA が e2e.yml success か (テストゲート) │
+                          │  ② promote: needs verify / environment:prod            │
+                          │            その SHA を checkout → prod に api+web deploy │
+                          │            (web は prod Firebase 設定を env 注入)        │
+                          └──────────────────────────────────────────────────────┘
+```
+
+- **テストゲート**: `verify` が `gh run list --workflow=e2e.yml` で指定 SHA の **success 完了**を確認。
+  未テスト SHA は弾く(prod に未検証コードを出さない)。
+- **承認ゲート**: 手動トリガ = 人の承認。`promote` は `environment: prod` 紐付き →
+  GitHub Environment の **Required reviewers** を足せば自動承認ゲート化(GitHub Pro)。
+- **昇格 = テスト済み SHA**: dev で E2E を通った commit と**同一 SHA** のソースから prod 用 image を build。
+- deploy-api/web の `env=prod`(workflow_dispatch)は **break-glass** として残す(正規経路は promote-prod)。
+
+実行例:
+```bash
+gh workflow run promote-prod.yml -f sha=$(git rev-parse HEAD) -f gemini_model=gemini-2.5-flash
+gh run watch   # verify → promote の順に緑を確認
+```
+
+---
+
+## 認証分離: prod 独立 Firebase Auth(2026-06-26)
+
+prod web のログインを開通するには、**prod 専用の Firebase Auth(IdP=信頼境界)** が要る。
+dev の Firebase を prod が信頼する案は環境分離を侵すアンチパターンなので採らない。
+web の Firebase 設定は `NUXT_PUBLIC_FIREBASE_*` 環境変数で**ランタイム上書き**できる
+(`nuxt.config.ts` の dev 値は fallback。`useFirebase()` が `useRuntimeConfig()` で読む)。
+prod 値は **GitHub repo variables**(公開情報なので secret ではなく variable)で管理し、
+`deploy-web.yml` / `promote-prod.yml` が env=prod 時に Cloud Run env へ注入する。
+
+### 🧑 YOU パート(Firebase Console / headless 不可 = Google の制限)
+1. https://console.firebase.google.com → **プロジェクトを追加** → ⚠️ **既存の `belvedere-prod-atrium` を選択**(新規作成しない)。
+2. Build → **Authentication** → 始める。
+3. Sign-in method → **Google**(support email = 個人 `mygolanglearn@gmail.com`)+ **Email/Password** を両方 ON(dev と機能差ゼロにする)。
+4. プロジェクト設定 → マイアプリ → **Web(`</>`)** 登録「Belvedere Web (prod)」→ **firebaseConfig**(apiKey / authDomain / projectId / appId)を取得。
+5. Authentication → Settings → **Authorized domains** に prod web ドメイン(`belvedere-web-prod-…-an.a.run.app`)を追加(Google OAuth リダイレクト用)。
+6. → 取得した 4 値を ME に渡す(Firebase web 設定は公開情報 / 機密でない)。
+
+### 🤖 ME パート(YOU 完了後)
+- GitHub repo variables を登録(値は YOU の 4 値 + prod api URL):
+  ```bash
+  gh variable set PROD_FIREBASE_API_KEY     --body '<apiKey>'
+  gh variable set PROD_FIREBASE_AUTH_DOMAIN --body '<authDomain>'   # belvedere-prod-atrium.firebaseapp.com
+  gh variable set PROD_FIREBASE_PROJECT_ID  --body 'belvedere-prod-atrium'
+  gh variable set PROD_FIREBASE_APP_ID      --body '<appId>'
+  gh variable set PROD_API_BASE_URL         --body 'https://belvedere-api-prod-…-an.a.run.app'
+  ```
+- prod demo ユーザー作成(firebase-admin `createUser` / ADC / 一時 tsx・実行後削除): `demo@belvedere.demo`。
+- `promote-prod.yml` で prod へ昇格 → prod web に prod Firebase 設定が env 注入される。
+- 疎通: Identity Toolkit REST `signInWithPassword`(prod apiKey)→ ID token → prod api `/api/whoami` 200 + `workspaceId: ws-belvedere`。
+
+> **不変条件**: `apps/api/src/middleware/auth.ts` は変更しない(prod api は `GCP_PROJECT=belvedere-prod-atrium`
+> で aud 検証 = dev トークンを弾く分離が既に効いている)。`prompts.ts` / `mock.ts` も不変(AI 挙動は変えない)。
+
+---
+
 ## 受け入れ条件(完了の定義)
-- [ ] 🧑 prod GCP リソース一式(1–7)作成 + `PROD_PROJECT_NUMBER` 受け渡し(8)
-- [ ] 🤖 deploy-*.yml env 可変化 + prod デプロイ(api/web)緑
-- [ ] 🤖 prod Firestore seed + RAG コーパス(KB+Try)+ ベクトル index READY
-- [ ] prod `/health` knowledge=firestore / retrospective が前回 Try 言及
+- [x] 🧑 prod GCP リソース一式(1–7)作成 + `PROD_PROJECT_NUMBER` 受け渡し(8)
+- [x] 🤖 deploy-*.yml env 可変化 + prod デプロイ(api/web)緑
+- [x] 🤖 prod Firestore seed + RAG コーパス(KB+Try)+ ベクトル index READY
+- [x] prod `/health` knowledge=firestore / retrospective が前回 Try 言及
+- [ ] 🧑 prod Firebase Auth(Google+Email/Password)設定 + 4 値受け渡し
+- [ ] 🤖 prod Firebase repo variables 登録 + demo ユーザー作成 + prod web 再昇格 → ログイン疎通
+- [ ] 🤖 `promote-prod.yml` が未テスト SHA を弾き / テスト済み SHA を昇格(実機1回)
 - [ ] dev は引き続き flags ON で無傷(prod 昇格が dev を壊していない)
 
 > dev は既に完成・稼働(seed + RAG + 前回 Try 言及をライブ実証済 / 2026-06-25)。この runbook は
