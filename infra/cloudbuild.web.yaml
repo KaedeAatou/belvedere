@@ -14,6 +14,17 @@ substitutions:
   _ENV: dev
   _RUNTIME_SA: belvedere-runtime
   _TAG: latest
+  # dev/prod 認証分離 (2026-06-26): prod build には prod の Firebase web 設定を Cloud Run env で注入する。
+  # Nuxt の runtimeConfig.public は NUXT_PUBLIC_* env でランタイム上書き可能 (SSR ペイロード経由で
+  # クライアントへ渡る) → web コードもイメージも env 非依存のまま、env だけで dev/prod を切替える。
+  # 既定は空 = 注入しない = dev は nuxt.config.ts の dev 値 fallback をそのまま使う (dev 無変更 / E2E 無傷)。
+  # 値は deploy-web.yml / promote-prod.yml が env=prod 時に GitHub repo variables (vars.PROD_FIREBASE_*) から渡す。
+  # Firebase web 設定は公開情報 (機密でない) なので secret ではなく variable で管理する。
+  _FB_API_KEY: ''
+  _FB_AUTH_DOMAIN: ''
+  _FB_PROJECT_ID: ''
+  _FB_APP_ID: ''
+  _API_BASE_URL: ''
 
 images:
   - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG}"
@@ -40,25 +51,37 @@ steps:
     waitFor: [build]
 
   # ---- Deploy to Cloud Run ----
+  # bash でラップして Firebase env を条件付き注入する (空なら付けない = dev は従来通り)。
+  # $${ENV_VARS} は Cloud Build が $ をエスケープし bash 変数として展開する ($$ → $)。
+  # ${_FB_API_KEY} 等は Cloud Build が deploy 時の値に置換する (dev=空 / prod=prod 値)。
   - id: deploy
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
-    entrypoint: gcloud
+    entrypoint: bash
     args:
-      - run
-      - deploy
-      - "${_SERVICE}-${_ENV}"
-      - --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG}
-      - --region=${_REGION}
-      - --platform=managed
-      - --allow-unauthenticated   # Phase 1-B (6/9-14) で Firebase Auth 検証を導入予定。/health と /login は最終形でも公開
-      - --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com
-      - --set-env-vars=NODE_ENV=production,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}
-      - --memory=512Mi
-      - --cpu=1
-      - --timeout=300s
-      - --concurrency=40
-      - --max-instances=3
-      - --min-instances=0
+      - -c
+      - |
+        set -e
+        ENV_VARS="NODE_ENV=production,GCP_PROJECT=${PROJECT_ID},GCP_REGION=${_REGION}"
+        if [ -n "${_FB_API_KEY}" ]; then
+          ENV_VARS="$${ENV_VARS},NUXT_PUBLIC_FIREBASE_API_KEY=${_FB_API_KEY},NUXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${_FB_AUTH_DOMAIN},NUXT_PUBLIC_FIREBASE_PROJECT_ID=${_FB_PROJECT_ID},NUXT_PUBLIC_FIREBASE_APP_ID=${_FB_APP_ID}"
+        fi
+        if [ -n "${_API_BASE_URL}" ]; then
+          ENV_VARS="$${ENV_VARS},NUXT_PUBLIC_API_BASE_URL=${_API_BASE_URL}"
+        fi
+        echo "▶ deploying ${_SERVICE}-${_ENV} (firebase env injected: $([ -n "${_FB_API_KEY}" ] && echo yes || echo no))"
+        gcloud run deploy "${_SERVICE}-${_ENV}" \
+          --image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/web:${_TAG} \
+          --region=${_REGION} \
+          --platform=managed \
+          --allow-unauthenticated \
+          --service-account=${_RUNTIME_SA}@${PROJECT_ID}.iam.gserviceaccount.com \
+          --set-env-vars="$${ENV_VARS}" \
+          --memory=512Mi \
+          --cpu=1 \
+          --timeout=300s \
+          --concurrency=40 \
+          --max-instances=3 \
+          --min-instances=0
     waitFor: [push]
 
 options:
