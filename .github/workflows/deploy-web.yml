@@ -56,15 +56,28 @@ jobs:
 
       - name: Resolve target project
         id: target
+        # dev/prod 認証分離: prod 時のみ prod の Firebase web 設定 (GitHub repo variables) を解決して
+        # cloudbuild に渡す。dev は空 → cloudbuild が NUXT_PUBLIC_FIREBASE_* を注入しない → dev は
+        # nuxt.config.ts の dev 値 fallback のまま (dev 無変更 / E2E 無傷)。Firebase web 設定は公開情報。
         run: |
           if [ "${{ github.event.inputs.env || 'dev' }}" = "prod" ]; then
             echo "project=$GCP_PROJECT_PROD" >> $GITHUB_OUTPUT
             echo "wif_provider=$WIF_PROVIDER_PROD" >> $GITHUB_OUTPUT
             echo "wif_sa=$WIF_SA_PROD" >> $GITHUB_OUTPUT
+            echo "fb_api_key=${{ vars.PROD_FIREBASE_API_KEY }}" >> $GITHUB_OUTPUT
+            echo "fb_auth_domain=${{ vars.PROD_FIREBASE_AUTH_DOMAIN }}" >> $GITHUB_OUTPUT
+            echo "fb_project_id=${{ vars.PROD_FIREBASE_PROJECT_ID }}" >> $GITHUB_OUTPUT
+            echo "fb_app_id=${{ vars.PROD_FIREBASE_APP_ID }}" >> $GITHUB_OUTPUT
+            echo "api_base_url=${{ vars.PROD_API_BASE_URL }}" >> $GITHUB_OUTPUT
           else
             echo "project=$GCP_PROJECT_DEV"  >> $GITHUB_OUTPUT
             echo "wif_provider=$WIF_PROVIDER_DEV" >> $GITHUB_OUTPUT
             echo "wif_sa=$WIF_SA_DEV" >> $GITHUB_OUTPUT
+            echo "fb_api_key=" >> $GITHUB_OUTPUT
+            echo "fb_auth_domain=" >> $GITHUB_OUTPUT
+            echo "fb_project_id=" >> $GITHUB_OUTPUT
+            echo "fb_app_id=" >> $GITHUB_OUTPUT
+            echo "api_base_url=" >> $GITHUB_OUTPUT
           fi
 
       - name: Authenticate to Google Cloud (Workload Identity)
@@ -79,11 +92,14 @@ jobs:
           project_id: ${{ steps.target.outputs.project }}
 
       - name: Submit Cloud Build
+        # _FB_*/_API_BASE_URL は env 別 (dev=空 / prod=repo variables)。各値にカンマは含まれない
+        # (apiKey 英数 / authDomain ドット / appId コロン / URL スラッシュ) ため --substitutions の
+        # カンマ区切りと衝突しない。
         run: |
           SHORT_SHA="${GITHUB_SHA::7}"
           gcloud builds submit \
             --config infra/cloudbuild.web.yaml \
-            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_TAG=$SHORT_SHA \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_SERVICE=${{ env.SERVICE }},_ENV=${{ github.event.inputs.env || 'dev' }},_RUNTIME_SA=${{ env.RUNTIME_SA_NAME }},_TAG=$SHORT_SHA,_FB_API_KEY=${{ steps.target.outputs.fb_api_key }},_FB_AUTH_DOMAIN=${{ steps.target.outputs.fb_auth_domain }},_FB_PROJECT_ID=${{ steps.target.outputs.fb_project_id }},_FB_APP_ID=${{ steps.target.outputs.fb_app_id }},_API_BASE_URL=${{ steps.target.outputs.api_base_url }} \
             --project=${{ steps.target.outputs.project }} \
             .
 
