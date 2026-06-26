@@ -167,6 +167,28 @@ const currentStats = computed(() => stats(props.current));
 const nextStats = computed(() => stats(props.next));
 const backlogStats = computed(() => stats(props.backlog));
 
+// ===== 区画の折り畳み (localStorage で保持 / WC-517e029a) =====
+// チケットが増えると一覧が長くなるため、CURRENT/NEXT/BACKLOG を各区画ヘッダのクリックで畳める。
+// 開閉状態は localStorage に保存し、リロード・再ログイン後も維持する (畳んでも見出しの件数/SP は残す)。
+const COLLAPSE_KEY = 'belv:section-collapsed';
+const collapsed = ref<Record<SectionKey, boolean>>({ current: false, next: false, backlog: false });
+onMounted(() => {
+  if (!import.meta.client) return;
+  try {
+    const raw = localStorage.getItem(COLLAPSE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as Partial<Record<SectionKey, boolean>>;
+      collapsed.value = { current: p.current === true, next: p.next === true, backlog: p.backlog === true };
+    }
+  } catch { /* 壊れた値は無視して既定 (全開) のまま */ }
+});
+function toggleSection(key: SectionKey): void {
+  collapsed.value = { ...collapsed.value, [key]: !collapsed.value[key] };
+  if (import.meta.client) {
+    try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(collapsed.value)); } catch { /* quota 等は無視 */ }
+  }
+}
+
 // ===== 新規作成ダイアログ (allowedTypes で種別を制限) =====
 const showCreateDialog = ref(false);
 const newTitle = ref('');
@@ -466,8 +488,10 @@ async function submitSplit(): Promise<void> {
 
     <!-- CURRENT SPRINT -->
     <div class="backlog-section" data-testid="section-current">
-      <div class="backlog-section-head">
-        <Icon name="caretRight" />
+      <div class="backlog-section-head sec-clickable" data-testid="section-toggle-current"
+           role="button" tabindex="0" :aria-expanded="!collapsed.current"
+           @click="toggleSection('current')" @keydown.enter.space.prevent="toggleSection('current')">
+        <span class="sec-caret" :class="{ open: !collapsed.current }"><Icon name="caretRight" /></span>
         <span class="title">{{ currentLabel ?? 'Current Sprint' }}</span>
         <span class="chip amber solid">CURRENT</span>
         <div class="meta">
@@ -476,7 +500,7 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ currentStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <VueDraggable v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
+      <VueDraggable v-show="!collapsed.current" v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
                     :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="current" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in currentList" :key="t.id" :t="t" data-testid="live-ticket"
@@ -493,13 +517,15 @@ async function submitSplit(): Promise<void> {
           </template>
         </TicketRow>
       </VueDraggable>
-      <p v-if="currentList.length === 0" class="live-msg">アクティブスプリントにチケットがありません。</p>
+      <p v-if="currentList.length === 0 && !collapsed.current" class="live-msg">アクティブスプリントにチケットがありません。</p>
     </div>
 
     <!-- NEXT SPRINT -->
     <div class="backlog-section" data-testid="section-next">
-      <div class="backlog-section-head">
-        <Icon name="caretRight" />
+      <div class="backlog-section-head sec-clickable" data-testid="section-toggle-next"
+           role="button" tabindex="0" :aria-expanded="!collapsed.next"
+           @click="toggleSection('next')" @keydown.enter.space.prevent="toggleSection('next')">
+        <span class="sec-caret" :class="{ open: !collapsed.next }"><Icon name="caretRight" /></span>
         <span class="title">{{ nextLabel ?? 'Next Sprint' }}</span>
         <span class="chip amber">NEXT</span>
         <div class="meta">
@@ -508,7 +534,7 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ nextStats.flagged }}</b> flagged</span>
         </div>
       </div>
-      <VueDraggable v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
+      <VueDraggable v-show="!collapsed.next" v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
                     :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="next" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in nextList" :key="t.id" :t="t" data-testid="live-ticket"
@@ -525,13 +551,15 @@ async function submitSplit(): Promise<void> {
           </template>
         </TicketRow>
       </VueDraggable>
-      <p v-if="nextList.length === 0" class="live-msg">計画中スプリントにチケットがありません。</p>
+      <p v-if="nextList.length === 0 && !collapsed.next" class="live-msg">計画中スプリントにチケットがありません。</p>
     </div>
 
     <!-- BACKLOG (未スケジュール) -->
     <div class="backlog-section" data-testid="section-backlog">
-      <div class="backlog-section-head">
-        <Icon name="caretRight" />
+      <div class="backlog-section-head sec-clickable" data-testid="section-toggle-backlog"
+           role="button" tabindex="0" :aria-expanded="!collapsed.backlog"
+           @click="toggleSection('backlog')" @keydown.enter.space.prevent="toggleSection('backlog')">
+        <span class="sec-caret" :class="{ open: !collapsed.backlog }"><Icon name="caretRight" /></span>
         <span class="title">Backlog</span>
         <span class="chip">UNSCHEDULED</span>
         <div class="meta">
@@ -539,10 +567,11 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ backlogStats.sp }}</b> SP</span>
           <span><b>{{ backlogStats.flagged }}</b> flagged</span>
         </div>
+        <!-- New issue は折り畳みトグルと競合しないよう @click.stop -->
         <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
-                @click="openCreate"><Icon name="plus" /> New issue</button>
+                @click.stop="openCreate"><Icon name="plus" /> New issue</button>
       </div>
-      <VueDraggable v-model="backlogList" :group="backlogGroup" handle=".trow-drag-grab"
+      <VueDraggable v-show="!collapsed.backlog" v-model="backlogList" :group="backlogGroup" handle=".trow-drag-grab"
                     :disabled="reorderBlocked" :animation="150" :force-fallback="true"
                     data-section="backlog" class="dnd-list" @end="onDragEnd">
         <TicketRow v-for="t in backlogList" :key="t.id" :t="t" data-testid="live-ticket"
@@ -559,7 +588,7 @@ async function submitSplit(): Promise<void> {
           </template>
         </TicketRow>
       </VueDraggable>
-      <p v-if="backlogList.length === 0" class="live-msg">未スケジュールのチケットはありません。</p>
+      <p v-if="backlogList.length === 0 && !collapsed.backlog" class="live-msg">未スケジュールのチケットはありません。</p>
     </div>
   </div>
 
@@ -770,6 +799,11 @@ async function submitSplit(): Promise<void> {
   font-size: 13px;
   color: var(--ink-2);
 }
+
+/* 区画ヘッダの折り畳みトグル (WC-517e029a)。ヘッダクリックで開閉、caret を回転で示す。 */
+.sec-clickable { cursor: pointer; user-select: none; }
+.sec-caret { display: inline-flex; transition: transform 0.15s ease; }
+.sec-caret.open { transform: rotate(90deg); }
 
 /* クロス区画ドラッグ中のドロップ先ハイライト (どこに落ちるかの可視フィードバック) */
 .backlog-section.drop-target {

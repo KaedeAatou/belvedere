@@ -5,7 +5,7 @@
 // 対象外で e2e (reorder.spec) と実機 (local-ui-verify) が見る。ここでは @end を合成イベントで
 // 発火させ、移動先区画 / 区画跨ぎの分岐で reorderTickets の引数が正しいことだけを固定する。
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { VueDraggable } from 'vue-draggable-plus';
@@ -322,5 +322,52 @@ describe('SprintSectionedList 分割の親Epic継承 (案A)', () => {
     const arg = mocks.createTicket.mock.calls[0]![0];
     expect(arg).toMatchObject({ type: 'task', parentTicketId: 'US-4' });
     expect(arg).not.toHaveProperty('epicId');
+  });
+});
+
+// ===== WC-517e029a: 区画の折り畳み + localStorage 保持 =====
+// 配線を固定する: ヘッダクリックで caret の open が反転し localStorage に保存される / 保存済みなら
+// 再マウントで復元 / New issue は @click.stop でトグルしない。物理的な見た目は review で目視。
+describe('SprintSectionedList 区画の折り畳み (WC-517e029a)', () => {
+  const props = { ...baseProps, current: [t('A')], next: [t('B')], backlog: [t('C')] };
+  // nuxt test 環境の localStorage は partial (clear 無し) なので、フル機能の in-memory mock に差し替える。
+  beforeEach(() => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => { store.set(k, v); },
+      removeItem: (k: string) => { store.delete(k); },
+      clear: () => { store.clear(); },
+    });
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('既定は全区画オープン (caret に open)', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    expect(wrapper.find('[data-testid=section-toggle-current] .sec-caret').classes()).toContain('open');
+    expect(wrapper.find('[data-testid=section-toggle-backlog] .sec-caret').classes()).toContain('open');
+  });
+
+  it('ヘッダクリックで折り畳み → caret から open が外れ localStorage に保存される', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    await wrapper.get('[data-testid=section-toggle-backlog]').trigger('click');
+    expect(wrapper.find('[data-testid=section-toggle-backlog] .sec-caret').classes()).not.toContain('open');
+    const saved = JSON.parse(localStorage.getItem('belv:section-collapsed') ?? '{}');
+    expect(saved.backlog).toBe(true);
+    expect(saved.current).toBe(false);
+  });
+
+  it('localStorage に保存済みなら再マウントで折り畳み状態を復元する', async () => {
+    localStorage.setItem('belv:section-collapsed', JSON.stringify({ current: true, next: false, backlog: false }));
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    expect(wrapper.find('[data-testid=section-toggle-current] .sec-caret').classes()).not.toContain('open');
+    expect(wrapper.find('[data-testid=section-toggle-next] .sec-caret').classes()).toContain('open');
+  });
+
+  it('New issue ボタンのクリックは折り畳みをトグルしない (@click.stop)', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, { props });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    expect(wrapper.find('[data-testid=section-toggle-backlog] .sec-caret').classes()).toContain('open');
+    expect(wrapper.find('[data-testid=create-dialog]').exists()).toBe(true);
   });
 });
