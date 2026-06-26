@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import type { ScreenId } from '~/composables/useUiMeta';
-import { SCREENS } from '~/composables/useUiMeta';
 
-const props = defineProps<{
+defineProps<{
   screen: ScreenId;
   aiOpen: boolean;
   railTab: 'backlog' | 'events';
@@ -12,8 +11,6 @@ const emit = defineEmits<{
   'update:aiOpen': [v: boolean];
   'update:railTab': [v: 'backlog' | 'events'];
 }>();
-
-const cur = computed(() => SCREENS.find((s) => s.id === props.screen));
 
 function setScreen(s: ScreenId) { emit('update:screen', s); }
 function setRailTab(t: 'backlog' | 'events') { emit('update:railTab', t); }
@@ -48,8 +45,9 @@ onMounted(() => {
           <button :class="['seg-btn', railTab === 'events' && 'active']"
                   @click="setRailTab('events')">Events</button>
         </div>
-        <span class="sep">/</span>
-        <span class="now">{{ cur?.label }}</span>
+        <!-- 旧「/ <現在画面ラベル>」breadcrumb 末尾は撤去 (WC-924256e9)。
+             Events 切替時に setScreen を呼ばず cur.label が更新されず紛らわしかったため。
+             現在地は seg-ctrl の active 状態とレールのハイライトで分かる。 -->
       </div>
       <div class="header-actions">
         <button class="h-btn" data-testid="search-btn" @click="toggleSearch">
