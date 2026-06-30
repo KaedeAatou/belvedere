@@ -20,6 +20,7 @@ import {
   generateId,
   applyStatusTransition,
   computeReorderUpdates,
+  reconcileSprintStatus,
 } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import { can, forbidden } from '../permissions';
@@ -205,6 +206,15 @@ export async function patchTicket(
   if (parsed.data.status !== undefined && parsed.data.status !== existing.status) {
     updated = applyStatusTransition(updated, parsed.data.status, now);
   }
+  // current↔backlog 不変条件 (WC-676a53e1): DetailSheet は status=backlog を sprintId(current) と
+  // 一緒に送るため、ここで強制しないと current + backlog の矛盾状態が生まれ Daily(current のみ)で
+  // 消える。status を新たに backlog にしたら sprint から外す / current 所属で backlog のままなら todo。
+  const demoteToBacklog = parsed.data.status === 'backlog' && existing.status !== 'backlog';
+  if (updated.status === 'backlog' || updated.sprintId !== undefined) {
+    const sprints = await repo.sprints.list({ workspaceId: ctx.workspaceId });
+    const activeSprintId = sprints.find((s) => s.status === 'active')?.id;
+    updated = reconcileSprintStatus(updated, { activeSprintId, demoteToBacklog });
+  }
   await repo.tickets.upsert(updated);
   return { ok: true, status: 200, body: updated };
 }
@@ -298,9 +308,17 @@ export async function changeTicketStatus(
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
   // applyStatusTransition が startedAt (初回 in-progress) / completedAt (初回 done) を自動記録
-  const updated = applyStatusTransition(existing, parsed.data.status, new Date().toISOString());
+  let updated = applyStatusTransition(existing, parsed.data.status, new Date().toISOString());
+  // current↔backlog 不変条件 (WC-676a53e1): backlog にしたら sprint から外す (Daily=current 非表示)。
+  // current 所属で backlog のまま残さない。create/reorder と同じ不変条件を status 変更経路でも保証。
+  const demoteToBacklog = parsed.data.status === 'backlog' && existing.status !== 'backlog';
+  if (updated.status === 'backlog' || updated.sprintId !== undefined) {
+    const sprints = await repo.sprints.list({ workspaceId: ctx.workspaceId });
+    const activeSprintId = sprints.find((s) => s.status === 'active')?.id;
+    updated = reconcileSprintStatus(updated, { activeSprintId, demoteToBacklog });
+  }
   await repo.tickets.upsert(updated);
-  return { ok: true, status: 200, body: { from: existing.status, to: parsed.data.status, ticket: updated } };
+  return { ok: true, status: 200, body: { from: existing.status, to: updated.status, ticket: updated } };
 }
 
 export async function deleteTicket(
