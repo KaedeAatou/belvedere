@@ -68,6 +68,7 @@ const { checkStory, checking: storyChecking } = useStoryCheck();
 const { activeSprint, nextPlanned } = useSprints();
 const { selectableEpics, fetchEpics, createEpic, error: epicsError } = useEpics();
 const { me } = useMe();
+const { upload: uploadImage } = useImages();
 
 // 並び替え (= backlog.reorder) は PO/admin のみ (permissions.ts MATRIX)。非 PO がドラッグして
 // サーバで 403 → 無言 revert する紛らわしさを防ぐため、UI 側でも drag を無効化する。
@@ -203,6 +204,35 @@ const newAC = ref(''); // 改行区切り
 const newValueImpact = ref<ValueImpact | ''>('');
 const newReproSteps = ref('');     // bug 専用 (WC-2dba4170 の欄を作成時にも)
 const newRegressionNote = ref(''); // bug 専用
+// 起票時の添付画像 (WC-a8f0be16)。![](/api/images/id) の配列。submitCreate で説明末尾に追記する。
+const newImages = ref<string[]>([]);
+const newImageBusy = ref(false);
+
+// 作成フォームで画像を選択 → アップロード → newImages に追加 (story/非 story 共通)。
+async function onCreatePickImage(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { createError.value = '画像ファイルを選んでください'; input.value = ''; return; }
+  createError.value = null;
+  newImageBusy.value = true;
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(new Error('read failed'));
+      r.readAsDataURL(file);
+    });
+    const id = await uploadImage(dataUrl);
+    if (id) newImages.value = [...newImages.value, `![](/api/images/${id})`];
+    else createError.value = '画像のアップロードに失敗しました';
+  } catch {
+    createError.value = '画像の読み込みに失敗しました';
+  } finally {
+    newImageBusy.value = false;
+    input.value = '';
+  }
+}
 
 // 起票先の区画 (Backlog / Next / Current)。作成時にそのまま sprintId に変換する。
 type CreateSection = 'backlog' | 'next' | 'current';
@@ -314,6 +344,8 @@ function openCreate(): void {
   newValueImpact.value = '';
   newReproSteps.value = '';
   newRegressionNote.value = '';
+  newImages.value = [];
+  newImageBusy.value = false;
   // story 作成時の親 Epic セレクタ用に Epic 一覧を確実に読み込む (単体マウント経路でも空にしない)。
   void fetchEpics();
   showCreateDialog.value = true;
@@ -371,17 +403,23 @@ async function submitCreate(): Promise<void> {
     input.description = composeStoryDescription();
     input.epicId = newEpicId.value;
   } else {
-    // 非 story: 作成フォームの 説明 / AC / 価値 / (bug) 再現手順・回帰テスト を反映 (WC-4b06be05)。
-    // 後でチケットを開かずに済むようにする。SP は作成時に設定しない (ポーカー / WC-9460f690)。
+    // 非 story: 説明 / (bug) 再現手順・回帰テスト / (spike) timebox を反映。SP は作成時に設定しない
+    // (見積もりはポーカー / WC-9460f690)。
     if (newDescription.value.trim()) input.description = newDescription.value.trim();
-    const ac = newAC.value.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-    if (ac.length > 0) input.acceptanceCriteria = ac;
-    if (newValueImpact.value) input.valueImpact = newValueImpact.value;
     if (newType.value === 'bug') {
       if (newReproSteps.value.trim()) input.reproSteps = newReproSteps.value.trim();
       if (newRegressionNote.value.trim()) input.regressionNote = newRegressionNote.value.trim();
     }
     if (newType.value === 'spike' && newTimebox.value !== null) input.timeboxHours = newTimebox.value;
+  }
+  // 受け入れ条件 / 価値 は story・非 story 共通で作成時に入力可能 (WC-4b06be05 / story でも AC を入れられる)。
+  const ac = newAC.value.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  if (ac.length > 0) input.acceptanceCriteria = ac;
+  if (newValueImpact.value) input.valueImpact = newValueImpact.value;
+  // 添付画像を説明末尾に追記 (WC-a8f0be16 / story は composed description に続けて足す)。
+  if (newImages.value.length > 0) {
+    const imgs = newImages.value.join('\n');
+    input.description = input.description ? `${input.description}\n${imgs}` : imgs;
   }
   // bug / incident / task は作成時に Story Point を設定しない。
   // story と同様、見積もりは見積もりポーカー (EstimationPanel) で全員で決める (WC-9460f690)。
@@ -739,39 +777,50 @@ async function submitSplit(): Promise<void> {
             </select>
           </div>
         </div>
-        <!-- 非 story: 説明 / AC / 価値 / (bug)再現手順・回帰テスト を作成時に入力 (後でチケットを開かずに済む / WC-4b06be05) -->
-        <template v-if="!isStory">
+        <!-- 説明は非 story のみ (story は 3 欄から自動生成 / WC-4b06be05) -->
+        <div v-if="!isStory" class="field">
+          <label class="label" for="ssl-new-desc">説明</label>
+          <textarea id="ssl-new-desc" v-model="newDescription" data-testid="new-ticket-description"
+                    class="text-input" rows="3" maxlength="2000" placeholder="背景・詳細" />
+        </div>
+        <!-- 受け入れ条件 / 価値 は story・非 story 共通で作成時に入力 (WC-4b06be05 / story でも AC を入れられる) -->
+        <div class="field">
+          <label class="label" for="ssl-new-ac">受け入れ条件 (1行1項目)</label>
+          <textarea id="ssl-new-ac" v-model="newAC" data-testid="new-ticket-ac"
+                    class="text-input" rows="3" maxlength="2000" placeholder="例: ○○できる" />
+        </div>
+        <div class="field">
+          <label class="label" for="ssl-new-value">価値 (valueImpact)</label>
+          <select id="ssl-new-value" v-model="newValueImpact" data-testid="new-ticket-value" class="select-input">
+            <option value="">未設定</option>
+            <option value="low">low</option>
+            <option value="medium">medium</option>
+            <option value="high">high</option>
+          </select>
+        </div>
+        <!-- 画像添付 (WC-a8f0be16 / story・非 story 共通)。アップロード→説明末尾に ![](…) 追記。 -->
+        <div class="field">
+          <label class="label">画像</label>
+          <label class="img-upload-btn">
+            <input type="file" accept="image/*" data-testid="new-ticket-image-input" style="display: none" @change="onCreatePickImage" />
+            {{ newImageBusy ? 'アップロード中…' : '🖼 画像を追加' }}
+          </label>
+          <p v-if="newImages.length > 0" class="new-img-count" data-testid="new-ticket-image-count">
+            {{ newImages.length }} 枚の画像を添付しました (説明末尾に挿入されます)
+          </p>
+        </div>
+        <!-- bug 専用: 再現手順 / 回帰テスト (WC-2dba4170) -->
+        <template v-if="newType === 'bug'">
           <div class="field">
-            <label class="label" for="ssl-new-desc">説明</label>
-            <textarea id="ssl-new-desc" v-model="newDescription" data-testid="new-ticket-description"
-                      class="text-input" rows="3" maxlength="2000" placeholder="背景・詳細" />
+            <label class="label" for="ssl-new-repro">再現手順</label>
+            <textarea id="ssl-new-repro" v-model="newReproSteps" data-testid="new-ticket-repro"
+                      class="text-input" rows="3" maxlength="2000" placeholder="再現手順 + 期待 vs 実動作 + 影響範囲" />
           </div>
           <div class="field">
-            <label class="label" for="ssl-new-ac">受け入れ条件 (1行1項目)</label>
-            <textarea id="ssl-new-ac" v-model="newAC" data-testid="new-ticket-ac"
-                      class="text-input" rows="3" maxlength="2000" placeholder="例: ○○できる" />
+            <label class="label" for="ssl-new-regression">回帰テスト</label>
+            <textarea id="ssl-new-regression" v-model="newRegressionNote" data-testid="new-ticket-regression"
+                      class="text-input" rows="2" maxlength="1000" placeholder="再発防止の自動テスト方針" />
           </div>
-          <div class="field">
-            <label class="label" for="ssl-new-value">価値 (valueImpact)</label>
-            <select id="ssl-new-value" v-model="newValueImpact" data-testid="new-ticket-value" class="select-input">
-              <option value="">未設定</option>
-              <option value="low">low</option>
-              <option value="medium">medium</option>
-              <option value="high">high</option>
-            </select>
-          </div>
-          <template v-if="newType === 'bug'">
-            <div class="field">
-              <label class="label" for="ssl-new-repro">再現手順</label>
-              <textarea id="ssl-new-repro" v-model="newReproSteps" data-testid="new-ticket-repro"
-                        class="text-input" rows="3" maxlength="2000" placeholder="再現手順 + 期待 vs 実動作 + 影響範囲" />
-            </div>
-            <div class="field">
-              <label class="label" for="ssl-new-regression">回帰テスト</label>
-              <textarea id="ssl-new-regression" v-model="newRegressionNote" data-testid="new-ticket-regression"
-                        class="text-input" rows="2" maxlength="1000" placeholder="再発防止の自動テスト方針" />
-            </div>
-          </template>
         </template>
         <div class="field-row">
           <div v-if="newType === 'spike'" class="field">
@@ -927,6 +976,14 @@ async function submitSplit(): Promise<void> {
 .us-suggestion { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 /* 親 Epic セレクタ補助文 (create / split 共通): 候補ゼロ or 継承不能時の案内 */
 .us-epic-empty { margin: 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
+/* 起票時の画像添付ボタン (WC-a8f0be16) */
+.img-upload-btn {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  padding: 6px 12px; border: var(--hairline) dashed var(--accent-dim, var(--line-2)); border-radius: var(--radius);
+  background: transparent; color: var(--accent); font-family: var(--sans); font-size: 12px; cursor: pointer;
+}
+.img-upload-btn:hover { background: var(--accent-bg, #fff3ee); }
+.new-img-count { margin: 6px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 /* 親 Epic セレクタ + 「+ 新規 Epic」を横並び。インライン Epic 作成フォーム */
 .epic-select-row { display: flex; gap: 8px; align-items: center; }
 .epic-select-row .select-input { flex: 1; }

@@ -26,11 +26,14 @@ const mocks = vi.hoisted(() => {
   // 並び替え権限 (canReorder) を切替えるための me。template/script は me.value?.role を読む。
   // テストごとに value を差し替えて remount し、reorderBlocked (= VueDraggable :disabled) を踏む。
   const me = { value: null as null | { role: string } };
+  // 作成フォームの画像アップロード (WC-a8f0be16) の配線スパイ。upload は固定 id を返す。
+  const uploadImage = vi.fn((_dataUrl: string) => Promise.resolve('IMG1'));
   return {
     me,
     reorderTickets,
     createTicket,
     createEpic,
+    uploadImage,
     // テンプレートは ref を自動アンラップするが、プレーン {value} はアンラップされない。
     // createLoading は template でのみ truthy 判定される (script で .value を読まない) ので素の値を渡す。
     // liveError は script で .value を読むので {value} 形を保つ。
@@ -75,6 +78,7 @@ mockNuxtImport('useStoryCheck', () => mocks.useStoryCheck);
 mockNuxtImport('useSprints', () => mocks.useSprints);
 mockNuxtImport('useEpics', () => mocks.useEpics);
 mockNuxtImport('useTicketSelection', () => mocks.useSelection);
+mockNuxtImport('useImages', () => () => ({ upload: mocks.uploadImage }));
 
 const t = (id: string): Ticket => ({
   id,
@@ -257,6 +261,71 @@ describe('SprintSectionedList story 作成の親Epic必須化 (案A)', () => {
     await flushPromises();
     expect(mocks.createEpic).not.toHaveBeenCalled();
     expect(wrapper.get('[data-testid=epic-new-error]').text()).toContain('Epic 名');
+  });
+
+  // WC-4b06be05: story 作成時にも AC / 価値 を入力できる (以前は story では入力欄が出ず説明も書けなかった)。
+  it('story でも 受け入れ条件 / 価値 を入力でき createTicket に載る', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=us-epic]').setValue('EP-1');
+    // AC / 価値 入力欄は story でも表示される (共通化)。
+    await wrapper.get('[data-testid=new-ticket-ac]').setValue('提案が割れない\nゴールが1行で出る');
+    await wrapper.get('[data-testid=new-ticket-value]').setValue('high');
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({
+      type: 'story',
+      acceptanceCriteria: ['提案が割れない', 'ゴールが1行で出る'],
+      valueImpact: 'high',
+    });
+  });
+});
+
+// WC-a8f0be16: 起票時に説明へ画像を貼れる。作成フォームに画像アップロード欄があり、
+// アップロード結果 (![](/api/images/id)) が description 末尾に載る配線を固定する。
+// 実 GCS upload は image-handlers の smoke / DetailSheet と共通経路なのでここは「配線」のみ。
+describe('SprintSectionedList 起票時の画像添付 (WC-a8f0be16)', () => {
+  const storyProps = { ...baseProps, allowedTypes: ['story'] as TicketType[], current: [], next: [], backlog: [] };
+  // nuxt test 環境に FileReader が無いため、data URL を同期的に返す最小 mock に差し替える。
+  beforeEach(() => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL(_f: Blob) { this.result = 'data:image/png;base64,AAAA'; this.onload?.(); }
+    }
+    vi.stubGlobal('FileReader', MockFileReader);
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('画像アップロード欄が作成フォームに出る (story でも)', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, { props: storyProps });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    expect(wrapper.find('[data-testid=new-ticket-image-input]').exists()).toBe(true);
+  });
+
+  it('画像を選ぶと upload が呼ばれ、作成時に description 末尾へ ![](…) が載る', async () => {
+    mocks.createTicket.mockClear();
+    mocks.uploadImage.mockClear();
+    const taskProps = { ...baseProps, allowedTypes: ['task'] as TicketType[], current: [], next: [], backlog: [] };
+    const wrapper = await mountSuspended(SprintSectionedList, { props: taskProps });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    await wrapper.get('[data-testid=new-ticket-title]').setValue('画像付きタスク');
+    // file input の change を発火 (files は read-only なので defineProperty で差し込む)。
+    const input = wrapper.get('[data-testid=new-ticket-image-input]');
+    const file = new File(['x'], 'shot.png', { type: 'image/png' });
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    expect(mocks.uploadImage).toHaveBeenCalledTimes(1);
+    // 添付枚数の表示が出る。
+    expect(wrapper.find('[data-testid=new-ticket-image-count]').exists()).toBe(true);
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    expect(mocks.createTicket).toHaveBeenCalledTimes(1);
+    const arg = mocks.createTicket.mock.calls[0]![0] as { description?: string };
+    expect(arg.description).toContain('![](/api/images/IMG1)');
   });
 });
 
