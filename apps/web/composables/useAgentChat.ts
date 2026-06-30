@@ -17,6 +17,7 @@ const SCREEN_TO_AGENT: Record<ScreenId, string> = {
   daily:      'daily',
   review:     'reviewer',
   retro:      'retrospective',
+  events:     'daily',        // events ホームの概要は Daily Agent (スプリント状態) に寄せる (WC-cba82df1)
 };
 
 /**

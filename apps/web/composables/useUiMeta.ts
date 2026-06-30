@@ -4,7 +4,8 @@
 // 注意: ScreenId は 6 画面 (Backlog + 5 儀式)。T9 で 'refinement' を floor 03 に追加し
 // Review→04 / Retro→05 に振り直した (2026-06-11 完了)。
 
-export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro';
+// 'events' = events タブの概要ホーム (WC-cba82df1)。儀式ではないので CEREMONIES には含めない。
+export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro' | 'events';
 
 export interface ScreenDef {
   id: ScreenId;

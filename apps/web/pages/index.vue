@@ -97,7 +97,10 @@ const ticket = computed(() =>
 <template>
   <Shell v-model:screen="screen" v-model:ai-open="aiOpen" v-model:rail-tab="railTab">
     <div style="flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative">
-      <BacklogScreen v-if="screen === 'backlog'"
+      <EventsHomeScreen v-if="screen === 'events'"
+                        :tickets="tickets" :selected-id="selected"
+                        @select="onSelect" @go="(s) => (screen = s)" />
+      <BacklogScreen v-else-if="screen === 'backlog'"
                      :tickets="tickets" :selected-id="selected"
                      @select="onSelect" />
       <PlanningScreen v-else-if="screen === 'planning'"

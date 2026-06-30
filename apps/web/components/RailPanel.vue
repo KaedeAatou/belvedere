@@ -13,8 +13,18 @@ const showEvents = computed(() => props.railTab === 'events');
 
 <template>
   <aside class="shell-rail">
-    <!-- Events tab → ceremonies -->
+    <!-- Events tab → 概要ホーム + ceremonies -->
     <div v-if="showEvents" class="rail-cer">
+      <!-- 概要 (events ホーム / WC-cba82df1)。儀式の上にスプリント概要への入口を置く。 -->
+      <div :class="['rail-cer-item', screen === 'events' && 'active']"
+           data-testid="rail-events"
+           @click="emit('update:screen', 'events')">
+        <span class="num">◎</span>
+        <span class="lbl">
+          <span class="l1">概要</span>
+          <span class="l2">Sprint overview</span>
+        </span>
+      </div>
       <div v-for="s in CEREMONIES" :key="s.id"
            :class="['rail-cer-item', screen === s.id && 'active']"
            :data-testid="`rail-${s.id}`"
