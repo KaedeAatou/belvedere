@@ -103,6 +103,10 @@ export interface Ticket {
   completedAt?: string;
   /** Review 儀式でステークホルダーがこの完成 increment (チケット) に残した指摘。Review は完成チケットをデモして関係者が指摘する場なので、新規起票せず対象チケット自体に蓄積する。seed (immutable) は持たないため optional */
   reviewNotes?: string[];
+  /** Bug の再現手順 (専用欄 / WC-2dba4170)。空だとルールエンジンが BUG_NO_REPRO を出す。期待 vs 実動作 + 影響範囲を書く。 */
+  reproSteps?: string;
+  /** Bug の回帰テスト方針 (専用欄 / WC-2dba4170)。空だと BUG_NO_REGRESSION_DOD を出す。再発防止の自動テストを書く。 */
+  regressionNote?: string;
   /**
    * バックログ上の手動並び順 (Linear/Jira 型 d&d)。fractional indexing —
    * 隣接 2 件の中間値を採番し、リバランス頻度を抑える。seed (immutable) は値を持たないため optional。

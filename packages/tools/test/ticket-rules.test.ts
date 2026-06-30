@@ -130,6 +130,13 @@ describe('BUG rules', () => {
   it('回帰テスト DoD なしで BUG_NO_REGRESSION_DOD 発火', () => {
     expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', description: '再現あり', acceptanceCriteria: ['直る'] })]), 'BUG_NO_REGRESSION_DOD', 'A')).toBe(true);
   });
+  // WC-2dba4170: 専用欄 reproSteps / regressionNote が埋まっていれば発火しない (description 非依存)。
+  it('reproSteps 欄ありで BUG_NO_REPRO 発火しない (description が空でも)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', description: '落ちる', reproSteps: '1. ボタン連打 → 2. 落ちる' })]), 'BUG_NO_REPRO', 'A')).toBe(false);
+  });
+  it('regressionNote 欄ありで BUG_NO_REGRESSION_DOD 発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', reproSteps: '手順', regressionNote: '連打のユニットテストを追加' })]), 'BUG_NO_REGRESSION_DOD', 'A')).toBe(false);
+  });
 });
 
 describe('INCIDENT rules', () => {

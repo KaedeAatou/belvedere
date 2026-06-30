@@ -25,6 +25,10 @@ const editValueImpact = ref<ValueImpact | ''>('');
 const editStatus = ref<Status>('backlog');
 const editAC = ref('');       // 改行区切りの AC テキスト
 const editSprintId = ref(''); // 空文字 = 未割当/変更なし
+const editReproSteps = ref('');     // Bug の再現手順 (WC-2dba4170)
+const editRegressionNote = ref(''); // Bug の回帰テスト方針 (WC-2dba4170)
+// Bug 種別のみ再現手順 / 回帰テスト欄を出す (ルールエンジンの BUG_NO_REPRO / BUG_NO_REGRESSION_DOD 対応)
+const isBug = computed(() => props.ticket.type === 'bug');
 
 function startEdit(): void {
   editTitle.value = props.ticket.title;
@@ -35,6 +39,8 @@ function startEdit(): void {
   editStatus.value = props.ticket.status;
   editAC.value = (props.ticket.acceptanceCriteria ?? []).join('\n');
   editSprintId.value = props.ticket.sprintId ?? '';
+  editReproSteps.value = props.ticket.reproSteps ?? '';
+  editRegressionNote.value = props.ticket.regressionNote ?? '';
   editError.value = null;
   editing.value = true;
 }
@@ -57,6 +63,11 @@ async function saveEdit(): Promise<void> {
   };
   if (editAssignee.value) patch.assigneeId = editAssignee.value;
   if (editValueImpact.value) patch.valueImpact = editValueImpact.value;
+  // Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。bug のみ送信 (空文字でクリアも可)。
+  if (isBug.value) {
+    patch.reproSteps = editReproSteps.value.trim();
+    patch.regressionNote = editRegressionNote.value.trim();
+  }
   // sprintId: API は null/空での解除をサポートしないため、選択がある場合のみ送信する。
   // 「バックログ (なし)」選択肢は提供しない (解除不可のため)。
   if (editSprintId.value) patch.sprintId = editSprintId.value;
@@ -226,6 +237,36 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
           </div>
         </template>
       </div>
+
+      <!-- Bug 専用: 再現手順 / 回帰テスト (WC-2dba4170)。空だとルールエンジンが BUG_NO_REPRO / BUG_NO_REGRESSION_DOD を出す。 -->
+      <template v-if="isBug">
+        <div class="field">
+          <div class="l">再現手順</div>
+          <textarea v-if="editing" v-model="editReproSteps" class="edit-input edit-textarea"
+                    data-testid="sheet-edit-repro" rows="4"
+                    placeholder="再現手順 + 期待 vs 実動作 + 影響範囲" />
+          <template v-else>
+            <div v-if="ticket.reproSteps" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.reproSteps }}</div>
+            <div v-else
+                 style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
+              再現手順が未記入です。編集して記入してください。
+            </div>
+          </template>
+        </div>
+        <div class="field">
+          <div class="l">回帰テスト</div>
+          <textarea v-if="editing" v-model="editRegressionNote" class="edit-input edit-textarea"
+                    data-testid="sheet-edit-regression" rows="3"
+                    placeholder="再発防止の自動テスト方針" />
+          <template v-else>
+            <div v-if="ticket.regressionNote" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.regressionNote }}</div>
+            <div v-else
+                 style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
+              回帰テストが未記入です。編集して記入してください。
+            </div>
+          </template>
+        </div>
+      </template>
 
       <!-- レビュー指摘 (Review 儀式でこの完成 increment に残された関係者の指摘)。空なら非表示。 -->
       <div v-if="ticket.reviewNotes && ticket.reviewNotes.length > 0" class="field" data-testid="sheet-review-notes">
