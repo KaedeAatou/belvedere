@@ -35,6 +35,7 @@ import { tryRefinementViaAdk } from './config/refinement-adk';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember, changeMemberRole } from './handlers/member-handlers';
+import { uploadImage, readImage } from './handlers/image-handlers';
 import { listApiKeys, createApiKey, revokeApiKey } from './handlers/api-key-handlers';
 import {
   createWorkspace,
@@ -346,6 +347,20 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   app.post('/api/members/:userId/role', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await changeMemberRole(repo, buildCtx(c), c.req.param('userId'), body));
+  });
+
+  // 画像アップロード (WC-a8f0be16)。POST=保存して id を返す / GET=API プロキシで binary 配信。
+  app.post('/api/images', async (c) => {
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return respond(c, await uploadImage(buildCtx(c), body));
+  });
+  app.get('/api/images/:id', async (c) => {
+    const img = await readImage(buildCtx(c), c.req.param('id'));
+    if (!img) return c.json({ error: 'not_found' }, 404);
+    return c.body(new Uint8Array(img.bytes), 200, {
+      'Content-Type': img.contentType,
+      'Cache-Control': 'private, max-age=3600',
+    });
   });
 
   // ------- per-user API キー (programmatic アクセス用トークン / 2026-06-17) -------

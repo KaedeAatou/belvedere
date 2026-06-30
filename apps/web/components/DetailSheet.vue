@@ -8,6 +8,37 @@ const emit = defineEmits<{ close: [] }>();
 const { memberName, members } = useMembers();
 const { findingsFor } = useFindings();
 const { patchTicket, deleteTicket } = useTickets();
+const { upload: uploadImage } = useImages();
+const imageBusy = ref(false);
+
+// 画像を選択 → data URL 化 → アップロード → ![](/api/images/id) を説明末尾に挿入 (WC-a8f0be16)。
+async function onPickImage(e: Event): Promise<void> {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { editError.value = '画像ファイルを選んでください'; input.value = ''; return; }
+  editError.value = null;
+  imageBusy.value = true;
+  try {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(new Error('read failed'));
+      r.readAsDataURL(file);
+    });
+    const id = await uploadImage(dataUrl);
+    if (id) {
+      editDescription.value = `${editDescription.value}${editDescription.value ? '\n' : ''}![](/api/images/${id})`;
+    } else {
+      editError.value = '画像のアップロードに失敗しました';
+    }
+  } catch {
+    editError.value = '画像の読み込みに失敗しました';
+  } finally {
+    imageBusy.value = false;
+    input.value = '';
+  }
+}
 const { sprints } = useSprints();
 
 const findings = computed(() => findingsFor(props.ticket.id));
@@ -200,9 +231,16 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
       <!-- Description -->
       <div class="field">
         <div class="l">DESCRIPTION</div>
-        <textarea v-if="editing" v-model="editDescription" class="edit-input edit-textarea" data-testid="edit-description" rows="4" />
+        <template v-if="editing">
+          <textarea v-model="editDescription" class="edit-input edit-textarea" data-testid="edit-description" rows="4" />
+          <!-- 画像アップロード (WC-a8f0be16)。選択 → アップロード → ![](/api/images/id) を説明末尾に挿入。 -->
+          <label class="img-upload-btn">
+            <input type="file" accept="image/*" data-testid="desc-image-input" style="display: none" @change="onPickImage" />
+            {{ imageBusy ? 'アップロード中…' : '🖼 画像を追加' }}
+          </label>
+        </template>
         <template v-else>
-          <div v-if="ticket.description" style="font-size: 13.5px; line-height: 1.6; white-space: pre-wrap">{{ ticket.description }}</div>
+          <DescriptionView v-if="ticket.description" :text="ticket.description" />
           <div v-else
                style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
             <span style="color: var(--accent); font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em">説明なし　</span>
@@ -352,6 +390,13 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 }
 .edit-input:focus { outline: none; border-color: var(--accent); }
 .edit-textarea { width: 100%; resize: vertical; line-height: 1.5; }
+/* 画像アップロードボタン (WC-a8f0be16) */
+.img-upload-btn {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 6px; align-self: flex-start;
+  padding: 5px 12px; border: var(--hairline) dashed var(--accent-dim, var(--line-2)); border-radius: var(--radius);
+  background: transparent; color: var(--accent); font-family: var(--sans); font-size: 12px; cursor: pointer;
+}
+.img-upload-btn:hover { background: var(--accent-bg, #fff3ee); }
 .edit-err { color: var(--err); font-size: 12px; margin: 0 0 12px; }
 .review-note-list { display: flex; flex-direction: column; gap: 6px; }
 .review-note {
