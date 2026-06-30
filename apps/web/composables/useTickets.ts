@@ -48,6 +48,9 @@ export interface PatchTicketInput {
   orderIndex?: number;
   /** Review 儀式の指摘ノート。read→append した全配列を渡す (配列まるごと replace)。 */
   reviewNotes?: string[];
+  /** Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。 */
+  reproSteps?: string;
+  regressionNote?: string;
 }
 
 export const useTickets = () => {

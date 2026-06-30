@@ -65,6 +65,9 @@ export const TicketCreateBodySchema = z.object({
   // Review 儀式の指摘ノート。create で渡すことは基本無いが、.partial() 派生の TicketPatchBodySchema で
   // PATCH が reviewNotes を受けられるようにするため create body にも optional で置く (配列まるごと replace 契約)。
   reviewNotes: z.array(z.string().min(1)).optional(),
+  // Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。PATCH (.partial() 派生) で詳細パネルから保存する。
+  reproSteps: z.string().optional(),
+  regressionNote: z.string().optional(),
   // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
   orderIndex: z.number().optional(),
 });
@@ -149,6 +152,8 @@ export async function createTicket(
     ...(parsed.data.type !== undefined && { type: parsed.data.type }),
     ...(parsed.data.timeboxHours !== undefined && { timeboxHours: parsed.data.timeboxHours }),
     ...(parsed.data.reviewNotes !== undefined && { reviewNotes: parsed.data.reviewNotes }),
+    ...(parsed.data.reproSteps !== undefined && { reproSteps: parsed.data.reproSteps }),
+    ...(parsed.data.regressionNote !== undefined && { regressionNote: parsed.data.regressionNote }),
     ...(parsed.data.orderIndex !== undefined && { orderIndex: parsed.data.orderIndex }),
     createdAt: now,
     updatedAt: now,

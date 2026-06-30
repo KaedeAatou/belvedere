@@ -88,6 +88,8 @@ export const TicketSchema = z.object({
   startedAt: z.string().optional(),
   completedAt: z.string().optional(),
   reviewNotes: z.array(z.string()).optional(),
+  reproSteps: z.string().optional(),
+  regressionNote: z.string().optional(),
   orderIndex: z.number().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),

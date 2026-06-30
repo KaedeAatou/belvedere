@@ -183,9 +183,10 @@ export const ticketRules: TicketRule[] = [
     id: 'BUG_NO_REPRO',
     appliesTo: ['bug'],
     ceremonies: ['refinement'],
+    // 専用欄 reproSteps を優先 (WC-2dba4170)。後方互換で description の再現手順記述もフォールバックで許容。
     check: (t) =>
-      t && !REPRO.test(t.description ?? '')
-        ? [{ ruleId: 'BUG_NO_REPRO', ticketId: t.id, severity: 'error', message: 'Bug に再現手順がありません。再現手順 + 期待 vs 実動作 + 影響範囲を description に書いてください。', action: { kind: 'edit-ticket', label: '再現手順を追加' } }]
+      t && !t.reproSteps?.trim() && !REPRO.test(t.description ?? '')
+        ? [{ ruleId: 'BUG_NO_REPRO', ticketId: t.id, severity: 'error', message: 'Bug に再現手順がありません。詳細パネルの「再現手順」欄に 再現手順 + 期待 vs 実動作 + 影響範囲 を記入してください。', action: { kind: 'edit-ticket', label: '再現手順を追加' } }]
         : [],
   },
   {
@@ -194,11 +195,13 @@ export const ticketRules: TicketRule[] = [
     ceremonies: ['refinement', 'review'],
     check: (t) => {
       if (!t) return [];
+      // 専用欄 regressionNote を優先 (WC-2dba4170)。後方互換で DoD(AC)の回帰テスト記述もフォールバック。
+      if (t.regressionNote?.trim()) return [];
       const ac = t.acceptanceCriteria ?? [];
       const hasRegression = ac.some((l) => REGRESSION.test(l));
       return hasRegression
         ? []
-        : [{ ruleId: 'BUG_NO_REGRESSION_DOD', ticketId: t.id, severity: 'warn', message: 'Bug の DoD に回帰テスト追加が含まれていません。再発防止の自動テストを完了条件に入れてください。', action: { kind: 'edit-ticket', label: '回帰テストを DoD に' } }];
+        : [{ ruleId: 'BUG_NO_REGRESSION_DOD', ticketId: t.id, severity: 'warn', message: 'Bug の回帰テストが未記入です。詳細パネルの「回帰テスト」欄に再発防止の自動テスト方針を記入してください。', action: { kind: 'edit-ticket', label: '回帰テストを記入' } }];
     },
   },
   {
