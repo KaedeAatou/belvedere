@@ -28,6 +28,9 @@ export interface CreateTicketInput {
   epicId?: string;
   /** Review 儀式の指摘ノート (完成 increment への関係者フィードバックを対象チケット自体に残す)。 */
   reviewNotes?: string[];
+  /** Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。作成フォームから渡せる (WC-4b06be05)。 */
+  reproSteps?: string;
+  regressionNote?: string;
 }
 
 /** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
@@ -103,6 +106,8 @@ export const useTickets = () => {
       if (input.parentTicketId !== undefined) body.parentTicketId = input.parentTicketId;
       if (input.epicId !== undefined) body.epicId = input.epicId;
       if (input.reviewNotes !== undefined) body.reviewNotes = input.reviewNotes;
+      if (input.reproSteps !== undefined) body.reproSteps = input.reproSteps;
+      if (input.regressionNote !== undefined) body.regressionNote = input.regressionNote;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)
