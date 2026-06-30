@@ -18,12 +18,12 @@ const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
 );
 
-// BLOCKED 列は廃止 (shared Status に無い)。現スプリントに属するが未着手 (status==='backlog') の
-// チケットも Daily に出すため 'backlog' を「未着手」列として先頭に含める (WC-676a53e1)。
-// これで Daily の表示集合 = Planning CURRENT (active sprint の全チケット) と一致する。
-const cols: Status[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
+// Daily は current sprint の作業ボード。列は todo/in-progress/review/done の 4 列。
+// backlog 状態は「スプリント未所属」を意味し current には存在しない不変条件 (API が保証 / WC-676a53e1)
+// ため backlog 列は持たない。Daily の表示集合 = current sprint の全チケット = Planning CURRENT に一致する。
+const cols: Status[] = ['todo', 'in-progress', 'review', 'done'];
 const COL_LABEL: Record<Status, string> = {
-  backlog: '未着手',
+  backlog: 'BACKLOG',
   todo: 'TODO',
   'in-progress': 'DOING',
   review: 'REVIEW',
