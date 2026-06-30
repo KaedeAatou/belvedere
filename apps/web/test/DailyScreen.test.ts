@@ -1,7 +1,7 @@
 // DailyScreen component unit test (T1b)。
-// WC-676a53e1: Daily は現スプリントの status=backlog チケットを「未着手」列で表示し、
-// 表示集合が Planning CURRENT (active sprint の全チケット) と一致することを固定する。
-// (この列が無いと backlog 状態が Daily で消え Planning と件数が食い違う = 報告バグ)。
+// WC-676a53e1: Daily は current sprint の作業ボード (todo/in-progress/review/done の 4 列)。
+// backlog 状態は「スプリント未所属」を意味し current には存在しない不変条件 (API が保証) なので
+// backlog 列は持たない。Daily の表示集合 = current sprint の全チケット = Planning CURRENT に一致する。
 import { describe, it, expect } from 'vitest';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import type { Ticket, Status } from '@belvedere/shared';
@@ -25,24 +25,27 @@ const t = (id: string, status: Status): Ticket => ({
   createdBy: 'human',
 });
 
-describe('DailyScreen 未着手列 (WC-676a53e1)', () => {
-  it('現スプリントの status=backlog も「未着手」列に出て、全チケットが表示される', async () => {
+describe('DailyScreen (current のみ / backlog 列なし) WC-676a53e1', () => {
+  it('current sprint のチケットを 4 列で表示し backlog 列は持たない', async () => {
     const wrapper = await mountSuspended(DailyScreen, {
-      props: { tickets: [t('WC-B', 'backlog'), t('WC-T', 'todo'), t('WC-D', 'done')], selectedId: null },
+      props: { tickets: [t('WC-T', 'todo'), t('WC-D', 'done')], selectedId: null },
     });
-    // 未着手 (backlog) 列が存在し、backlog 状態カードを含む
-    expect(wrapper.find('[data-testid=daily-col-backlog]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid=daily-card-WC-B]').exists()).toBe(true);
-    // active sprint の全 3 枚が描画される (= Planning CURRENT と一致)
-    expect(wrapper.findAll('[data-testid^=daily-card-]').length).toBe(3);
+    // current に backlog 状態は存在しない不変条件 → backlog 列は無い
+    expect(wrapper.find('[data-testid=daily-col-backlog]').exists()).toBe(false);
+    // 4 列は存在する
+    expect(wrapper.find('[data-testid=daily-col-todo]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=daily-col-done]').exists()).toBe(true);
+    // current の todo/done チケットは表示
+    expect(wrapper.find('[data-testid=daily-card-WC-T]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=daily-card-WC-D]').exists()).toBe(true);
   });
 
-  it('別スプリント / 未割当のチケットは Daily に出ない (active sprint スコープ)', async () => {
-    const other: Ticket = { ...t('WC-X', 'backlog'), sprintId: 's-other' };
+  it('別スプリント / 未割当のチケットは Daily に出ない (current スコープ)', async () => {
+    const other: Ticket = { ...t('WC-X', 'todo'), sprintId: 's-other' };
     const wrapper = await mountSuspended(DailyScreen, {
-      props: { tickets: [t('WC-B', 'backlog'), other], selectedId: null },
+      props: { tickets: [t('WC-T', 'todo'), other], selectedId: null },
     });
-    expect(wrapper.find('[data-testid=daily-card-WC-B]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=daily-card-WC-T]').exists()).toBe(true);
     expect(wrapper.find('[data-testid=daily-card-WC-X]').exists()).toBe(false);
   });
 });

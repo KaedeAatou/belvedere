@@ -121,12 +121,18 @@ export async function createTicket(
     }
   }
   const now = new Date().toISOString();
+  // スプリント所属 ⟹ 最低 todo (backlog 状態 ⟺ 未所属 / WC-676a53e1)。sprintId 付きで status が
+  // 未指定 or backlog のとき todo に引き上げる (client は既に todo を送るが API でも保証 = 矛盾状態防止)。
+  const hasSprint = typeof parsed.data.sprintId === 'string' && parsed.data.sprintId !== '';
+  const defaultedStatus = parsed.data.status ?? 'backlog';
+  const initialStatus = hasSprint && defaultedStatus === 'backlog' ? 'todo' : defaultedStatus;
   const t: Ticket = {
     id: generateId('WC'),
     workspaceId: ctx.workspaceId,
     title: parsed.data.title,
-    // Status / Priority のデフォルトは「backlog / medium」(POST 初期値の慣例)
-    status: parsed.data.status ?? 'backlog',
+    // Status / Priority のデフォルトは「backlog / medium」(POST 初期値の慣例)。
+    // ただし sprintId 付きは todo 以上 (上記 initialStatus)。
+    status: initialStatus,
     priority: parsed.data.priority ?? 'medium',
     ...(parsed.data.description !== undefined && { description: parsed.data.description }),
     ...(parsed.data.valueImpact !== undefined && { valueImpact: parsed.data.valueImpact }),
@@ -255,7 +261,14 @@ export async function reorderTickets(
   // **実際に orderIndex/sprintId が変わる行だけ** を返す算術は純粋関数 computeReorderUpdates
   // (@belvedere/shared) に委譲する (退化入力テストは packages/shared/test/order.test.ts が担保)。
   const now = new Date().toISOString();
-  const updates = computeReorderUpdates(survivors, { movedId, sprintId, now });
+  // current↔backlog の status 整合 (WC-676a53e1): current へ入れたら todo / BACKLOG へ戻したら backlog。
+  // active sprint を解決して渡す (movedId 移動時のみ必要 = 余計な読みを避ける)。
+  let activeSprintId: string | undefined;
+  if (movedId !== undefined) {
+    const sprints = await repo.sprints.list({ workspaceId: ctx.workspaceId });
+    activeSprintId = sprints.find((s) => s.status === 'active')?.id;
+  }
+  const updates = computeReorderUpdates(survivors, { movedId, sprintId, activeSprintId, now });
   // 変わった行だけ書込 + 返す (frontend は id でマージし未変更行は現状維持)。
   await Promise.all(updates.map((t) => repo.tickets.upsert(t)));
   return { ok: true, status: 200, body: updates };

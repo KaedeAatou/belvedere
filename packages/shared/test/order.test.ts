@@ -131,3 +131,36 @@ describe('computeReorderUpdates — movedId の sprint set / clear', () => {
     expect(updates[0]!.sprintId).toBe('s2');
   });
 });
+
+// current↔backlog の status 整合 (WC-676a53e1)。「current にある=やる(todo)」/「backlog 状態 ⟺ 未所属」。
+describe('computeReorderUpdates — current↔backlog の status 整合 (WC-676a53e1)', () => {
+  it('current (active sprint) へ入れた backlog チケットは todo に上がる', () => {
+    const survivors = [t({ id: 'M', status: 'backlog' }), t({ id: 'X', status: 'todo', sprintId: 's-active' })];
+    const updates = computeReorderUpdates(survivors, { movedId: 'M', sprintId: 's-active', activeSprintId: 's-active', now: NOW });
+    const m = updates.find((u) => u.id === 'M')!;
+    expect(m.sprintId).toBe('s-active');
+    expect(m.status).toBe('todo');
+  });
+
+  it('current へ入れても元が todo 以上なら status は変えない', () => {
+    const survivors = [t({ id: 'M', status: 'review' })];
+    const updates = computeReorderUpdates(survivors, { movedId: 'M', sprintId: 's-active', activeSprintId: 's-active', now: NOW });
+    expect(updates.find((u) => u.id === 'M')!.status).toBe('review');
+  });
+
+  it('next (≠ active) へ入れた backlog は backlog のまま (方針: current のみ)', () => {
+    const survivors = [t({ id: 'M', status: 'backlog' })];
+    const updates = computeReorderUpdates(survivors, { movedId: 'M', sprintId: 's-next', activeSprintId: 's-active', now: NOW });
+    const m = updates.find((u) => u.id === 'M')!;
+    expect(m.sprintId).toBe('s-next');
+    expect(m.status).toBe('backlog');
+  });
+
+  it('BACKLOG 区画へ戻す (sprint 解除) と status=backlog + sprintId 削除', () => {
+    const survivors = [t({ id: 'M', status: 'todo', sprintId: 's-active' })];
+    const updates = computeReorderUpdates(survivors, { movedId: 'M', sprintId: null, activeSprintId: 's-active', now: NOW });
+    const m = updates.find((u) => u.id === 'M')!;
+    expect(m.status).toBe('backlog');
+    expect(m.sprintId).toBeUndefined();
+  });
+});
