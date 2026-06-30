@@ -4,8 +4,8 @@
 // 末尾に debug セクション (Whoami 確認、Phase 1-B 動作検証用、後でフラグで隠す)。
 
 const { me, isLoading, error, fetchMe, updateDisplayName } = useMe();
-const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, syncCurrentFromStorage } = useWorkspaces();
-const { members, fetchMembers, isPendingInvite, invite, cancelInvite } = useMembers();
+const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, setCurrent, syncCurrentFromStorage } = useWorkspaces();
+const { members, fetchMembers, isPendingInvite, invite, cancelInvite, updateRole } = useMembers();
 
 const editName = ref('');
 const saveSuccess = ref(false);
@@ -69,6 +69,20 @@ async function revokeInvite(userId: string): Promise<void> {
     await cancelInvite(userId);
   } catch (e) {
     inviteError.value = errText(e);
+  }
+}
+
+// ===== メンバーのロール変更 (admin 専権 / WC-600736ff) =====
+// 自分自身は降格不可 (API 側でも cannot_change_own_role で弾く)。
+const canChangeRole = computed(() => me.value?.role === 'admin');
+const roleError = ref<string | null>(null);
+async function changeRole(userId: string, role: string): Promise<void> {
+  roleError.value = null;
+  if (role !== 'po' && role !== 'sm' && role !== 'dev') return;
+  try {
+    await updateRole(userId, role);
+  } catch (e) {
+    roleError.value = errText(e);
   }
 }
 
@@ -217,8 +231,10 @@ async function save(): Promise<void> {
           <div v-for="w in workspaces" :key="w.id"
                :class="['ws-row', w.id === currentId && 'ws-row--current']">
             <span class="ws-row-name">{{ w.name }}</span>
-            <span v-if="w.id === currentId" class="ws-current-badge" style="margin-left: auto">表示中</span>
-            <span class="ws-row-role">{{ w.role }}</span>
+            <span class="ws-row-role" style="margin-left: auto">{{ w.role }}</span>
+            <!-- 設定画面から直接 WS 切替 (右上アイコンに依存しない / WC-600736ff)。 -->
+            <span v-if="w.id === currentId" class="ws-current-badge">表示中</span>
+            <button v-else class="ws-switch-btn" :data-testid="`ws-switch-${w.id}`" @click="setCurrent(w.id)">切替</button>
           </div>
           <p v-if="workspaces.length === 0" class="muted">所属 Workspace がありません。下のフォームで作成してください。</p>
         </div>
@@ -251,12 +267,24 @@ async function save(): Promise<void> {
           <span class="member-name">{{ m.displayName }}</span>
           <span class="member-email">{{ m.email }}</span>
           <span v-if="isPendingInvite(m)" class="pending-badge" data-testid="member-pending">招待中</span>
-          <span class="member-role-badge" style="margin-left: auto">{{ m.role }}</span>
+          <!-- admin は po/sm/dev メンバーのロールを変更可 (自分・admin メンバーは badge 表示 / WC-600736ff)。 -->
+          <select v-if="canChangeRole && m.userId !== me?.userId && m.role !== 'admin'"
+                  class="member-role-select" style="margin-left: auto"
+                  :data-testid="`member-role-${m.userId}`"
+                  :value="m.role"
+                  @change="changeRole(m.userId, ($event.target as HTMLSelectElement).value)">
+            <option value="po">po</option>
+            <option value="sm">sm</option>
+            <option value="dev">dev</option>
+          </select>
+          <span v-else class="member-role-badge" style="margin-left: auto">{{ m.role }}</span>
           <button v-if="canManage && isPendingInvite(m)" class="revoke-btn"
                   :data-testid="`invite-revoke-${m.userId}`" @click="revokeInvite(m.userId)">取消</button>
         </div>
         <p v-if="members.length === 0" class="muted">メンバーがいません。</p>
       </div>
+
+      <p v-if="roleError" class="msg error" data-testid="role-error">{{ roleError }}</p>
 
       <!-- 招待フォーム (member.invite = admin/po/sm のみ) -->
       <div v-if="canManage" class="field editable" style="margin-top: 20px">
@@ -624,5 +652,16 @@ async function save(): Promise<void> {
 
 .member-row code.member-email {
   flex-shrink: 0;
+}
+/* WS 切替ボタン (設定画面から直接切替 / WC-600736ff) */
+.ws-switch-btn {
+  padding: 4px 12px; border: var(--hairline) solid var(--accent); border-radius: var(--radius);
+  background: transparent; color: var(--accent); font-family: var(--sans); font-size: 12px; cursor: pointer;
+}
+.ws-switch-btn:hover { background: var(--accent-bg, #fff3ee); }
+/* メンバーのロール変更セレクト (admin のみ表示 / WC-600736ff) */
+.member-role-select {
+  padding: 4px 8px; border: var(--hairline) solid var(--line-2); border-radius: var(--radius);
+  background: var(--bg-0); font-family: var(--mono); font-size: 12px; cursor: pointer;
 }
 </style>

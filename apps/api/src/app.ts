@@ -34,7 +34,7 @@ import { can, forbidden } from './permissions';
 import { tryRefinementViaAdk } from './config/refinement-adk';
 import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
-import { getMe, patchMember } from './handlers/member-handlers';
+import { getMe, patchMember, changeMemberRole } from './handlers/member-handlers';
 import { listApiKeys, createApiKey, revokeApiKey } from './handlers/api-key-handlers';
 import {
   createWorkspace,
@@ -341,6 +341,11 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   app.patch('/api/members/:userId', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await patchMember(repo, buildCtx(c), c.req.param('userId'), body));
+  });
+  // メンバーの role 変更 (admin 専権 / WC-600736ff)
+  app.post('/api/members/:userId/role', async (c) => {
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return respond(c, await changeMemberRole(repo, buildCtx(c), c.req.param('userId'), body));
   });
 
   // ------- per-user API キー (programmatic アクセス用トークン / 2026-06-17) -------

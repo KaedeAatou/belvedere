@@ -67,8 +67,14 @@ export const useMembers = () => {
     await fetchMembers();
   }
 
+  /** メンバーのロールを変更する (admin 専権 / WC-600736ff)。po/sm/dev のいずれか。成功後に一覧を再取得。 */
+  async function updateRole(userId: string, role: 'po' | 'sm' | 'dev'): Promise<void> {
+    await api.post<Member>(`/api/members/${encodeURIComponent(userId)}/role`, { role });
+    await fetchMembers();
+  }
+
   return {
     members, isLoading, error, fetchMembers, memberById, memberName, memberInitial,
-    isPendingInvite, invite, cancelInvite,
+    isPendingInvite, invite, cancelInvite, updateRole,
   };
 };

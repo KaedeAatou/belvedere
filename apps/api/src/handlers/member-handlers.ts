@@ -7,9 +7,15 @@ import type { Member } from '@belvedere/shared';
 import { stripUndefinedPartial } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
+import { can, forbidden } from '../permissions';
 
 export const MemberPatchBodySchema = z.object({
   displayName: z.string().min(1).max(80).optional(),
+});
+
+// ロール変更で付与できるのは po/sm/dev (admin は workspace 作成者のみ / invite と同方針)。
+export const MemberRoleBodySchema = z.object({
+  role: z.enum(['po', 'sm', 'dev']),
 });
 
 /**
@@ -74,6 +80,40 @@ export async function patchMember(
     email: existing.email,               // 不変
     role: existing.role,                 // 不変 (招待 UI Phase 1-E まで)
   };
+  await repo.members.upsert(updated);
+  return { ok: true, status: 200, body: updated };
+}
+
+/**
+ * POST /api/members/:userId/role — メンバーの role を変更する (WC-600736ff)。
+ *
+ * セキュリティ:
+ * - admin 専権 (can('member.role') / MATRIX で admin の bypass のみ通る)。
+ * - IDOR: 別 workspace / 不在は 404。権限判定は対象取得の後 (member-handlers の方針)。
+ * - 自分自身の role は変えられない (admin が自分を降格して締め出す事故を防ぐ)。
+ * - 付与できるのは po/sm/dev のみ (admin への昇格は不可 = workspace 作成者のみが admin)。
+ */
+export async function changeMemberRole(
+  repo: RepoContainer,
+  ctx: HandlerContext,
+  paramUserId: string,
+  body: unknown,
+): Promise<HandlerResult<Member>> {
+  const existing = await repo.members.get(ctx.workspaceId, paramUserId);
+  if (!existing || existing.workspaceId !== ctx.workspaceId) {
+    return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  if (!can('member.role', ctx)) {
+    return { ok: false, status: 403, body: forbidden('member.role') };
+  }
+  if (paramUserId === ctx.user.userId) {
+    return { ok: false, status: 400, body: { error: 'cannot_change_own_role' } };
+  }
+  const parsed = MemberRoleBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
+  }
+  const updated: Member = { ...existing, role: parsed.data.role };
   await repo.members.upsert(updated);
   return { ok: true, status: 200, body: updated };
 }
