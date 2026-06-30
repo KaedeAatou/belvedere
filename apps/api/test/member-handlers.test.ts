@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
 import type { Member } from '@belvedere/shared';
-import { getMe, patchMember } from '../src/handlers/member-handlers';
+import { getMe, patchMember, changeMemberRole } from '../src/handlers/member-handlers';
 
 const WS = 'ws-belvedere';
 const ATTACK_WS = 'ws-attacker';
@@ -36,6 +36,45 @@ const CTX = {
   workspaceId: WS,
   user: { userId: MY_USERID, email: 'me@example.com' },
 };
+
+// role 付き ctx (changeMemberRole 用 / WC-600736ff)。MY_USERID=admin / OTHER_USERID=dev。
+const ADMIN_CTX = { workspaceId: WS, role: 'admin' as const, user: { userId: MY_USERID, email: 'me@example.com' } };
+const DEV_CTX = { workspaceId: WS, role: 'dev' as const, user: { userId: OTHER_USERID, email: 'other@example.com' } };
+
+describe('changeMemberRole (WC-600736ff)', () => {
+  it('admin は他メンバーの role を変更できる', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    const res = await changeMemberRole(repo, ADMIN_CTX, OTHER_USERID, { role: 'sm' });
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.body.role).toBe('sm');
+    expect((await repo.members.get(WS, OTHER_USERID))!.role).toBe('sm');
+  });
+  it('admin 以外は 403 forbidden', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    const res = await changeMemberRole(repo, DEV_CTX, MY_USERID, { role: 'dev' });
+    expect(res.status).toBe(403);
+  });
+  it('自分自身の role は変更できない (自己降格防止 → 400)', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    const res = await changeMemberRole(repo, ADMIN_CTX, MY_USERID, { role: 'dev' });
+    expect(res.status).toBe(400);
+  });
+  it('admin への昇格は不可 (po/sm/dev のみ → 400 invalid_body)', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    const res = await changeMemberRole(repo, ADMIN_CTX, OTHER_USERID, { role: 'admin' });
+    expect(res.status).toBe(400);
+  });
+  it('不在 / 別 workspace は 404', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    const res = await changeMemberRole(repo, ADMIN_CTX, 'ghost', { role: 'sm' });
+    expect(res.status).toBe(404);
+  });
+});
 
 describe('getMe', () => {
   let repo: RepoContainer;

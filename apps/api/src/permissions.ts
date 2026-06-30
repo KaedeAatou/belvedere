@@ -15,6 +15,7 @@ import type { WorkspaceRole } from '@belvedere/shared';
 /** 権限ゲートのかかる操作。新しいゲートを足すときはここに追加し MATRIX を埋める。 */
 export type Action =
   | 'member.invite' // ws 内のメンバー招待・取消
+  | 'member.role' // ws 内メンバーのロール変更 (admin 専権 / WC-600736ff)
   | 'backlog.reorder' // バックログ並び替え (優先順位)
   | 'epic.write' // Epic/Story の作成・価値/優先度設定
   | 'sprint.goal' // Sprint Goal 設定 (patchSprint)
@@ -31,6 +32,7 @@ export type Action =
  */
 const MATRIX: Record<Action, ReadonlyArray<Exclude<WorkspaceRole, 'admin'>>> = {
   'member.invite': ['po', 'sm'],
+  'member.role': [], // admin 専権 (空 = admin の bypass のみ通る)
   'backlog.reorder': ['po'],
   'epic.write': ['po'],
   'sprint.goal': ['po', 'sm'],
@@ -83,6 +85,7 @@ export function rolesFor(action: Action): WorkspaceRole[] {
  */
 const FORBIDDEN_MESSAGE: Record<Action, string> = {
   'member.invite': 'メンバーの招待は PO・SM・管理者のみが行えます。',
+  'member.role': 'メンバーのロール変更は管理者のみが行えます。',
   'backlog.reorder': 'バックログの並び替え (優先順位付け) は PO・管理者のみが行えます。',
   'epic.write': 'Epic / Story の価値・優先度の編集は PO・管理者のみが行えます。',
   'sprint.goal': 'スプリントゴール・期間の編集は PO・SM・管理者のみが行えます。',
