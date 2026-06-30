@@ -546,6 +546,72 @@ describe('changeTicketStatus', () => {
   });
 });
 
+// current↔backlog 不変条件 (WC-676a53e1)。「current にある=やる(todo) / backlog 状態=未所属」を
+// patch / status 変更 経路で強制する。実データ状態 (active sprint に所属したまま) で踏む。
+// (純粋関数 reconcileSprintStatus の退化入力は packages/shared/test/sprint-status.test.ts が担保。
+//  ここは handler が active sprint を解決して不変条件を適用する配線を実データで固める。)
+describe('current↔backlog 不変条件 (WC-676a53e1)', () => {
+  let repo: RepoContainer;
+  let SPRINT_ID: string;
+  beforeEach(async () => {
+    repo = createMemoryRepoContainer(); // seed に active sprint が含まれる
+    const sprints = await repo.sprints.list({ workspaceId: WS });
+    const active = sprints.find((s) => s.status === 'active');
+    if (!active) throw new Error('setup: seed に active sprint が無い');
+    SPRINT_ID = active.id; // handler が解決する active sprint と一致させる
+  });
+
+  it('PATCH status=backlog (current 所属) → sprint から外れる (DetailSheet が sprintId を一緒に送っても矛盾しない)', async () => {
+    // DetailSheet 経路の再現: current sprint に居る todo チケットを backlog に変更しつつ sprintId も送る。
+    const created = await createTicket(repo, CTX, { title: 'in current', sprintId: SPRINT_ID });
+    if (!created.ok) throw new Error('setup failed');
+    expect(created.body.status).toBe('todo'); // create で sprint 付きは todo に引き上げ済
+    const res = await patchTicket(repo, CTX, created.body.id, { status: 'backlog', sprintId: SPRINT_ID });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.status).toBe('backlog');
+    expect('sprintId' in res.body).toBe(false); // backlog にしたら sprint から外れる
+    const got = await repo.tickets.get(created.body.id);
+    expect(got?.sprintId).toBeUndefined();
+  });
+
+  it('PATCH で current 所属の既存 backlog 矛盾チケットに sprintId を付け直す (demote でない) → todo に上がる', async () => {
+    // 既存矛盾データ (current + backlog) を直接 upsert で作り、sprint 割当 intent の patch を当てる。
+    const created = await createTicket(repo, CTX, { title: 'contradiction' });
+    if (!created.ok) throw new Error('setup failed');
+    await repo.tickets.upsert({ ...created.body, status: 'backlog', sprintId: SPRINT_ID });
+    // status を触らず別フィールドだけ patch (demote=false) → current+backlog は todo に是正される。
+    const res = await patchTicket(repo, CTX, created.body.id, { title: 'renamed' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.status).toBe('todo');
+    expect(res.body.sprintId).toBe(SPRINT_ID); // sprint は保持 (current にある=やる)
+  });
+
+  it('changeTicketStatus → backlog (current 所属) → sprint から外れる + to=backlog', async () => {
+    const created = await createTicket(repo, CTX, { title: 'demote me', sprintId: SPRINT_ID });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await changeTicketStatus(repo, CTX, created.body.id, { status: 'backlog' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.to).toBe('backlog');
+    expect(res.body.ticket.status).toBe('backlog');
+    expect('sprintId' in res.body.ticket).toBe(false);
+    const got = await repo.tickets.get(created.body.id);
+    expect(got?.sprintId).toBeUndefined();
+  });
+
+  it('changeTicketStatus → in-progress (current 所属) → sprint 保持 (backlog 以外は外さない)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'progress', sprintId: SPRINT_ID });
+    if (!created.ok) throw new Error('setup failed');
+    const res = await changeTicketStatus(repo, CTX, created.body.id, { status: 'in-progress' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.ticket.status).toBe('in-progress');
+    expect(res.body.ticket.sprintId).toBe(SPRINT_ID);
+  });
+});
+
 describe('deleteTicket', () => {
   let repo: RepoContainer;
   beforeEach(() => { repo = createMemoryRepoContainer(); });
