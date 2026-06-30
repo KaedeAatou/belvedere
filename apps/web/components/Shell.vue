@@ -43,7 +43,7 @@ onMounted(() => {
           <button :class="['seg-btn', railTab === 'backlog' && 'active']"
                   @click="() => { setRailTab('backlog'); setScreen('backlog'); }">Backlog</button>
           <button :class="['seg-btn', railTab === 'events' && 'active']"
-                  @click="setRailTab('events')">Events</button>
+                  @click="() => { setRailTab('events'); setScreen('events'); }">Events</button>
         </div>
         <!-- 旧「/ <現在画面ラベル>」breadcrumb 末尾は撤去 (WC-924256e9)。
              Events 切替時に setScreen を呼ばず cur.label が更新されず紛らわしかったため。
