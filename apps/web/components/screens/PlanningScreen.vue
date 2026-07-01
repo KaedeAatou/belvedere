@@ -50,6 +50,18 @@ const smart = computed(() =>
     : SMART_GUIDE.map((g) => ({ ...g, ok: null as boolean | null, evaluated: false })),
 );
 
+// 自動評価 (WC-14 / A 案): Goal が変わった時だけ実評価し、開いた時は前回結果 (キャッシュ) を表示する。
+// SMART 評価は実 Gemini 呼び出しなので無駄打ちを避ける。チケット追加で SP を見直したい時等は手動「再評価」で。
+function maybeAutoEvaluateSmart(): void {
+  const g = activeSprint.value?.goal?.trim() ?? '';
+  if (!g) return; // ゴール未設定なら評価しない (neutral ガイドのまま)
+  if (smartVerdict.value?.goal === g) return; // 同じ Goal を評価済ならキャッシュ表示 (呼ばない)
+  void evaluateSmart();
+}
+onMounted(maybeAutoEvaluateSmart);
+// activeSprint は初期ロードで後から入るので、goal の変化 (undefined→値 / 編集で変更) を監視して自動評価。
+watch(() => activeSprint.value?.goal, maybeAutoEvaluateSmart);
+
 // 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
 // (旧 @move-to-section emit 経路は撤去済)。patchTicket は下の submitPull で引き続き使う。
 
@@ -224,6 +236,11 @@ onMounted(() => {
           <Icon name="sparkle" /> {{ smartLoading ? '評価中…' : smartVerdict ? '再評価' : 'AI で評価' }}
         </button>
       </div>
+      <!-- SMART の目的を 1 行で説明 (WC-14: 使い方が分からない指摘)。曖昧なゴールを事前に捕まえる診断。 -->
+      <p class="smart-explain" data-testid="smart-explain">
+        Sprint Goal が「具体的・測定可能・達成可能・整合・期限明確」かを AI が採点します。△ の観点を潰すと
+        Review で達成を判定できるゴールになります。Goal を変えると自動で再評価します。
+      </p>
       <div class="smart-row">
         <div v-for="s in smart" :key="s.letter"
              :class="['smart-cell', s.evaluated ? (s.ok ? 'ok' : 'weak') : 'neutral']"

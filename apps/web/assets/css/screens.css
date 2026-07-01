@@ -166,6 +166,8 @@
 .smart-cell.neutral { opacity: 0.75; }
 /* SMART ヘッダ (ラベル + AI で評価 ボタン) */
 .smart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* SMART の目的説明 (WC-14) */
+.smart-explain { margin: 0 0 10px; font-size: 11.5px; line-height: 1.5; color: var(--ink-3); }
 /* AI 評価後の summary + 弱い観点の改善提案 */
 .smart-error { color: var(--err); font-size: 12px; margin: 8px 0 0; }
 .smart-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
