@@ -183,7 +183,10 @@
 .daily-board {
   flex: 1;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* minmax(0, 1fr): 1fr (=minmax(auto,1fr)) はトラック最小が min-content になり、
+     カード内の縮まない要素で 4 列合計が画面幅を超えて横スクロールが出る (WC-b54cfa56)。
+     最小を 0 にすると列は常に等幅で画面内に収まり、はみ出しは列内 (overflow:hidden) で吸収。 */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-bottom: var(--hairline) solid var(--line-1);
   overflow: hidden;
 }
@@ -191,6 +194,7 @@
   display: flex; flex-direction: column;
   border-right: var(--hairline) solid var(--line-1);
   overflow: hidden;
+  min-width: 0; /* grid track 内で min-content 下回りを許可 (横はみ出し防止) */
   position: relative; /* col-empty-hint の絶対配置の基準 */
 }
 /* 空列のヒント: VueDraggable (.col-body flex:1) の上に重ね、ドロップを邪魔しない */
@@ -212,7 +216,7 @@
 }
 .col-board .ch .name { font-family: var(--mono); font-size: 10px; letter-spacing: 0.16em; color: var(--ink-2); text-transform: uppercase; }
 .col-board .ch .count { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
-.col-body { padding: 8px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+.col-body { padding: 8px; overflow-y: auto; overflow-x: hidden; min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 6px; }
 .tcard {
   border: var(--hairline) solid var(--line-1);
   background: var(--bg-1);
@@ -231,7 +235,7 @@
 .tcard.drop-target { background: var(--bg-3); border-color: var(--accent); }
 .tcard .id { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--ink-3); letter-spacing: 0.08em; }
 .tcard .title { font-size: 13px; color: var(--ink-0); margin: 6px 0 10px; line-height: 1.6; letter-spacing: 0.03em; }
-.tcard .row { display: flex; align-items: center; gap: 6px; }
+.tcard .row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .tcard .row .spacer { flex: 1; }
 .tcard .age {
   font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.06em;
