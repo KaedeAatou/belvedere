@@ -109,3 +109,27 @@ export function stripUndefinedPartial<T extends Record<string, unknown>>(
 export function generateId(prefix: string): string {
   return `${prefix}-${globalThis.crypto.randomUUID().slice(0, 8)}`;
 }
+
+/**
+ * チケットの連番採番 (WC-6d01e4b2)。`${prefix}-${n}` 形式の既存 id 群から次の番号を返す。
+ * 覚えやすさ優先でランダム hex ではなく連番 (WC-1, WC-2, …) を振る。
+ *
+ * - `${prefix}-<数字>` だけを数値として拾い、`${prefix}-<hex>` (旧ランダム id) 等の非数値 suffix は無視する。
+ * - 空 / 全て非数値なら 1 から開始。歯抜け (WC-1, WC-3) があっても max+1 を返す (欠番は詰めない)。
+ *
+ * 注意: max+1 方式は list→create の間の並行作成で理論上 2 件が同番になり得る (Firestore は
+ * トランザクション counter が本来の解)。dogfood 規模 (実質単一ユーザ) では許容し、ここでは
+ * 純粋関数として採番ロジックだけを固定する (呼び出し側が list を渡す)。
+ */
+export function nextTicketNumber(existingIds: string[], prefix = 'WC'): number {
+  const re = new RegExp(`^${prefix}-(\\d+)$`);
+  let max = 0;
+  for (const id of existingIds) {
+    const m = re.exec(id);
+    if (m) {
+      const n = Number(m[1]);
+      if (Number.isFinite(n) && n > max) max = n;
+    }
+  }
+  return max + 1;
+}

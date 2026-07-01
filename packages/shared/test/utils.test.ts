@@ -1,7 +1,7 @@
 // utils.ts の単体テスト (2026-06-10 / R2 で api/repo から移設・集約)。
 
 import { describe, it, expect } from 'vitest';
-import { stripUndefined, stripUndefinedPartial, generateId, applyStatusTransition, compareTicketOrder } from '../src/utils';
+import { stripUndefined, stripUndefinedPartial, generateId, nextTicketNumber, applyStatusTransition, compareTicketOrder } from '../src/utils';
 import type { Ticket } from '../src/types';
 
 const baseTicket = (over: Partial<Ticket> = {}): Ticket => ({
@@ -55,6 +55,35 @@ describe('generateId', () => {
   it('同一ミリ秒に連続採番しても衝突しない (ランダム id の本旨)', () => {
     const ids = new Set(Array.from({ length: 1000 }, () => generateId('WC')));
     expect(ids.size).toBe(1000);
+  });
+});
+
+// nextTicketNumber は連番採番 (WC-6d01e4b2) の核。退化入力 (空 / 全非数値 / 歯抜け / 混在) を固定する。
+describe('nextTicketNumber', () => {
+  it('空配列は 1 から開始', () => {
+    expect(nextTicketNumber([])).toBe(1);
+  });
+  it('全て非数値 (旧ランダム WC-<hex>) は無視して 1', () => {
+    expect(nextTicketNumber(['WC-a8f0be16', 'WC-676a53e1', 'WC-2640fecd'])).toBe(1);
+  });
+  it('連番の max+1 を返す', () => {
+    expect(nextTicketNumber(['WC-1', 'WC-2', 'WC-3'])).toBe(4);
+  });
+  it('歯抜けがあっても max+1 (欠番は詰めない)', () => {
+    expect(nextTicketNumber(['WC-1', 'WC-3', 'WC-10'])).toBe(11);
+  });
+  it('数値と非数値が混在しても数値の max+1 (移行途中の状態)', () => {
+    expect(nextTicketNumber(['WC-1', 'WC-a8f0be16', 'WC-2', 'WC-676a53e1'])).toBe(3);
+  });
+  it('別 prefix の id は数えない (WC- のみ)', () => {
+    expect(nextTicketNumber(['EP-5', 'SPRINT-9', 'WC-2'])).toBe(3);
+  });
+  it('seed の WC-101..112 の後は 113', () => {
+    const seedish = Array.from({ length: 12 }, (_, i) => `WC-${101 + i}`);
+    expect(nextTicketNumber(seedish)).toBe(113);
+  });
+  it('prefix 引数で別接頭辞の連番も採れる', () => {
+    expect(nextTicketNumber(['BV-1', 'BV-2'], 'BV')).toBe(3);
   });
 });
 

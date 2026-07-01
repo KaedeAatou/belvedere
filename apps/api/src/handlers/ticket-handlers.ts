@@ -18,6 +18,7 @@ import {
   TicketTypeSchema,
   stripUndefinedPartial,
   generateId,
+  nextTicketNumber,
   applyStatusTransition,
   computeReorderUpdates,
   reconcileSprintStatus,
@@ -136,8 +137,11 @@ export async function createTicket(
   const hasSprint = typeof parsed.data.sprintId === 'string' && parsed.data.sprintId !== '';
   const defaultedStatus = parsed.data.status ?? 'backlog';
   const initialStatus = hasSprint && defaultedStatus === 'backlog' ? 'todo' : defaultedStatus;
+  // 連番採番 (WC-6d01e4b2): 覚えやすさ優先で WC-<n> を振る。workspace 内の既存チケットから
+  // 次番号を決める (旧ランダム WC-<hex> は無視されるので、移行前は 1 から / 移行後は max+1 で継続)。
+  const existingForNumber = await repo.tickets.list({ workspaceId: ctx.workspaceId });
   const t: Ticket = {
-    id: generateId('WC'),
+    id: `WC-${nextTicketNumber(existingForNumber.map((x) => x.id))}`,
     workspaceId: ctx.workspaceId,
     title: parsed.data.title,
     // Status / Priority のデフォルトは「backlog / medium」(POST 初期値の慣例)。
