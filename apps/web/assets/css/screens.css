@@ -96,6 +96,9 @@
   position: sticky; top: 0; z-index: 1;
   border-bottom: var(--hairline) solid var(--line-1);
 }
+/* 一括選択バー (sticky top:0 / 高さ45px) 表示中は、区画見出しをバー分だけ下げて
+   sticky させる。両方 top:0 だと CURRENT SPRINT 見出しと選択バーが重なる (WC-21)。 */
+.screen-body.has-bulk-bar .backlog-section-head { top: 45px; }
 .backlog-section-head .title { font-family: var(--display); font-size: 22px; font-weight: 600; color: var(--ink-0); letter-spacing: 0; text-transform: uppercase; }
 .backlog-section-head .meta {
   display: flex; gap: 20px; margin-left: auto;
