@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import type { Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
-import { buildChecks, screenIntro } from '~/composables/useChecks';
+import { buildChecks, screenIntro, type AICheckAction } from '~/composables/useChecks';
 
 const props = defineProps<{
   screen: ScreenId;
   tickets: Ticket[];
 }>();
-const emit = defineEmits<{ jump: [id: string] }>();
+const emit = defineEmits<{ jump: [id: string]; navigate: [screen: ScreenId] }>();
 
 const checks = computed(() => buildChecks(props.screen, props.tickets));
 const intro = computed(() => screenIntro(props.screen));
@@ -31,6 +31,17 @@ function onTextareaKeydown(e: KeyboardEvent): void {
     void handleSend();
   }
 }
+
+// アクションボタン (WC-f17989df): navigate は画面遷移、prompt は AI チャットに定型文を投入して実行。
+async function onAction(a: AICheckAction): Promise<void> {
+  if (a.kind === 'navigate' && a.target) {
+    emit('navigate', a.target);
+    return;
+  }
+  if (a.kind === 'prompt' && a.prompt && !isSending.value) {
+    await send(props.screen, a.prompt);
+  }
+}
 </script>
 
 <template>
@@ -52,7 +63,14 @@ function onTextareaKeydown(e: KeyboardEvent): void {
       <div v-if="c.ref" class="ref">{{ c.ref }}</div>
       <div class="msg">{{ c.msg }}</div>
       <div v-if="c.actions" class="actions">
-        <button v-for="(a, j) in c.actions" :key="j" :class="a.primary && 'primary'">
+        <button
+          v-for="(a, j) in c.actions"
+          :key="j"
+          :class="a.primary && 'primary'"
+          :data-testid="`ai-action-${a.kind}`"
+          :disabled="a.kind === 'prompt' && isSending"
+          @click="onAction(a)"
+        >
           {{ a.label }}
         </button>
         <button v-if="c.ref && c.ticketId" @click="emit('jump', c.ticketId)">Open</button>
