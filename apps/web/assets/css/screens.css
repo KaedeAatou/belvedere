@@ -102,15 +102,13 @@
   font-family: var(--mono); font-size: 11px; color: var(--ink-2); letter-spacing: 0.06em;
 }
 .backlog-section-head .meta b { color: var(--ink-0); font-weight: 600; font-family: var(--display); font-size: 14px; }
-/* 区画を全選択 (WC-85c72d94)。meta が margin-left:auto で右寄せなので左に少し間隔。 */
-.backlog-section-head .sec-select-all {
-  margin-left: 12px;
-  font-family: var(--sans); font-size: 11px; color: var(--ink-2);
-  background: var(--bg-1); border: var(--hairline) solid var(--line-2);
-  border-radius: var(--radius); padding: 4px 10px; cursor: pointer; white-space: nowrap;
+/* 区画を全選択 (WC-85c72d94 → WC-9 差し戻しで見出しチェックボックス化)。
+   区画見出しの左端に置き、押すとその区画を一括選択/解除。accent-color で配色を統一。 */
+.backlog-section-head .sec-select-cb {
+  flex: 0 0 auto; width: 16px; height: 16px; margin: 0 2px 0 0;
+  cursor: pointer; accent-color: var(--accent);
 }
-.backlog-section-head .sec-select-all:hover:not(:disabled) { color: var(--ink-0); background: var(--bg-2); }
-.backlog-section-head .sec-select-all:disabled { opacity: 0.4; cursor: not-allowed; }
+.backlog-section-head .sec-select-cb:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ===== planning ===== */
 /* 単一カラム: チケット一覧を全幅で見せる (velocity チャート / per-member load は廃止)。 */

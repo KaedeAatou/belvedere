@@ -378,8 +378,8 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         <div v-else style="font-size: 12.5px; color: var(--ink-3); font-style: italic; margin-bottom: 8px">
           まだコメントはありません。
         </div>
-        <textarea v-model="commentText" class="edit-input edit-textarea" data-testid="comment-input"
-                  rows="2" placeholder="追記・調査メモ・議論を書く" @keydown.meta.enter="submitComment" @keydown.ctrl.enter="submitComment" />
+        <textarea v-model="commentText" class="edit-input edit-textarea comment-textarea" data-testid="comment-input"
+                  rows="4" placeholder="追記・調査メモ・議論を書く" @keydown.meta.enter="submitComment" @keydown.ctrl.enter="submitComment" />
         <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px">
           <button class="ibtn-text" data-testid="comment-submit"
                   :disabled="commentBusy || !commentText.trim()" @click="submitComment">
@@ -452,6 +452,8 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 }
 .comment-author { color: var(--ink-1); font-weight: 600; }
 .comment-body { font-family: var(--sans); font-size: 13px; line-height: 1.55; color: var(--ink-0); white-space: pre-wrap; }
+/* コメント入力欄は最低でも 4 行ぶんの高さを確保 (WC-9 差し戻し: 狭かった)。 */
+.comment-textarea { min-height: 84px; }
 .review-note-list { display: flex; flex-direction: column; gap: 6px; }
 .review-note {
   font-family: var(--sans); font-size: 13px; line-height: 1.5;
