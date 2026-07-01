@@ -28,12 +28,15 @@ const mocks = vi.hoisted(() => {
   const me = { value: null as null | { role: string } };
   // 作成フォームの画像アップロード (WC-a8f0be16) の配線スパイ。upload は固定 id を返す。
   const uploadImage = vi.fn((_dataUrl: string) => Promise.resolve('IMG1'));
+  // 区画を全選択 (WC-85c72d94) の配線スパイ。selectSection → selectMany(区画 id 群) を固定する。
+  const selectMany = vi.fn((_ids: string[]) => {});
   return {
     me,
     reorderTickets,
     createTicket,
     createEpic,
     uploadImage,
+    selectMany,
     // テンプレートは ref を自動アンラップするが、プレーン {value} はアンラップされない。
     // createLoading は template でのみ truthy 判定される (script で .value を読まない) ので素の値を渡す。
     // liveError は script で .value を読むので {value} 形を保つ。
@@ -66,7 +69,7 @@ const mocks = vi.hoisted(() => {
       applyToSelected: () => {},
       removeSelected: () => {},
       clear: () => {},
-      selectMany: () => {},
+      selectMany: selectMany,
     }),
   };
 });
@@ -159,6 +162,34 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
       { item: el('data-ticket-id', 'GHOST'), from: el('data-section', 'backlog'), to: el('data-section', 'backlog') },
     );
     expect(mocks.reorderTickets).not.toHaveBeenCalled();
+  });
+});
+
+describe('区画を全選択 (WC-85c72d94)', () => {
+  beforeEach(() => mocks.selectMany.mockClear());
+
+  it('backlog の「区画を全選択」は backlog の id 群だけを selectMany に渡す (current/next は含めない)', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, current: [t('C1')], next: [t('N1')], backlog: [t('B1'), t('B2')] },
+    });
+    await wrapper.find('[data-testid=section-select-all-backlog]').trigger('click');
+    expect(mocks.selectMany).toHaveBeenCalledTimes(1);
+    expect(mocks.selectMany).toHaveBeenCalledWith(['B1', 'B2']);
+  });
+
+  it('current の「区画を全選択」は current の id 群だけを渡す', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, current: [t('C1'), t('C2')], next: [t('N1')], backlog: [t('B1')] },
+    });
+    await wrapper.find('[data-testid=section-select-all-current]').trigger('click');
+    expect(mocks.selectMany).toHaveBeenCalledWith(['C1', 'C2']);
+  });
+
+  it('空区画のボタンは disabled', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, current: [], next: [t('N1')], backlog: [t('B1')] },
+    });
+    expect(wrapper.find('[data-testid=section-select-all-current]').attributes('disabled')).toBeDefined();
   });
 });
 
