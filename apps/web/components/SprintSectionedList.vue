@@ -280,6 +280,9 @@ function applySpike(): void { newType.value = 'spike'; }
 const usAsA = ref('');
 const usIWant = ref('');
 const usSoThat = ref('');
+// who/what/why だけでは表現しきれない背景・補足を書く自由記述欄 (WC-19 / A 案・非破壊)。
+// 3 欄の下に本文として description に足す (3 欄は構造化フィールドとして残す)。
+const usDescription = ref('');
 const storyVerdict = ref<StoryQualityVerdict | null>(null);
 // story の親 Epic (案A: story 作成時は必須)。selectableEpics から選ぶ。
 const newEpicId = ref<string>('');
@@ -327,11 +330,13 @@ const composedStoryTitle = computed(() =>
   usAsA.value.trim() && usIWant.value.trim() ? `${usAsA.value.trim()}として${usIWant.value.trim()}` : '',
 );
 function composeStoryDescription(): string {
-  return [
+  const base = [
     `**誰が:** ${usAsA.value.trim() || '—'}`,
     `**何をしたい:** ${usIWant.value.trim() || '—'}`,
     `**なぜ:** ${usSoThat.value.trim() || '—'}`,
   ].join('\n');
+  const detail = usDescription.value.trim();
+  return detail ? `${base}\n\n${detail}` : base;
 }
 
 async function runStoryCheck(): Promise<void> {
@@ -352,6 +357,7 @@ function openCreate(): void {
   usAsA.value = '';
   usIWant.value = '';
   usSoThat.value = '';
+  usDescription.value = '';
   storyVerdict.value = null;
   newEpicId.value = '';
   showEpicCreate.value = false;
@@ -717,6 +723,12 @@ async function submitSplit(): Promise<void> {
             <label class="label" for="ssl-us-sothat">なぜ <span class="req">*</span></label>
             <input id="ssl-us-sothat" v-model="usSoThat" data-testid="us-sothat" type="text" class="text-input"
                    maxlength="160" placeholder="例: 測定可能なゴールを定義でき、レビュー時の判定が割れない" />
+          </div>
+          <!-- 自由記述の説明 (WC-19): who/what/why だけでは足りない背景・補足・受け入れの前提などを書く。任意。 -->
+          <div class="field">
+            <label class="label" for="ssl-us-desc">説明 (任意)</label>
+            <textarea id="ssl-us-desc" v-model="usDescription" data-testid="us-description" class="text-input"
+                      rows="4" maxlength="2000" placeholder="背景・補足・制約など。who/what/why だけで表現しきれない詳細を書けます。" />
           </div>
           <!-- 親 Epic は story 作成時に必須 (案A)。実在 Epic から選ぶ or その場で作る (決定2部目)。 -->
           <div class="field">

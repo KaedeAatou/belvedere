@@ -312,6 +312,31 @@ describe('SprintSectionedList story 作成の親Epic必須化 (案A)', () => {
     expect(mocks.createTicket.mock.calls[0]![0]).toMatchObject({ type: 'story', epicId: 'EP-1' });
   });
 
+  // WC-19: story にも自由記述の説明を書ける (who/what/why の下に本文として description に足す)。
+  it('説明欄を書くと who/what/why の下に本文が足された description で作成される', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=us-epic]').setValue('EP-1');
+    await wrapper.get('[data-testid=us-description]').setValue('背景: 決済チームからの要望。既存の手動運用を置き換える。');
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    const desc = String(mocks.createTicket.mock.calls[0]![0].description);
+    expect(desc).toContain('**誰が:** 運営担当者');
+    expect(desc).toContain('**なぜ:** 判定が割れない');
+    // who/what/why ブロックの後に本文が続く (空行区切り)。
+    expect(desc).toMatch(/\*\*なぜ:\*\*[^\n]*\n\n背景: 決済チームからの要望/);
+  });
+
+  it('説明欄が空なら description は who/what/why の 3 行のみ (末尾に余計な本文が付かない)', async () => {
+    mocks.createTicket.mockClear();
+    const wrapper = await openCreateStory();
+    await wrapper.get('[data-testid=us-epic]').setValue('EP-1');
+    await wrapper.get('[data-testid=submit-create]').trigger('click');
+    await flushPromises();
+    const desc = String(mocks.createTicket.mock.calls[0]![0].description);
+    expect(desc.split('\n').filter((l) => l.trim().length > 0)).toHaveLength(3);
+  });
+
   // 決定2部目: Story を作れる儀式で Epic も追加できる (インライン作成 → 即選択)。
   it('インライン Epic 作成: 名前を入れて作成すると createEpic が呼ばれフォームが閉じる', async () => {
     mocks.createEpic.mockClear();
