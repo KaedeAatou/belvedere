@@ -160,6 +160,20 @@
 }
 .smart-cell.ok .letter { color: var(--ok); }
 .smart-cell.weak .letter { color: var(--accent); }
+/* 未評価 (WC-14): AI 評価前は neutral (ink-4) で「まだ採点していない」ことを示す。 */
+.smart-cell.neutral .letter { color: var(--ink-3); }
+.smart-cell.neutral { opacity: 0.75; }
+/* SMART ヘッダ (ラベル + AI で評価 ボタン) */
+.smart-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+/* AI 評価後の summary + 弱い観点の改善提案 */
+.smart-error { color: var(--err); font-size: 12px; margin: 8px 0 0; }
+.smart-notes { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
+.smart-summary { margin: 0 0 4px; font-size: 12.5px; color: var(--ink-1); line-height: 1.5; }
+.smart-note { display: flex; gap: 8px; font-size: 12px; color: var(--ink-1); line-height: 1.5; }
+.smart-note-letter {
+  flex: 0 0 auto; font-family: var(--mono); font-weight: 600; color: var(--accent);
+  min-width: 14px; text-align: center;
+}
 
 /* planned SP vs velocity (SMART 下のコンパクト 1 行表示) */
 .vel-inline {

@@ -46,6 +46,7 @@ import {
 } from './handlers/workspace-handlers';
 import { getFindings } from './handlers/finding-handlers';
 import { checkStoryQuality } from './handlers/story-quality-handlers';
+import { evaluateSprintSmart } from './handlers/smart-eval-handlers';
 import {
   startEstimation,
   getEstimation,
@@ -290,6 +291,11 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   app.post('/api/story-quality', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await checkStoryQuality(repo, llm, buildCtx(c), body));
+  });
+
+  // Sprint Goal の SMART 評価 (WC-14)。active スプリントの Goal を LLM が 5観点で採点する。
+  app.post('/api/planning/smart', async (c) => {
+    return respond(c, await evaluateSprintSmart(repo, llm, buildCtx(c)));
   });
 
   // ------- /api/* CRUD endpoints (Phase 1-C / 2026-06-11) -------
