@@ -169,7 +169,10 @@ function confirmRemove(): void {
   align-items: center;
   gap: 12px;
   padding: 8px 20px;
-  background: var(--accent-bg, #fff3ee);
+  /* 不透明背景 (WC-21): --accent-bg は rgba(...0.08) で半透明のため、sticky バーの下を
+     スクロールするチケット行が透けて「文字がかぶる」。不透明な bg-0 の上に accent 8% を
+     重ねて、色味を保ったまま完全不透明にする。 */
+  background: linear-gradient(var(--accent-bg), var(--accent-bg)), var(--bg-0);
   border-bottom: var(--hairline) solid var(--accent-dim, var(--line-2));
   font-family: var(--sans);
 }
