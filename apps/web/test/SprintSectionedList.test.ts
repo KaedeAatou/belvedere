@@ -28,8 +28,10 @@ const mocks = vi.hoisted(() => {
   const me = { value: null as null | { role: string } };
   // 作成フォームの画像アップロード (WC-a8f0be16) の配線スパイ。upload は固定 id を返す。
   const uploadImage = vi.fn((_dataUrl: string) => Promise.resolve('IMG1'));
-  // 区画を全選択 (WC-85c72d94) の配線スパイ。selectSection → selectMany(区画 id 群) を固定する。
+  // 区画の全選択チェックボックス (WC-9) の配線スパイ。selectMany/deselectMany + isSelected を固定する。
   const selectMany = vi.fn((_ids: string[]) => {});
+  const deselectMany = vi.fn((_ids: string[]) => {});
+  const isSelected = vi.fn((_id: string) => false);
   return {
     me,
     reorderTickets,
@@ -37,6 +39,8 @@ const mocks = vi.hoisted(() => {
     createEpic,
     uploadImage,
     selectMany,
+    deselectMany,
+    isSelected,
     // テンプレートは ref を自動アンラップするが、プレーン {value} はアンラップされない。
     // createLoading は template でのみ truthy 判定される (script で .value を読まない) ので素の値を渡す。
     // liveError は script で .value を読むので {value} 形を保つ。
@@ -63,13 +67,14 @@ const mocks = vi.hoisted(() => {
     }),
     useSelection: () => ({
       count: { value: 0 },
-      isSelected: () => false,
+      isSelected: isSelected,
       toggle: () => {},
       isBusy: { value: false },
       applyToSelected: () => {},
       removeSelected: () => {},
       clear: () => {},
       selectMany: selectMany,
+      deselectMany: deselectMany,
     }),
   };
 });
@@ -165,27 +170,39 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
   });
 });
 
-describe('区画を全選択 (WC-85c72d94)', () => {
-  beforeEach(() => mocks.selectMany.mockClear());
+describe('区画の全選択チェックボックス (WC-85c72d94 → WC-9 差し戻しで見出し checkbox 化)', () => {
+  beforeEach(() => { mocks.selectMany.mockClear(); mocks.deselectMany.mockClear(); });
 
-  it('backlog の「区画を全選択」は backlog の id 群だけを selectMany に渡す (current/next は含めない)', async () => {
+  it('未選択の backlog チェックボックスを押すと backlog の id 群だけを selectMany (current/next 含めない)', async () => {
     const wrapper = await mountSuspended(SprintSectionedList, {
       props: { ...baseProps, current: [t('C1')], next: [t('N1')], backlog: [t('B1'), t('B2')] },
     });
-    await wrapper.find('[data-testid=section-select-all-backlog]').trigger('click');
+    await wrapper.find('[data-testid=section-select-all-backlog]').trigger('change');
     expect(mocks.selectMany).toHaveBeenCalledTimes(1);
     expect(mocks.selectMany).toHaveBeenCalledWith(['B1', 'B2']);
   });
 
-  it('current の「区画を全選択」は current の id 群だけを渡す', async () => {
+  it('current チェックボックスは current の id 群だけを渡す', async () => {
     const wrapper = await mountSuspended(SprintSectionedList, {
       props: { ...baseProps, current: [t('C1'), t('C2')], next: [t('N1')], backlog: [t('B1')] },
     });
-    await wrapper.find('[data-testid=section-select-all-current]').trigger('click');
+    await wrapper.find('[data-testid=section-select-all-current]').trigger('change');
     expect(mocks.selectMany).toHaveBeenCalledWith(['C1', 'C2']);
   });
 
-  it('空区画のボタンは disabled', async () => {
+  it('全選択済の区画チェックボックスを押すと deselectMany で解除する (all↔none トグル)', async () => {
+    // isSelected を「全部選択済」に差し替えて allSelected を成立させる。
+    mocks.isSelected.mockReturnValue(true);
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, current: [], next: [], backlog: [t('B1'), t('B2')] },
+    });
+    await wrapper.find('[data-testid=section-select-all-backlog]').trigger('change');
+    expect(mocks.deselectMany).toHaveBeenCalledWith(['B1', 'B2']);
+    expect(mocks.selectMany).not.toHaveBeenCalled();
+    mocks.isSelected.mockReturnValue(false);
+  });
+
+  it('空区画のチェックボックスは disabled', async () => {
     const wrapper = await mountSuspended(SprintSectionedList, {
       props: { ...baseProps, current: [], next: [t('N1')], backlog: [t('B1')] },
     });

@@ -44,6 +44,13 @@ export const useTicketSelection = () => {
     ids.value = next;
   }
 
+  /** 区画チェックボックスの解除用: 指定 id 群を選択セットから外す (他区画の選択は維持)。 */
+  function deselectMany(targetIds: string[]): void {
+    const next = new Set(ids.value);
+    for (const id of targetIds) next.delete(id);
+    ids.value = next;
+  }
+
   function clear(): void {
     ids.value = new Set();
   }
@@ -87,6 +94,7 @@ export const useTicketSelection = () => {
     isSelected,
     toggle,
     selectMany,
+    deselectMany,
     clear,
     prune,
     count,
