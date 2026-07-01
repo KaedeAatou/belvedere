@@ -6,12 +6,23 @@
 import type { Ticket } from '@belvedere/shared';
 import type { ScreenId } from './useUiMeta';
 
+// アクションボタンの挙動 (WC-f17989df: 従来はラベルだけで @click 未配線 = 無反応だった)。
+//   - navigate: 別画面へ遷移 (例: backlog の「Refinement へ」)。target に遷移先 ScreenId。
+//   - prompt:   Integrity AI チャットに定型プロンプトを投入して実行 (例: daily の「滞留を抽出」)。
+export interface AICheckAction {
+  label: string;
+  primary?: boolean;
+  kind: 'navigate' | 'prompt';
+  target?: ScreenId; // kind==='navigate'
+  prompt?: string; // kind==='prompt'
+}
+
 export interface AICheck {
   tag: string;
   msg: string;
   ref?: string;
   ticketId?: string;
-  actions?: { label: string; primary?: boolean }[];
+  actions?: AICheckAction[];
 }
 
 export function screenIntro(screen: ScreenId): string {
@@ -35,42 +46,57 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
     out.push({
       tag: '品質チェック',
       msg: 'SP 未見積もり・DoD 欠落・種別なし等の指摘を各行のピルで可視化しています。Refinement で上から潰せます。',
-      actions: [{ label: 'Refinement へ', primary: true }],
+      actions: [{ label: 'Refinement へ', primary: true, kind: 'navigate', target: 'refinement' }],
     });
 
   if (screen === 'planning')
     out.push({
       tag: '計画点検',
       msg: '計画 SP の積み上げを velocity 実績と比較中。過剰計画になっていないか、各チケットがゴールに貢献するかを確認しましょう。',
-      actions: [{ label: '提案を見る', primary: true }],
+      actions: [{
+        label: '提案を見る', primary: true, kind: 'prompt',
+        prompt: '現在のスプリント計画を点検して。計画 SP の積み上げを velocity 実績と比較し、過剰計画かどうか、各チケットが Sprint Goal に貢献するかを診断して改善を提案して。',
+      }],
     });
 
   if (screen === 'daily')
     out.push({
       tag: '滞留監視',
       msg: 'in-progress に長く留まるチケットは、サブタスクへの分割かブロッカーの記録を推奨します。',
-      actions: [{ label: '滞留を抽出', primary: true }],
+      actions: [{
+        label: '滞留を抽出', primary: true, kind: 'prompt',
+        prompt: 'in-progress に長く滞留しているチケットを抽出して。各チケットについてサブタスクへの分割かブロッカーの記録を提案して。',
+      }],
     });
 
   if (screen === 'refinement')
     out.push({
       tag: 'グルーミング',
       msg: 'SP 未見積もりのストーリーは「ポーカー開始」で合意形成できます。種別なし・DoD 欠落も上から解消しましょう。',
-      actions: [{ label: '一括提案', primary: true }],
+      actions: [{
+        label: '一括提案', primary: true, kind: 'prompt',
+        prompt: 'バックログの品質指摘(粒度 SP>8 / 依存 / valueImpact / priority×valueImpact ミスマッチ / SP 分散 / Epic.rationale 欠落)を一括で洗い出し、上位から改善を提案して。',
+      }],
     });
 
   if (screen === 'review')
     out.push({
       tag: 'デモ準備',
       msg: '完了チケットのデモシナリオを準備できます。受け入れ条件の充足も確認します。',
-      actions: [{ label: 'デモ台本を生成', primary: true }],
+      actions: [{
+        label: 'デモ台本を生成', primary: true, kind: 'prompt',
+        prompt: '完了チケットのデモシナリオ(台本)を生成して。各チケットの受け入れ条件が満たされているかも確認して。',
+      }],
     });
 
   if (screen === 'retro')
     out.push({
       tag: '議論候補',
       msg: 'スプリントのメトリクスから Keep / Problem / Try の候補を提案できます。',
-      actions: [{ label: 'アクションに追加', primary: true }],
+      actions: [{
+        label: 'アクションに追加', primary: true, kind: 'prompt',
+        prompt: 'このスプリントのメトリクスから Keep / Problem / Try の候補を抽出して。特に次スプリントに転記すべき Try を提案して。',
+      }],
     });
 
   return out;
