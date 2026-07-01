@@ -21,7 +21,7 @@ const showEvents = computed(() => props.railTab === 'events');
            @click="emit('update:screen', 'events')">
         <span class="num">◎</span>
         <span class="lbl">
-          <span class="l1">概要</span>
+          <span class="l1">Home</span>
           <span class="l2">Sprint overview</span>
         </span>
       </div>

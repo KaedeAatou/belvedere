@@ -75,7 +75,7 @@ const stalled = computed(() =>
   <div class="ehome" data-testid="events-home">
     <div class="ehome-head">
       <div>
-        <div class="ehome-floor">EVENTS · 概要</div>
+        <div class="ehome-floor">EVENTS · HOME</div>
         <h1 class="ehome-title">{{ currentLabel || 'Current Sprint' }}</h1>
         <p class="ehome-goal">{{ goal }}</p>
       </div>
