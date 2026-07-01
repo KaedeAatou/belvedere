@@ -12,6 +12,7 @@ import {
   reorderTickets,
   changeTicketStatus,
   deleteTicket,
+  addTicketComment,
 } from '../src/handlers/ticket-handlers';
 import { createEpic, patchEpic } from '../src/handlers/epic-handlers';
 
@@ -761,5 +762,50 @@ describe('権限マトリクス境界 (reorder / epic.write)', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(403);
+  });
+});
+
+describe('addTicketComment (WC-2640fecd)', () => {
+  let repo: RepoContainer;
+  let id: string;
+  beforeEach(async () => {
+    repo = createMemoryRepoContainer();
+    const created = await createTicket(repo, CTX, { title: 'コメント対象' });
+    if (!created.ok) throw new Error('setup failed');
+    id = created.body.id;
+  });
+
+  it('コメントを末尾に追加し authorId=認証ユーザ / createdAt を API で確定する', async () => {
+    const res = await addTicketComment(repo, CTX, id, { body: '追加調査した' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.comments).toHaveLength(1);
+    const c = res.body.comments![0]!;
+    expect(c.body).toBe('追加調査した');
+    expect(c.authorId).toBe('firebase-uid-test');
+    expect(c.id).toMatch(/^CMT-/);
+    expect(typeof c.createdAt).toBe('string');
+  });
+
+  it('複数コメントは投稿順に積まれる', async () => {
+    await addTicketComment(repo, CTX, id, { body: '1件目' });
+    const res = await addTicketComment(repo, CTX, id, { body: '2件目' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.comments!.map((c) => c.body)).toEqual(['1件目', '2件目']);
+  });
+
+  it('body 空は 400', async () => {
+    const res = await addTicketComment(repo, CTX, id, { body: '' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('別 workspace のチケットは 404 (IDOR / body 偽装で authorId は載らない)', async () => {
+    const res = await addTicketComment(repo, OTHER_CTX, id, { body: 'x' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(404);
   });
 });

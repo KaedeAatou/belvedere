@@ -195,6 +195,19 @@ export const useTickets = () => {
     }
   }
 
+  /** コメント / 追記を 1 件足す (WC-2640fecd)。成功時はサーバの更新済みチケットで置換する。 */
+  async function addComment(id: string, body: string): Promise<Ticket | null> {
+    error.value = null;
+    try {
+      const updated = await api.post<Ticket>(`/api/tickets/${id}/comments`, { body });
+      tickets.value = tickets.value.map((t) => (t.id === id ? updated : t));
+      return updated;
+    } catch (e) {
+      error.value = apiErrorMessage(e);
+      return null;
+    }
+  }
+
   /** 削除。成功時はローカル tickets から除去する。 */
   async function deleteTicket(id: string): Promise<boolean> {
     error.value = null;
@@ -209,5 +222,5 @@ export const useTickets = () => {
     }
   }
 
-  return { tickets, isLoading, error, fetchTickets, createTicket, patchTicket, reorderTickets, changeStatus, deleteTicket };
+  return { tickets, isLoading, error, fetchTickets, createTicket, patchTicket, reorderTickets, changeStatus, addComment, deleteTicket };
 };

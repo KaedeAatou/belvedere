@@ -84,6 +84,12 @@ export const TicketStatusChangeBodySchema = z.object({
   status: StatusSchema,
 });
 
+// POST /api/tickets/:id/comments body — 追記スレッドに 1 件足す (WC-2640fecd)。
+// authorId / createdAt は API 側で確定する (body 経由の偽装を防ぐ)。
+export const TicketCommentBodySchema = z.object({
+  body: z.string().min(1, 'body is required'),
+});
+
 // POST /api/tickets/reorder body — 区画 d&d 確定時に「その区画の全 id を新並び順で」受け取り、
 // orderIndex を (i+1)*ORDER_STEP で密に再採番する。区画跨ぎ移動は movedId 1 件だけ sprintId を
 // 変更する (区画内の他チケット — 完了 sprint 紐付け等 — の sprintId は触らない)。
@@ -336,5 +342,39 @@ export async function deleteTicket(
   }
   await repo.tickets.delete(id);
   return { ok: true, status: 200, body: { deleted: id } };
+}
+
+/**
+ * チケットへコメント / 追記を 1 件足す (WC-2640fecd)。
+ * description が 1 つしか無く追記できない不便を解消する時系列スレッド。authorId は認証ユーザ、
+ * createdAt は API 側で確定 (body 偽装を防ぐ)。既存 comments の末尾に append して返す。
+ */
+export async function addTicketComment(
+  repo: RepoContainer,
+  ctx: HandlerContext,
+  id: string,
+  body: unknown,
+): Promise<HandlerResult<Ticket>> {
+  const existing = await repo.tickets.get(id);
+  if (!existing || existing.workspaceId !== ctx.workspaceId) {
+    return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  // コメントも ticket.write (全役割可 / undefined のみ弾く)。IDOR(404) を先に。
+  if (!can('ticket.write', ctx)) {
+    return { ok: false, status: 403, body: forbidden('ticket.write') };
+  }
+  const parsed = TicketCommentBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
+  }
+  const now = new Date().toISOString();
+  const comment = { id: generateId('CMT'), authorId: ctx.user.userId, body: parsed.data.body, createdAt: now };
+  const updated: Ticket = {
+    ...existing,
+    comments: [...(existing.comments ?? []), comment],
+    updatedAt: now,
+  };
+  await repo.tickets.upsert(updated);
+  return { ok: true, status: 200, body: updated };
 }
 

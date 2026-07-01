@@ -7,9 +7,25 @@ const emit = defineEmits<{ close: [] }>();
 
 const { memberName, members } = useMembers();
 const { findingsFor } = useFindings();
-const { patchTicket, deleteTicket } = useTickets();
+const { patchTicket, deleteTicket, addComment } = useTickets();
 const { upload: uploadImage } = useImages();
 const imageBusy = ref(false);
+
+// ===== コメント / 追記スレッド (WC-2640fecd) =====
+const comments = computed(() => props.ticket.comments ?? []);
+const commentText = ref('');
+const commentBusy = ref(false);
+const commentError = ref<string | null>(null);
+async function submitComment(): Promise<void> {
+  const body = commentText.value.trim();
+  if (!body || commentBusy.value) return;
+  commentError.value = null;
+  commentBusy.value = true;
+  const updated = await addComment(props.ticket.id, body);
+  commentBusy.value = false;
+  if (updated) commentText.value = '';
+  else commentError.value = 'コメントの追加に失敗しました';
+}
 
 // 画像を選択 → data URL 化 → アップロード → ![](/api/images/id) を説明末尾に挿入 (WC-a8f0be16)。
 async function onPickImage(e: Event): Promise<void> {
@@ -345,6 +361,35 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </div>
       </div>
 
+      <!-- コメント / 追記スレッド (WC-2640fecd)。説明が 1 つしか無く追記できない不便を解消。 -->
+      <div class="field" data-testid="sheet-comments">
+        <div class="l">コメント / 追記</div>
+        <div v-if="comments.length > 0" class="comment-list">
+          <div v-for="c in comments" :key="c.id" class="comment" :data-testid="`comment-${c.id}`">
+            <div class="comment-meta">
+              <Avatar :user="c.authorId" />
+              <span class="comment-author">{{ memberName(c.authorId) }}</span>
+              <span style="color: var(--ink-4)">·</span>
+              <span>{{ c.createdAt.slice(0, 16).replace('T', ' ') }}</span>
+            </div>
+            <div class="comment-body">{{ c.body }}</div>
+          </div>
+        </div>
+        <div v-else style="font-size: 12.5px; color: var(--ink-3); font-style: italic; margin-bottom: 8px">
+          まだコメントはありません。
+        </div>
+        <textarea v-model="commentText" class="edit-input edit-textarea" data-testid="comment-input"
+                  rows="2" placeholder="追記・調査メモ・議論を書く" @keydown.meta.enter="submitComment" @keydown.ctrl.enter="submitComment" />
+        <div style="display: flex; align-items: center; gap: 10px; margin-top: 6px">
+          <button class="ibtn-text" data-testid="comment-submit"
+                  :disabled="commentBusy || !commentText.trim()" @click="submitComment">
+            {{ commentBusy ? '追加中…' : '追加' }}
+          </button>
+          <span style="font-family: var(--mono); font-size: 10px; color: var(--ink-3)">⌘ ↵</span>
+          <span v-if="commentError" class="edit-err" style="margin: 0">{{ commentError }}</span>
+        </div>
+      </div>
+
       <!-- 削除 (2 段階クリック / T10-2) -->
       <div class="field delete-zone">
         <button :class="['delete-btn', deleteArmed && 'armed']" data-testid="delete-ticket" @click="onDelete">
@@ -398,6 +443,15 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 }
 .img-upload-btn:hover { background: var(--accent-bg, #fff3ee); }
 .edit-err { color: var(--err); font-size: 12px; margin: 0 0 12px; }
+/* コメント / 追記スレッド (WC-2640fecd) */
+.comment-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 12px; }
+.comment { border-left: 2px solid var(--line-2); padding: 2px 0 2px 12px; }
+.comment-meta {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+}
+.comment-author { color: var(--ink-1); font-weight: 600; }
+.comment-body { font-family: var(--sans); font-size: 13px; line-height: 1.55; color: var(--ink-0); white-space: pre-wrap; }
 .review-note-list { display: flex; flex-direction: column; gap: 6px; }
 .review-note {
   font-family: var(--sans); font-size: 13px; line-height: 1.5;

@@ -27,6 +27,7 @@ import {
   reorderTickets,
   changeTicketStatus,
   deleteTicket,
+  addTicketComment,
   type HandlerContext,
   type HandlerResult,
 } from './handlers/ticket-handlers';
@@ -311,6 +312,11 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   });
   app.delete('/api/tickets/:id', async (c) => {
     return respond(c, await deleteTicket(repo, buildCtx(c), c.req.param('id')));
+  });
+  // チケットへコメント / 追記を 1 件足す (WC-2640fecd)
+  app.post('/api/tickets/:id/comments', async (c) => {
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return respond(c, await addTicketComment(repo, buildCtx(c), c.req.param('id'), body));
   });
 
   // Sprint 新規作成 (owner/sm/po のみ / 2026-06-12)
