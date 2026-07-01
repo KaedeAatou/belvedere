@@ -89,6 +89,16 @@ const allVisibleIds = computed(() => [
   ...props.backlog.map((t) => t.id),
 ]);
 
+// 区画単位の全選択 (WC-85c72d94): 上部バーの「全選択」は全区画=allVisibleIds を選ぶが、
+// 「backlog だけ選びたい」等の要望に応え各区画ヘッダに「区画を全選択」を置く。
+// 既存選択には加算 (selectMany の意味論) なので複数区画を続けて選べる。
+function sectionTickets(key: SectionKey): Ticket[] {
+  return key === 'current' ? props.current : key === 'next' ? props.next : props.backlog;
+}
+function selectSection(key: SectionKey): void {
+  sel.selectMany(sectionTickets(key).map((t) => t.id));
+}
+
 // ===== d&d は SortableJS (vue-draggable-plus) で実装 =====
 // 自前 pointer 実装は cross-section / 選択抑止 / ドロップ位置で edge case を量産したため廃止。
 // SortableJS は Trello/Jira 級で実績があり、group でリスト間移動、handle で点々限定ドラッグ、
@@ -560,6 +570,9 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ currentStats.sp }}</b> SP</span>
           <span><b>{{ currentStats.flagged }}</b> flagged</span>
         </div>
+        <button class="sec-select-all" data-testid="section-select-all-current"
+                :disabled="currentStats.count === 0" title="この区画を全選択"
+                @click.stop="selectSection('current')">区画を全選択</button>
       </div>
       <VueDraggable v-show="!collapsed.current" v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
                     :disabled="reorderBlocked" :animation="150" :force-fallback="true"
@@ -594,6 +607,9 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ nextStats.sp }}</b> SP</span>
           <span><b>{{ nextStats.flagged }}</b> flagged</span>
         </div>
+        <button class="sec-select-all" data-testid="section-select-all-next"
+                :disabled="nextStats.count === 0" title="この区画を全選択"
+                @click.stop="selectSection('next')">区画を全選択</button>
       </div>
       <VueDraggable v-show="!collapsed.next" v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
                     :disabled="reorderBlocked" :animation="150" :force-fallback="true"
@@ -628,6 +644,9 @@ async function submitSplit(): Promise<void> {
           <span><b>{{ backlogStats.sp }}</b> SP</span>
           <span><b>{{ backlogStats.flagged }}</b> flagged</span>
         </div>
+        <button class="sec-select-all" data-testid="section-select-all-backlog"
+                :disabled="backlogStats.count === 0" title="この区画を全選択"
+                @click.stop="selectSection('backlog')">区画を全選択</button>
         <!-- New issue は折り畳みトグルと競合しないよう @click.stop -->
         <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
                 @click.stop="openCreate"><Icon name="plus" /> New issue</button>
