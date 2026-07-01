@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Status, Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
+import { isScreenId } from '~/composables/useUiMeta';
 
 // 実 API データ源 (R3: demo data 廃止)。useState 共有なので各画面は composable から直接読む。
 const { tickets, fetchTickets, changeStatus } = useTickets();
@@ -56,6 +57,26 @@ function onSearchKeydown(e: KeyboardEvent): void {
     closeSearch();
   }
 }
+
+// 画面 / タブをリロード後も保持する (WC-17: リロードで必ず backlog に戻る指摘)。
+// localStorage の既存パターン (区画折り畳み) に合わせる。selected(DetailSheet) は一時状態なので保持しない。
+const SCREEN_KEY = 'belv:screen';
+onMounted(() => {
+  if (import.meta.client) {
+    try {
+      const saved = localStorage.getItem(SCREEN_KEY);
+      if (isScreenId(saved)) {
+        screen.value = saved;
+        railTab.value = saved === 'backlog' ? 'backlog' : 'events';
+      }
+    } catch { /* 壊れた値は無視して既定 (backlog) */ }
+  }
+});
+watch(screen, (s) => {
+  if (import.meta.client) {
+    try { localStorage.setItem(SCREEN_KEY, s); } catch { /* quota 等は無視 */ }
+  }
+});
 
 onMounted(() => {
   fetchTickets();

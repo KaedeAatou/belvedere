@@ -7,6 +7,14 @@
 // 'events' = events タブの概要ホーム (WC-cba82df1)。儀式ではないので CEREMONIES には含めない。
 export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro' | 'events';
 
+// 有効な ScreenId 一覧 (localStorage 復元時の検証用 / WC-17)。
+export const SCREEN_IDS: readonly ScreenId[] = ['backlog', 'planning', 'daily', 'refinement', 'review', 'retro', 'events'];
+
+/** 任意値が有効な ScreenId か (壊れた localStorage 値を弾く純粋ガード / WC-17)。 */
+export function isScreenId(x: unknown): x is ScreenId {
+  return typeof x === 'string' && (SCREEN_IDS as readonly string[]).includes(x);
+}
+
 export interface ScreenDef {
   id: ScreenId;
   label: string;
