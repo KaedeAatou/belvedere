@@ -33,6 +33,17 @@ export class MockLLMProvider implements LLMProvider {
       };
     }
 
+    // Sprint Goal の SMART 評価 (WC-14)。story_quality と同様、responseSchema.title==='smart_eval'
+    // なら detectRole の前段で決定的ヒューリスティックの契約 JSON を返す (6 ロール経路に入らない)。
+    if (isSmartEvalRequest(req)) {
+      const text = JSON.stringify(composeSmartEval(req), null, 2);
+      return {
+        text,
+        stop: { type: 'stop' },
+        usage: this.fakeUsage(req, text.length),
+      };
+    }
+
     const sessionKey = req.messages.length.toString();
 
     // 直前が tool result なら最終応答に進む
@@ -591,4 +602,78 @@ function composeStoryQuality(req: LLMRequest): StoryQualityVerdict {
     verdict.sprintGoal = draft.goal;
   }
   return verdict;
+}
+
+// ========== SMART 評価 補助 (Sprint Goal 診断 / WC-14) ==========
+//
+// handler (apps/api/src/handlers/smart-eval-handlers.ts) が responseSchema.title='smart_eval' を
+// 付けて llm.generate() を tools 無しで 1 回呼ぶ。mock は決定的ヒューリスティックで契約形
+// (criteria 5 件 + summary) の JSON を返す。gemini に差し替えても同じ形を返すので handler は無改修。
+
+/** responseSchema が smart_eval 用かどうか (title または name で判定)。 */
+function isSmartEvalRequest(req: LLMRequest): boolean {
+  const s = req.responseSchema;
+  if (!s) return false;
+  const title = typeof s.title === 'string' ? s.title : '';
+  const name = typeof s.name === 'string' ? s.name : '';
+  return title === 'smart_eval' || name === 'smart_eval';
+}
+
+interface SmartMockCriterion {
+  letter: 'S' | 'M' | 'A' | 'R' | 'T';
+  name: string;
+  ok: boolean;
+  note: string;
+}
+
+/**
+ * user message の `goal:` / `plannedSP:` / `velocity:` を読み、SMART 5観点を決定的に採点する。
+ * S=具体性(非空&長さ) / M=測定可能(数値や指標語) / A=velocity内 / R=整合(非空) / T=期限(スプリントは時間箱)。
+ */
+function composeSmartEval(req: LLMRequest): { criteria: SmartMockCriterion[]; summary: string } {
+  const userMsg = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
+  const pick = (label: string): string => {
+    const re = new RegExp(`^[^\\S\\n]*${label}[^\\S\\n]*:[^\\S\\n]*(.*)$`, 'im');
+    return (userMsg.match(re)?.[1] ?? '').trim();
+  };
+  const goal = pick('goal');
+  const plannedSP = Number(pick('plannedSP')) || 0;
+  const velocity = Number(pick('velocity')) || 0;
+  const hasGoal = goal.length > 0;
+
+  const specific = hasGoal && goal.length >= 6;
+  // 測定可能: 数値 / 指標記号 / 大文字 SP (i フラグを付けると "response" 等の小文字 sp に誤一致するため付けない)。
+  const measurable = hasGoal && /[0-9０-９]|[%％件率点]|SP/.test(goal);
+  const attainable = velocity > 0 ? plannedSP <= velocity : true;
+
+  const criteria: SmartMockCriterion[] = [
+    {
+      letter: 'S', name: 'Specific', ok: specific,
+      note: !hasGoal ? 'ゴール未設定。まず一文で具体的な達成状態を書きましょう。'
+        : specific ? '達成状態が具体的に書かれています。' : 'ゴールが短く曖昧です。誰に何を届けるかを明記しましょう。',
+    },
+    {
+      letter: 'M', name: 'Measurable', ok: measurable,
+      note: measurable ? '測定可能な指標が含まれています。' : '測定可能な指標がありません。完了率% や件数など数値目標を1つ加えましょう。',
+    },
+    {
+      letter: 'A', name: 'Attainable', ok: attainable,
+      note: velocity <= 0 ? 'velocity 実績が無いため判定保留 (過去スプリント完了後に精度が上がります)。'
+        : attainable ? `計画 ${plannedSP}SP は velocity ${velocity} 内に収まっています。`
+          : `計画 ${plannedSP}SP が velocity ${velocity} を超過 (過剰計画)。スコープを削るか次スプリントへ回しましょう。`,
+    },
+    {
+      letter: 'R', name: 'Relevant', ok: hasGoal,
+      note: hasGoal ? 'ロードマップとの整合を Epic の戦略意図と突き合わせて確認しましょう。' : 'ゴール未設定のため整合を判定できません。',
+    },
+    {
+      letter: 'T', name: 'Time-bound', ok: true,
+      note: 'スプリントは期間で区切られています (Time-bound は満たしています)。',
+    },
+  ];
+  const weak = criteria.filter((c) => !c.ok).map((c) => c.letter);
+  const summary = weak.length === 0
+    ? 'Sprint Goal は SMART 5観点を満たしています。'
+    : `弱い観点: ${weak.join(' / ')}。特に ${weak[0]} の改善から着手しましょう。`;
+  return { criteria, summary };
 }

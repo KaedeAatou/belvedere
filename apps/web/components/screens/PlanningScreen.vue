@@ -33,14 +33,22 @@ const goal = computed(() => activeSprint.value?.goal?.trim() || 'スプリント
 // 1 セグメント = 1 SP。velocity を超えた分が over (accent) になる。
 const barTotal = computed(() => Math.max(totalSP.value, avgVelocity.value, 1));
 
-// SMART は構造ガイド (汎用)。実評価は AI 連携で別途。
-const smart = [
-  { letter: 'S', name: 'Specific', ok: true, note: 'ゴールが具体的か' },
-  { letter: 'M', name: 'Measurable', ok: false, note: '測定可能な指標があるか' },
-  { letter: 'A', name: 'Attainable', ok: true, note: 'velocity 内に収まるか' },
-  { letter: 'R', name: 'Relevant', ok: true, note: 'ロードマップに整合するか' },
-  { letter: 'T', name: 'Time-bound', ok: true, note: '期限が明確か' },
+// SMART 実評価 (WC-14): AI が active スプリントの Goal を 5観点で採点する。
+// 未評価時は 5観点の構造ガイド (neutral) を出し、「AI で評価」で verdict に差し替える。
+const { verdict: smartVerdict, loading: smartLoading, error: smartError, evaluate: evaluateSmart } = useSmartEval();
+const SMART_GUIDE: { letter: string; name: string; note: string }[] = [
+  { letter: 'S', name: 'Specific', note: 'ゴールが具体的か' },
+  { letter: 'M', name: 'Measurable', note: '測定可能な指標があるか' },
+  { letter: 'A', name: 'Attainable', note: 'velocity 内に収まるか' },
+  { letter: 'R', name: 'Relevant', note: 'ロードマップに整合するか' },
+  { letter: 'T', name: 'Time-bound', note: '期限が明確か' },
 ];
+// 評価済なら AI の criteria、未評価なら guide (ok=null 相当で neutral 表示)。
+const smart = computed(() =>
+  smartVerdict.value
+    ? smartVerdict.value.criteria.map((c) => ({ letter: c.letter, name: c.name, ok: c.ok, note: c.note, evaluated: true }))
+    : SMART_GUIDE.map((g) => ({ ...g, ok: null as boolean | null, evaluated: false })),
+);
 
 // 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
 // (旧 @move-to-section emit 経路は撤去済)。patchTicket は下の submitPull で引き続き使う。
@@ -210,13 +218,30 @@ onMounted(() => {
         スプリントを準備中です。表示されない場合はページをリロードしてください。
       </p>
       <div class="goal-text">{{ goal }}</div>
+      <div class="smart-head">
+        <span class="t-cap">SMART GOAL</span>
+        <button class="h-btn" data-testid="smart-eval-btn" :disabled="smartLoading" @click="evaluateSmart">
+          <Icon name="sparkle" /> {{ smartLoading ? '評価中…' : smartVerdict ? '再評価' : 'AI で評価' }}
+        </button>
+      </div>
       <div class="smart-row">
-        <div v-for="s in smart" :key="s.letter" :class="['smart-cell', s.ok ? 'ok' : 'weak']">
+        <div v-for="s in smart" :key="s.letter"
+             :class="['smart-cell', s.evaluated ? (s.ok ? 'ok' : 'weak') : 'neutral']"
+             :data-testid="`smart-cell-${s.letter}`" :title="s.note">
           <div class="letter">{{ s.letter }}</div>
           <div class="name">{{ s.name }}</div>
-          <div class="check" :style="{ color: s.ok ? 'var(--ok)' : 'var(--accent)' }">
-            {{ s.ok ? '✓' : '△' }}
+          <div class="check" :style="{ color: !s.evaluated ? 'var(--ink-4)' : s.ok ? 'var(--ok)' : 'var(--accent)' }">
+            {{ !s.evaluated ? '—' : s.ok ? '✓' : '△' }}
           </div>
+        </div>
+      </div>
+      <p v-if="smartError" class="smart-error" data-testid="smart-error">{{ smartError }}</p>
+      <!-- AI 評価後: summary + 弱い観点の改善提案 (note) を出す。 -->
+      <div v-if="smartVerdict" class="smart-notes" data-testid="smart-notes">
+        <p v-if="smartVerdict.summary" class="smart-summary">{{ smartVerdict.summary }}</p>
+        <div v-for="c in smartVerdict.criteria.filter((x) => !x.ok)" :key="c.letter" class="smart-note">
+          <span class="smart-note-letter">{{ c.letter }}</span>
+          <span>{{ c.note }}</span>
         </div>
       </div>
 
