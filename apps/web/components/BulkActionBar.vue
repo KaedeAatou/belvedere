@@ -161,6 +161,10 @@ function confirmRemove(): void {
   position: sticky;
   top: 0;
   z-index: 30;
+  /* 高さを固定し、区画見出しの sticky top オフセット (screens.css の has-bulk-bar) と一致させる。
+     両方 top:0 の sticky だと CURRENT SPRINT 見出しと重なって文字がかぶる (WC-21)。 */
+  height: 45px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: 12px;

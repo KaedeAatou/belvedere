@@ -550,7 +550,7 @@ async function submitSplit(): Promise<void> {
 </script>
 
 <template>
-  <div ref="rootEl" class="screen-body" data-testid="live-section">
+  <div ref="rootEl" class="screen-body" :class="{ 'has-bulk-bar': sel.count.value > 0 }" data-testid="live-section">
     <BulkActionBar
       v-if="sel.count.value > 0"
       :count="sel.count.value"
