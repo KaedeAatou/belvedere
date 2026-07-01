@@ -68,6 +68,18 @@ export interface Sprint {
 }
 
 // === Ticket ===
+/**
+ * チケットへの時系列コメント / 追記 (WC-2640fecd)。description が 1 つしかなく追記できない
+ * 不便を解消する。監査ログ (全フィールドの変更履歴) ではなく、人が手で足す議論スレッド。
+ */
+export interface TicketComment {
+  id: string;
+  /** 投稿者 userId (Member.userId) */
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface Ticket {
   id: string;
   /** 所属 Workspace (IDOR fix 用、Phase 1-B / 2026-06-10 で必須化)。projectId から導けるが where 1-hop で済ますために denormalize */
@@ -107,6 +119,8 @@ export interface Ticket {
   reproSteps?: string;
   /** Bug の回帰テスト方針 (専用欄 / WC-2dba4170)。空だと BUG_NO_REGRESSION_DOD を出す。再発防止の自動テストを書く。 */
   regressionNote?: string;
+  /** 時系列コメント / 追記スレッド (WC-2640fecd)。POST /api/tickets/:id/comments で末尾に追加。seed (immutable) は持たないため optional */
+  comments?: TicketComment[];
   /**
    * バックログ上の手動並び順 (Linear/Jira 型 d&d)。fractional indexing —
    * 隣接 2 件の中間値を採番し、リバランス頻度を抑える。seed (immutable) は値を持たないため optional。

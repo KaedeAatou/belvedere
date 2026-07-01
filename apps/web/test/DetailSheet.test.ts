@@ -15,12 +15,16 @@ const mocks = vi.hoisted(() => {
     Promise.resolve<{ id: string } | null>({ id: 'WC-1' }),
   );
   const deleteTicket = vi.fn((_id: string) => Promise.resolve(true));
+  // コメント追加 (WC-2640fecd) の配線スパイ。成功時は更新済チケット (comments 付き) を返す。
+  const addComment = vi.fn((id: string, body: string) =>
+    Promise.resolve<{ id: string } | null>({ id, comments: [{ id: 'CMT-1', authorId: 'u1', body, createdAt: '2026-07-01T00:00:00Z' }] } as unknown as { id: string }));
   return {
     patchTicket,
     deleteTicket,
-    useMembers: () => ({ memberName: () => 'Kaede', members: [] }),
+    addComment,
+    useMembers: () => ({ memberName: () => 'Kaede', memberInitial: () => 'K', members: [] }),
     useFindings: () => ({ findingsFor: () => [] }),
-    useTickets: () => ({ patchTicket, deleteTicket }),
+    useTickets: () => ({ patchTicket, deleteTicket, addComment }),
     useSprints: () => ({ sprints: [] }),
   };
 });
@@ -45,6 +49,7 @@ const ticket = (over: Partial<Ticket> & { id: string }): Ticket => ({
 beforeEach(() => {
   mocks.patchTicket.mockClear().mockResolvedValue({ id: 'WC-1' });
   mocks.deleteTicket.mockClear();
+  mocks.addComment.mockClear();
 });
 
 describe('DetailSheet 編集 → 保存 の配線', () => {
@@ -124,5 +129,36 @@ describe('DetailSheet レビュー指摘 (reviewNotes) 表示', () => {
   it('reviewNotes が空配列なら「レビュー指摘」セクションは描画されない', async () => {
     const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1', reviewNotes: [] }) } });
     expect(wrapper.find('[data-testid="sheet-review-notes"]').exists()).toBe(false);
+  });
+});
+
+describe('コメント / 追記スレッド (WC-2640fecd)', () => {
+  it('既存コメントを著者名 + 本文で描画する', async () => {
+    const tk = ticket({ id: 'WC-1', comments: [
+      { id: 'CMT-1', authorId: 'u1', body: '追加調査した', createdAt: '2026-07-01T09:00:00Z' },
+    ] });
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: tk } });
+    const sec = wrapper.find('[data-testid="sheet-comments"]');
+    expect(sec.exists()).toBe(true);
+    expect(sec.text()).toContain('追加調査した');
+    expect(wrapper.find('[data-testid="comment-CMT-1"]').exists()).toBe(true);
+  });
+
+  it('入力して追加 → addComment(id, body) を呼び、成功で入力欄をクリアする', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-9' }) } });
+    await wrapper.find('[data-testid="comment-input"]').setValue('  あとで直す  ');
+    await wrapper.find('[data-testid="comment-submit"]').trigger('click');
+    await flushPromises();
+    expect(mocks.addComment).toHaveBeenCalledWith('WC-9', 'あとで直す');
+    expect((wrapper.find('[data-testid="comment-input"]').element as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('空 (空白のみ) では追加ボタンが disabled で addComment を呼ばない', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    await wrapper.find('[data-testid="comment-input"]').setValue('   ');
+    expect(wrapper.find('[data-testid="comment-submit"]').attributes('disabled')).toBeDefined();
+    await wrapper.find('[data-testid="comment-submit"]').trigger('click');
+    await flushPromises();
+    expect(mocks.addComment).not.toHaveBeenCalled();
   });
 });

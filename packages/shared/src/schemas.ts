@@ -64,6 +64,13 @@ export const WorkspaceSchema = z.object({
 });
 
 // === Ticket ===
+export const TicketCommentSchema = z.object({
+  id: z.string(),
+  authorId: z.string(),
+  body: z.string(),
+  createdAt: z.string(),
+});
+
 export const TicketSchema = z.object({
   id: z.string(),
   workspaceId: z.string(),
@@ -90,6 +97,7 @@ export const TicketSchema = z.object({
   reviewNotes: z.array(z.string()).optional(),
   reproSteps: z.string().optional(),
   regressionNote: z.string().optional(),
+  comments: z.array(TicketCommentSchema).optional(),
   orderIndex: z.number().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
