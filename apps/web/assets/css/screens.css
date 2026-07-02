@@ -133,6 +133,11 @@
   padding: 18px;
   border-bottom: var(--hairline) solid var(--line-1);
 }
+/* Planning の Product Goal 参照 (WC-23 / 読み取り専用) */
+.pg-ref { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.pg-ref-cap { font-family: var(--mono); font-size: 9px; letter-spacing: 0.16em; color: var(--accent); flex: 0 0 auto; }
+.pg-ref-text { font-family: var(--sans); font-size: 13px; color: var(--ink-1); line-height: 1.5; }
+.pg-ref-empty { font-family: var(--sans); font-size: 12px; color: var(--ink-3); font-style: italic; }
 .goal-text {
   font-family: var(--sans);
   font-size: 17px;

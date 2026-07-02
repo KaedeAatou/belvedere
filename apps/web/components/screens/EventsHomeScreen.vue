@@ -10,6 +10,29 @@ const emit = defineEmits<{ select: [id: string]; go: [screen: ScreenId] }>();
 
 const { activeSprint, nextPlanned, velocityHistory, currentLabel } = useSprints();
 
+// Product Goal (WC-23): 全体に紐づく到達点なので Home を本籍に、ここで表示+編集する。
+// 編集は PO / admin のみ (product.goal ゲート)。Planning は読み取り専用で参照する。
+const { current: currentWs, updateProductGoal } = useWorkspaces();
+const productGoal = computed(() => currentWs.value?.productGoal?.trim() ?? '');
+const canEditGoal = computed(() => currentWs.value?.role === 'admin' || currentWs.value?.role === 'po');
+const editingGoal = ref(false);
+const goalDraft = ref('');
+const goalSaving = ref(false);
+const goalError = ref<string | null>(null);
+function startEditGoal(): void {
+  goalDraft.value = productGoal.value;
+  goalError.value = null;
+  editingGoal.value = true;
+}
+async function saveGoal(): Promise<void> {
+  if (goalSaving.value) return;
+  goalSaving.value = true;
+  const ok = await updateProductGoal(goalDraft.value.trim());
+  goalSaving.value = false;
+  if (ok) editingGoal.value = false;
+  else goalError.value = '保存に失敗しました';
+}
+
 const sprintTickets = computed(() =>
   activeSprint.value ? props.tickets.filter((t) => t.sprintId === activeSprint.value!.id) : [],
 );
@@ -82,6 +105,29 @@ const stalled = computed(() =>
       <div v-if="!activeSprint" class="ehome-empty">アクティブなスプリントがありません。</div>
     </div>
 
+    <!-- Product Goal (WC-23): プロダクト全体の到達点。ここで設定し、Planning が参照する。 -->
+    <section class="ehome-card pg-card" data-testid="ehome-product-goal">
+      <div class="ehome-card-head">
+        <h2>Product Goal</h2>
+        <button v-if="canEditGoal && !editingGoal" class="pg-edit" data-testid="pg-edit" @click="startEditGoal">編集</button>
+      </div>
+      <template v-if="!editingGoal">
+        <p v-if="productGoal" class="pg-text" data-testid="pg-text">{{ productGoal }}</p>
+        <p v-else class="pg-empty" data-testid="pg-empty">
+          プロダクトゴール未設定。<template v-if="canEditGoal">「編集」で、このプロダクトで達成したい長期の到達点を設定してください。</template><template v-else>PO / 管理者が設定できます。</template>
+        </p>
+      </template>
+      <template v-else>
+        <textarea v-model="goalDraft" class="pg-input" data-testid="pg-input" rows="3" maxlength="280"
+                  placeholder="このプロダクトで達成したい長期の到達点 (例: 決済MVPを本番リリースし社内10チームが日次利用する)" />
+        <div class="pg-actions">
+          <button class="h-btn h-btn--primary" data-testid="pg-save" :disabled="goalSaving" @click="saveGoal">{{ goalSaving ? '保存中…' : '保存' }}</button>
+          <button class="h-btn" data-testid="pg-cancel" @click="editingGoal = false">キャンセル</button>
+          <span v-if="goalError" class="pg-error">{{ goalError }}</span>
+        </div>
+      </template>
+    </section>
+
     <!-- ステータス別件数 -->
     <div class="ehome-counts">
       <button v-for="c in cols" :key="c.key" class="count-card" :data-testid="`ehome-count-${c.key}`"
@@ -145,6 +191,22 @@ const stalled = computed(() =>
 .ehome-title { font-family: var(--display); font-size: 28px; font-weight: 600; margin: 4px 0 6px; }
 .ehome-goal { font-family: var(--sans); font-size: 13.5px; color: var(--ink-2); margin: 0; }
 .ehome-empty { font-size: 13px; color: var(--ink-3); }
+/* Product Goal カード (WC-23) */
+.pg-card { border-left: 3px solid var(--accent); }
+.pg-edit {
+  background: transparent; border: var(--hairline) solid var(--line-2); border-radius: var(--radius);
+  padding: 3px 10px; font-family: var(--sans); font-size: 12px; color: var(--ink-1); cursor: pointer;
+}
+.pg-edit:hover { background: var(--bg-2); color: var(--ink-0); }
+.pg-text { font-family: var(--sans); font-size: 15px; line-height: 1.55; color: var(--ink-0); margin: 0; }
+.pg-empty { font-size: 13px; color: var(--ink-3); font-style: italic; margin: 0; }
+.pg-input {
+  width: 100%; resize: vertical; padding: 8px 10px; font-family: var(--sans); font-size: 14px; line-height: 1.5;
+  border: var(--hairline) solid var(--line-2); border-radius: var(--radius); background: var(--bg-0);
+}
+.pg-input:focus { outline: none; border-color: var(--accent); }
+.pg-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+.pg-error { color: var(--err); font-size: 12px; }
 .ehome-counts { display: flex; gap: 12px; flex-wrap: wrap; }
 .count-card {
   flex: 1; min-width: 96px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;

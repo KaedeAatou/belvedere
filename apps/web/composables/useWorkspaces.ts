@@ -11,6 +11,8 @@ export interface MyWorkspace {
   name: string;
   // 正準 role (admin/po/sm/dev)。旧 owner/guest は migration 済で廃止 (2026-06-23)。
   role: 'admin' | 'po' | 'sm' | 'dev';
+  /** Product Goal (WC-23)。Home で編集し Planning が参照する。 */
+  productGoal: string;
 }
 
 /** localStorage key (useApiClient と共有)。 */
@@ -54,17 +56,41 @@ export const useWorkspaces = () => {
   async function create(name: string, productGoal?: string): Promise<MyWorkspace | null> {
     error.value = null;
     try {
-      const res = await api.post<{ workspace: { id: string; name: string }; member: { role: MyWorkspace['role'] } }>(
+      const res = await api.post<{ workspace: { id: string; name: string; productGoal?: string }; member: { role: MyWorkspace['role'] } }>(
         '/api/workspaces',
         { name, ...(productGoal ? { productGoal } : {}) },
       );
-      const created: MyWorkspace = { id: res.workspace.id, name: res.workspace.name, role: res.member.role };
+      const created: MyWorkspace = { id: res.workspace.id, name: res.workspace.name, role: res.member.role, productGoal: res.workspace.productGoal ?? productGoal ?? '' };
       workspaces.value = [...workspaces.value, created];
       setCurrent(created.id); // reload して新 ws に入る
       return created;
     } catch (e) {
       error.value = apiErrorMessage(e);
       return null;
+    }
+  }
+
+  /** 現在の Workspace (currentId に一致する MyWorkspace)。未解決なら null。 */
+  const current = computed<MyWorkspace | null>(
+    () => workspaces.value.find((w) => w.id === currentId.value) ?? null,
+  );
+
+  /** Product Goal を更新 (PATCH /api/workspaces/:id) しローカルにも反映 (WC-23)。 */
+  async function updateProductGoal(productGoal: string): Promise<boolean> {
+    if (!currentId.value) return false;
+    error.value = null;
+    try {
+      const updated = await api.patch<{ id: string; productGoal: string }>(
+        `/api/workspaces/${currentId.value}`,
+        { productGoal },
+      );
+      workspaces.value = workspaces.value.map((w) =>
+        w.id === updated.id ? { ...w, productGoal: updated.productGoal } : w,
+      );
+      return true;
+    } catch (e) {
+      error.value = apiErrorMessage(e);
+      return false;
     }
   }
 
@@ -80,5 +106,5 @@ export const useWorkspaces = () => {
     }
   }
 
-  return { workspaces, currentId, isLoading, error, fetch, create, setCurrent, syncCurrentFromStorage };
+  return { workspaces, current, currentId, isLoading, error, fetch, create, updateProductGoal, setCurrent, syncCurrentFromStorage };
 };

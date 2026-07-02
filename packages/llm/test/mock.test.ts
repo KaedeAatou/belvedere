@@ -152,17 +152,29 @@ describe('MockLLMProvider tool-call decision tree (C3: deferred branches)', () =
       model: 'mock-model',
       messages: [
         { role: 'system', content: 'SMART 採点' },
-        { role: 'user', content: 'goal: 決済完了率を95%にする\nplannedSP: 3\nvelocity: 10' },
+        { role: 'user', content: 'goal: 決済完了率を95%にする\nproductGoal: 決済基盤を本番化\nplannedSP: 3\nvelocity: 10' },
       ],
       responseSchema: { title: 'smart_eval', type: 'object' },
     });
     expect(res.stop.type).toBe('stop');
     const parsed = JSON.parse(res.text) as { criteria: { letter: string; ok: boolean }[] };
     expect(parsed.criteria.map((c) => c.letter)).toEqual(['S', 'M', 'A', 'R', 'T']);
-    // 測定可能(95%)→M ok / plannedSP3<=velocity10→A ok / T は常に ok
+    // 測定可能(95%)→M ok / plannedSP3<=velocity10→A ok / productGoal あり→R ok / T は常に ok
     expect(parsed.criteria.find((c) => c.letter === 'M')?.ok).toBe(true);
     expect(parsed.criteria.find((c) => c.letter === 'A')?.ok).toBe(true);
+    expect(parsed.criteria.find((c) => c.letter === 'R')?.ok).toBe(true);
     expect(parsed.criteria.find((c) => c.letter === 'T')?.ok).toBe(true);
+  });
+
+  it('smart_eval: productGoal 未設定なら R=weak', async () => {
+    const provider = new MockLLMProvider();
+    const res = await provider.generate({
+      model: 'mock-model',
+      messages: [{ role: 'user', content: 'goal: 決済完了率を95%にする\nproductGoal: \nplannedSP: 3\nvelocity: 10' }],
+      responseSchema: { title: 'smart_eval', type: 'object' },
+    });
+    const parsed = JSON.parse(res.text) as { criteria: { letter: string; ok: boolean }[] };
+    expect(parsed.criteria.find((c) => c.letter === 'R')?.ok).toBe(false);
   });
 
   it('smart_eval: goal 空 + plannedSP>velocity で S/M/A が weak', async () => {

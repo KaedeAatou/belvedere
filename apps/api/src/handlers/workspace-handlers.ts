@@ -35,6 +35,11 @@ export const WorkspaceCreateBodySchema = z.object({
   productGoal: z.string().max(280).optional(),
 });
 
+// PATCH /api/workspaces/:id body — 今は productGoal のみ編集可 (Product Goal / WC-23)。
+export const WorkspacePatchBodySchema = z.object({
+  productGoal: z.string().max(280),
+});
+
 // admin は招待で付与できない (workspace 作成者だけが admin になる設計)。
 export const InviteBodySchema = z.object({
   email: z.string().email('valid email is required'),
@@ -113,6 +118,8 @@ export interface MyWorkspace {
   name: string;
   /** ログインユーザの当該 ws での role (UI の管理操作可否判定に使う)。 */
   role: Member['role'];
+  /** Workspace の Product Goal (WC-23)。doc が無い既存 ws は空文字。 */
+  productGoal: string;
 }
 
 /**
@@ -141,6 +148,7 @@ export async function listMyWorkspaces(
       id: m.workspaceId,
       name: byId.get(m.workspaceId)?.name ?? m.workspaceId,
       role: m.role,
+      productGoal: byId.get(m.workspaceId)?.productGoal ?? '',
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
   return { ok: true, status: 200, body: result };
@@ -210,4 +218,35 @@ export async function cancelInvite(
   }
   await repo.members.delete(ctx.workspaceId, paramUserId);
   return { ok: true, status: 200, body: { deleted: paramUserId } };
+}
+
+/**
+ * PATCH /api/workspaces/:id — Workspace の Product Goal を編集する (WC-23)。
+ * product.goal (PO/admin) のみ。IDOR: 認証で確定した ctx.workspaceId 以外の id は 404。
+ * 現状は productGoal のみ編集可 (name/slug/owner は別 Phase)。
+ */
+export async function patchWorkspace(
+  repo: RepoContainer,
+  ctx: WorkspaceCtx,
+  id: string,
+  body: unknown,
+): Promise<HandlerResult<Workspace>> {
+  // IDOR: 自分が認証された workspace 以外は編集させない (別 ws の id は「存在しない」扱い)。
+  if (id !== ctx.workspaceId) {
+    return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  if (!can('product.goal', ctx)) {
+    return { ok: false, status: 403, body: forbidden('product.goal') };
+  }
+  const parsed = WorkspacePatchBodySchema.safeParse(body);
+  if (!parsed.success) {
+    return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
+  }
+  const existing = await repo.workspaces.get(id);
+  if (!existing) {
+    return { ok: false, status: 404, body: { error: 'not_found' } };
+  }
+  const updated: Workspace = { ...existing, productGoal: parsed.data.productGoal };
+  await repo.workspaces.upsert(updated);
+  return { ok: true, status: 200, body: updated };
 }

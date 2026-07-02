@@ -24,6 +24,9 @@ mockNuxtImport('useSprintSections', () => () => ({ current: ref([]), next: ref([
 mockNuxtImport('useSmartEval', () => () => ({
   verdict: verdictRef, loading: ref(false), error: ref(null), evaluate: evaluateSpy,
 }));
+mockNuxtImport('useWorkspaces', () => () => ({
+  current: ref({ id: 'ws', name: 'W', role: 'admin', productGoal: '決済基盤を本番リリースする' }),
+}));
 
 const mountOpts = { global: { stubs: { SprintSectionedList: true } } };
 
@@ -56,6 +59,15 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
   it('目的説明 (smart-explain) が常に表示される (WC-14: 使い方が分からない対策)', async () => {
     const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
     expect(wrapper.find('[data-testid=smart-explain]').exists()).toBe(true);
+  });
+
+  it('Product Goal を読み取り専用で表示する (WC-23 / 編集は Home)', async () => {
+    const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
+    const pg = wrapper.find('[data-testid=planning-product-goal]');
+    expect(pg.exists()).toBe(true);
+    expect(pg.text()).toContain('決済基盤を本番リリースする');
+    // 編集手段 (input/button) は Planning には無い (Home 専用)。
+    expect(pg.find('textarea').exists()).toBe(false);
   });
 
   it('A案: goal があり未評価なら mount 時に自動評価する', async () => {

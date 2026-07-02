@@ -637,9 +637,11 @@ function composeSmartEval(req: LLMRequest): { criteria: SmartMockCriterion[]; su
     return (userMsg.match(re)?.[1] ?? '').trim();
   };
   const goal = pick('goal');
+  const productGoal = pick('productGoal');
   const plannedSP = Number(pick('plannedSP')) || 0;
   const velocity = Number(pick('velocity')) || 0;
   const hasGoal = goal.length > 0;
+  const hasProductGoal = productGoal.length > 0;
 
   const specific = hasGoal && goal.length >= 6;
   // 測定可能: 数値 / 指標記号 / 大文字 SP (i フラグを付けると "response" 等の小文字 sp に誤一致するため付けない)。
@@ -663,8 +665,11 @@ function composeSmartEval(req: LLMRequest): { criteria: SmartMockCriterion[]; su
           : `計画 ${plannedSP}SP が velocity ${velocity} を超過 (過剰計画)。スコープを削るか次スプリントへ回しましょう。`,
     },
     {
-      letter: 'R', name: 'Relevant', ok: hasGoal,
-      note: hasGoal ? 'ロードマップとの整合を Epic の戦略意図と突き合わせて確認しましょう。' : 'ゴール未設定のため整合を判定できません。',
+      // R=Relevant は Sprint Goal が Product Goal に貢献するかで見る (WC-23)。
+      letter: 'R', name: 'Relevant', ok: hasGoal && hasProductGoal,
+      note: !hasGoal ? 'ゴール未設定のため整合を判定できません。'
+        : !hasProductGoal ? 'Product Goal が未設定です。Home で設定すると、この Sprint Goal が貢献するか判定できます。'
+          : 'Product Goal と突き合わせ、この Sprint Goal がその達成に貢献するか確認しましょう。',
     },
     {
       letter: 'T', name: 'Time-bound', ok: true,

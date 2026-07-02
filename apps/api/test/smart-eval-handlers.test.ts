@@ -90,4 +90,31 @@ describe('evaluateSprintSmart (WC-14)', () => {
     if (!res.ok) return;
     expect(res.body.criteria.find((c) => c.letter === 'A')?.ok).toBe(true); // velocity 実績なし → 保留
   });
+
+  // R=Relevant は Product Goal (Workspace.productGoal) 依存 (WC-23)。
+  it('Product Goal + Sprint Goal が両方あると R=ok', async () => {
+    const WS = 'ws-smart-r';
+    const ctx = { ...CTX, workspaceId: WS };
+    const now = new Date().toISOString();
+    await repo.workspaces.upsert({ id: WS, name: 'R', slug: 'r', productGoal: '決済プラットフォームを本番リリース', ownerId: 'u', createdAt: now });
+    await repo.sprints.upsert({ id: 'SP-r', workspaceId: WS, number: 1, startsAt: now, endsAt: now, goal: '決済完了率を95%にする', capacity: 0, status: 'active' });
+    const res = await evaluateSprintSmart(repo, llm, ctx);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.criteria.find((c) => c.letter === 'R')?.ok).toBe(true);
+  });
+
+  it('Product Goal 未設定なら R=weak (Sprint Goal があっても)', async () => {
+    const WS = 'ws-smart-nopg';
+    const ctx = { ...CTX, workspaceId: WS };
+    const now = new Date().toISOString();
+    // workspace doc を作らない (= productGoal 空)。
+    await repo.sprints.upsert({ id: 'SP-n', workspaceId: WS, number: 1, startsAt: now, endsAt: now, goal: '決済完了率を95%にする', capacity: 0, status: 'active' });
+    const res = await evaluateSprintSmart(repo, llm, ctx);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const r = res.body.criteria.find((c) => c.letter === 'R')!;
+    expect(r.ok).toBe(false);
+    expect(r.note).toMatch(/Product Goal/);
+  });
 });

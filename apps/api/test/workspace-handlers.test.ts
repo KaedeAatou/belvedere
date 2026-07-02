@@ -9,6 +9,7 @@ import {
   listMyWorkspaces,
   inviteMember,
   cancelInvite,
+  patchWorkspace,
 } from '../src/handlers/workspace-handlers';
 import { planInviteBind, inviteSentinelId, isInviteSentinel } from '../src/config/invite-bind';
 
@@ -77,7 +78,7 @@ describe('listMyWorkspaces', () => {
     const res = await listMyWorkspaces(repo, ME);
     expect(res.ok).toBe(true);
     if (!res.ok) return;
-    expect(res.body).toEqual([{ id: 'ws-belvedere', name: 'ws-belvedere', role: 'admin' }]);
+    expect(res.body).toEqual([{ id: 'ws-belvedere', name: 'ws-belvedere', role: 'admin', productGoal: '' }]);
   });
 
   it('招待中 (センチネル) は listByUserId に引っかからない = 招待された人には表示されない', async () => {
@@ -213,5 +214,66 @@ describe('planInviteBind (純粋関数)', () => {
   it('email 大文字小文字を正規化して突合する', () => {
     const plan = planInviteBind('uid-real', 'A@X.com', [sentinel('ws-a', 'a@x.com')]);
     expect(plan).not.toBeNull();
+  });
+});
+
+describe('patchWorkspace (Product Goal 編集 / WC-23)', () => {
+  let repo: RepoContainer;
+  let wsId: string;
+  beforeEach(async () => {
+    repo = createMemoryRepoContainer();
+    const created = await createWorkspace(repo, ME, { name: 'C社', productGoal: '初期ゴール' });
+    if (!created.ok) throw new Error('setup failed');
+    wsId = created.body.workspace.id;
+  });
+
+  const ctx = (workspaceId: string, role: 'admin' | 'po' | 'sm' | 'dev') => ({
+    user: ME.user, workspaceId, role,
+  });
+
+  it('admin (作成者) は productGoal を編集できる', async () => {
+    const res = await patchWorkspace(repo, ctx(wsId, 'admin'), wsId, { productGoal: '決済MVPを本番リリース' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.productGoal).toBe('決済MVPを本番リリース');
+    const stored = await repo.workspaces.get(wsId);
+    expect(stored?.productGoal).toBe('決済MVPを本番リリース');
+  });
+
+  it('po も編集できる', async () => {
+    const res = await patchWorkspace(repo, ctx(wsId, 'po'), wsId, { productGoal: 'PO 更新' });
+    expect(res.ok).toBe(true);
+  });
+
+  it('dev / sm は 403 (product.goal は po/admin のみ)', async () => {
+    for (const role of ['dev', 'sm'] as const) {
+      const res = await patchWorkspace(repo, ctx(wsId, role), wsId, { productGoal: 'x' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(403);
+    }
+  });
+
+  it('別 workspace の id は 404 (IDOR: 認証 ws 以外は編集不可)', async () => {
+    const res = await patchWorkspace(repo, ctx(wsId, 'admin'), 'ws-other', { productGoal: 'x' });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(404);
+  });
+
+  it('productGoal 欠落は 400', async () => {
+    const res = await patchWorkspace(repo, ctx(wsId, 'admin'), wsId, {});
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.status).toBe(400);
+  });
+
+  it('listMyWorkspaces は productGoal を含めて返す', async () => {
+    await patchWorkspace(repo, ctx(wsId, 'admin'), wsId, { productGoal: '一覧に出るゴール' });
+    const res = await listMyWorkspaces(repo, ME);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const mine = res.body.find((w) => w.id === wsId);
+    expect(mine?.productGoal).toBe('一覧に出るゴール');
   });
 });

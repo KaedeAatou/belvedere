@@ -14,6 +14,9 @@ const emit = defineEmits<{ select: [id: string] }>();
 const { sprints, velocityHistory, activeSprint, nextPlanned, currentLabel, nextLabel, patchSprint, startSprint } = useSprints();
 const { patchTicket } = useTickets();
 const { members } = useMembers();
+// Product Goal (WC-23): Planning では読み取り専用で参照 (編集は Home)。Sprint Goal がこれに貢献するかが R 観点。
+const { current: currentWs } = useWorkspaces();
+const productGoal = computed(() => currentWs.value?.productGoal?.trim() ?? '');
 
 // 全チケットを 3 区画へ。
 const allTickets = computed(() => props.tickets);
@@ -229,6 +232,12 @@ onMounted(() => {
       <p v-if="!activeSprint && !nextPlanned" class="sprint-empty" data-testid="sprint-empty">
         スプリントを準備中です。表示されない場合はページをリロードしてください。
       </p>
+      <!-- Product Goal (WC-23): 読み取り専用。Sprint Goal がこの到達点に貢献するか (SMART の R) を見る。編集は Home。 -->
+      <div class="pg-ref" data-testid="planning-product-goal">
+        <span class="pg-ref-cap">PRODUCT GOAL</span>
+        <span v-if="productGoal" class="pg-ref-text">{{ productGoal }}</span>
+        <span v-else class="pg-ref-empty">未設定 — Home で設定すると Sprint Goal の整合 (R) を評価できます</span>
+      </div>
       <div class="goal-text">{{ goal }}</div>
       <div class="smart-head">
         <span class="t-cap">SMART GOAL</span>

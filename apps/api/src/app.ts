@@ -43,6 +43,7 @@ import {
   listMyWorkspaces,
   inviteMember,
   cancelInvite,
+  patchWorkspace,
 } from './handlers/workspace-handlers';
 import { getFindings } from './handlers/finding-handlers';
 import { checkStoryQuality } from './handlers/story-quality-handlers';
@@ -399,6 +400,12 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   app.post('/api/workspaces/members/invite', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await inviteMember(repo, buildCtx(c), body));
+  });
+  // PATCH /api/workspaces/:id — Product Goal 編集 (WC-23)。完全一致 skip 対象外なので
+  // workspaceMiddleware を通り role が確定する (product.goal ゲート = PO/admin)。
+  app.patch('/api/workspaces/:id', async (c) => {
+    const body = await c.req.json<unknown>().catch(() => ({}));
+    return respond(c, await patchWorkspace(repo, buildCtx(c), c.req.param('id'), body));
   });
   app.delete('/api/workspaces/members/:userId', async (c) =>
     respond(c, await cancelInvite(repo, buildCtx(c), c.req.param('userId'))),
