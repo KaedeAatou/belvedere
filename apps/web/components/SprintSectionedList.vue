@@ -188,6 +188,15 @@ const currentStats = computed(() => stats(props.current));
 const nextStats = computed(() => stats(props.next));
 const backlogStats = computed(() => stats(props.backlog));
 
+// ===== 見出し統計のツールチップ (用語定義 / WC-22・WC-25・WC-26) =====
+// 「issues / flagged の意味がわからない」「backlog にチケットが無いのにカウントされる」への対応。
+// 挙動は変えず、各見出しにホバー定義を添えて一目で意味がわかるようにする。
+const TIP_ISSUES = 'このスプリントに割り当てられたチケットの件数';
+const TIP_FLAGGED = 'AI が指摘 (finding) を付けたチケットの件数';
+// BACKLOG 区画は status ではなく「現在/次スプリント以外」で数える (sections.ts)。
+// 完了済スプリントや未割当のチケットも含むため、status=backlog が空でも件数が出る点を明記する。
+const TIP_BACKLOG_ISSUES = '未スケジュールのチケット件数。現在/次スプリント以外(完了済スプリント・未割当を含む)を数えるため、backlog ステータスが空でも件数が出ることがある';
+
 // ===== 区画の折り畳み (localStorage で保持 / WC-517e029a) =====
 // チケットが増えると一覧が長くなるため、CURRENT/NEXT/BACKLOG を各区画ヘッダのクリックで畳める。
 // 開閉状態は localStorage に保存し、リロード・再ログイン後も維持する (畳んでも見出しの件数/SP は残す)。
@@ -586,9 +595,9 @@ async function submitSplit(): Promise<void> {
         <span class="title">{{ currentLabel ?? 'Current Sprint' }}</span>
         <span class="chip amber solid">CURRENT</span>
         <div class="meta">
-          <span><b>{{ currentStats.count }}</b> issues</span>
+          <span :title="TIP_ISSUES"><b>{{ currentStats.count }}</b> issues</span>
           <span><b>{{ currentStats.sp }}</b> SP</span>
-          <span><b>{{ currentStats.flagged }}</b> flagged</span>
+          <span :title="TIP_FLAGGED"><b>{{ currentStats.flagged }}</b> flagged</span>
         </div>
       </div>
       <VueDraggable v-show="!collapsed.current" v-model="currentList" :group="currentGroup" handle=".trow-drag-grab"
@@ -624,9 +633,9 @@ async function submitSplit(): Promise<void> {
         <span class="title">{{ nextLabel ?? 'Next Sprint' }}</span>
         <span class="chip amber">NEXT</span>
         <div class="meta">
-          <span><b>{{ nextStats.count }}</b> issues</span>
+          <span :title="TIP_ISSUES"><b>{{ nextStats.count }}</b> issues</span>
           <span><b>{{ nextStats.sp }}</b> SP</span>
-          <span><b>{{ nextStats.flagged }}</b> flagged</span>
+          <span :title="TIP_FLAGGED"><b>{{ nextStats.flagged }}</b> flagged</span>
         </div>
       </div>
       <VueDraggable v-show="!collapsed.next" v-model="nextList" :group="nextGroup" handle=".trow-drag-grab"
@@ -662,9 +671,9 @@ async function submitSplit(): Promise<void> {
         <span class="title">Backlog</span>
         <span class="chip">UNSCHEDULED</span>
         <div class="meta">
-          <span><b>{{ backlogStats.count }}</b> issues</span>
+          <span :title="TIP_BACKLOG_ISSUES"><b>{{ backlogStats.count }}</b> issues</span>
           <span><b>{{ backlogStats.sp }}</b> SP</span>
-          <span><b>{{ backlogStats.flagged }}</b> flagged</span>
+          <span :title="TIP_FLAGGED"><b>{{ backlogStats.flagged }}</b> flagged</span>
         </div>
         <!-- New issue は折り畳みトグルと競合しないよう @click.stop -->
         <button v-if="!hideSectionCreate" class="h-btn" data-testid="section-new-ticket-btn" style="margin-left: 16px"
