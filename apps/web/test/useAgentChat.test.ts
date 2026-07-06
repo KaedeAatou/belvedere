@@ -34,11 +34,15 @@ const sp = (over: Partial<Sprint> & { id: string; status: Sprint['status'] }): S
 });
 
 describe('buildAgentContext (WC-39/29 — スプリント文脈の自動付与)', () => {
-  it('active スプリントの id / velocity / ゴールを文脈に含める', () => {
-    const ctx = buildAgentContext([sp({ id: 's1', status: 'active', number: 5, goal: 'G', velocity: 12, name: 'Sprint5' })]);
+  it('active スプリントの id / ゴール + velocity 実績平均を文脈に含める', () => {
+    const ctx = buildAgentContext([
+      sp({ id: 's1', status: 'active', number: 5, goal: 'G', name: 'Sprint5' }),
+      sp({ id: 's0', status: 'completed', number: 4, velocity: 10 }),
+    ]);
     expect(ctx).toContain('id=s1');
-    expect(ctx).toContain('velocity=12');
     expect(ctx).toContain('G');
+    expect(ctx).toContain('velocity 実績');
+    expect(ctx).toContain('= 10'); // 完了スプリントの velocity 平均 (画面 PLANNED/VELOCITY の分母)
   });
 
   it('active + planned の両方を含める', () => {
@@ -50,9 +54,9 @@ describe('buildAgentContext (WC-39/29 — スプリント文脈の自動付与)'
     expect(ctx).toContain('id=s2');
   });
 
-  it('velocity 未確定 / ゴール未設定はフォールバック表記', () => {
+  it('velocity 実績なし / ゴール未設定はフォールバック表記', () => {
     const ctx = buildAgentContext([sp({ id: 's1', status: 'active' })]);
-    expect(ctx).toContain('(未確定)');
+    expect(ctx).toContain('(実績なし)');
     expect(ctx).toContain('(未設定)');
   });
 

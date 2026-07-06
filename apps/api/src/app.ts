@@ -473,8 +473,12 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     if (!VALID_AGENTS.includes(name)) {
       return c.json({ error: `unknown agent: ${name}`, valid: VALID_AGENTS }, 400);
     }
-    const body: { prompt?: string; context?: string } = await c.req
-      .json<{ prompt?: string; context?: string }>()
+    const body: {
+      prompt?: string;
+      context?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+    } = await c.req
+      .json<{ prompt?: string; context?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }>()
       .catch(() => ({}));
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
@@ -513,6 +517,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         tools,
         trigger: 'human',
         ...(body.context && { contextText: body.context }),
+        ...(body.history && { history: body.history }),
       },
       prompt,
     );

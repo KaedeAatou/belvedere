@@ -38,13 +38,19 @@ export function resolveAgentName(screen: ScreenId, useOrchestratorWindow: boolea
 export function buildAgentContext(sprints: Sprint[]): string | undefined {
   const active = sprints.find((s) => s.status === 'active');
   const next = sprints.filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number)[0];
+  // velocity 実績 = 完了スプリントの velocity 平均。画面 PLANNED/VELOCITY の分母 (avgVelocity) と一致させる。
+  // active 自身の velocity は「進行中で未確定」なので、AI に渡すのは実績平均にする (画面と食い違わせない)。
+  const completed = sprints.filter((s) => s.velocity !== undefined);
+  const avgVelocity = completed.length > 0
+    ? Math.round(completed.reduce((n, s) => n + (s.velocity ?? 0), 0) / completed.length)
+    : null;
+  if (!active && !next) return undefined; // スプリントが無ければ文脈を付けない (payload に載せない)。
   const lines: string[] = [];
   if (active) {
     const nm = active.name?.trim() || `Sprint ${active.number}`;
-    lines.push(
-      `現在のアクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'} / velocity=${active.velocity ?? '(未確定)'}`,
-    );
+    lines.push(`現在のアクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'}`);
   }
+  lines.push(`velocity 実績 (直近完了スプリントの平均 = 画面 PLANNED/VELOCITY の分母) = ${avgVelocity ?? '(実績なし)'}`);
   if (next) {
     const nm = next.name?.trim() || `Sprint ${next.number}`;
     lines.push(`次の計画中スプリント: id=${next.id} / 名前=${nm}`);
@@ -74,12 +80,21 @@ export const useAgentChat = () => {
     try {
       // WC-39/29: 現在のスプリント文脈を自動付与し、ユーザーが sprintId を書かなくても診断できるようにする。
       const context = buildAgentContext(sprints.value);
+      // 会話継続: 直近の会話履歴 (今回追加した user を除く最新 8 件) を送り、AI が前の文脈を保持できるようにする。
+      const history = messages.value
+        .slice(0, -1)
+        .slice(-8)
+        .map((m) => ({ role: m.role === 'agent' ? ('assistant' as const) : ('user' as const), content: m.text }));
       const run = await api.post<{
         status: string;
         outputArtifacts?: { summary?: string };
         steps?: Array<{ type: string; content: unknown }>;
         error?: { message: string };
-      }>(`/api/agents/${agentName}`, { prompt: trimmed, ...(context && { context }) });
+      }>(`/api/agents/${agentName}`, {
+        prompt: trimmed,
+        ...(context && { context }),
+        ...(history.length > 0 && { history }),
+      });
 
       // summary が最優先。無ければ output 型 step の content を文字列化。
       let responseText = run.outputArtifacts?.summary ?? '';

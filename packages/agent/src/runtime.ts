@@ -20,6 +20,8 @@ export interface AgentRuntimeOpts {
    * 英語 Agent 名で役割判定するため、context を system に混ぜると判定が壊れる)。
    */
   contextText?: string;
+  /** AI パネルの会話継続用 (WC-39/29 拡張)。過去の会話 (user/assistant 交互) を system の後・今回の user の前に積む。 */
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
 }
 
 /**
@@ -38,6 +40,7 @@ export async function runAgent(
 
   const messages: LLMMessage[] = [
     { role: 'system', content: opts.systemPrompt },
+    ...(opts.history ?? []),
     {
       role: 'user',
       content: opts.contextText ? `${opts.contextText}\n\n---\n\n${userInput}` : userInput,
