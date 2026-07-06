@@ -290,7 +290,7 @@ onMounted(() => {
 
       <!-- PLANNED / VELOCITY — CURRENT (active sprint) の積み上げ SP vs velocity 実績 -->
       <div class="vel-inline">
-        <span class="t-cap">PLANNED / VELOCITY</span>
+        <span class="t-cap" title="Velocity = 直近スプリントで完了した Story Point の実績平均。計画 SP がこれを超えると過剰計画のサイン">PLANNED / VELOCITY</span>
         <span class="nums">
           <span style="color: var(--accent)">{{ totalSP }}</span>
           <span class="div">/</span>
@@ -356,9 +356,14 @@ onMounted(() => {
             :class="['pull-row', pullSelected.has(t.id) && 'pull-row--selected']"
             @click="togglePullRow(t.id)"
           >
-            <span class="pull-check">
-              <span v-if="pullSelected.has(t.id)" style="color: var(--accent)">✓</span>
-            </span>
+            <input
+              type="checkbox"
+              class="pull-check"
+              :checked="pullSelected.has(t.id)"
+              style="accent-color: var(--accent); pointer-events: none"
+              tabindex="-1"
+              :data-testid="`pull-check-${t.id}`"
+            />
             <TypeMark :type="t.type" />
             <span class="trow-id t-mono" style="font-size: 11px; color: var(--ink-3); min-width: 72px">{{ t.id }}</span>
             <span class="pull-title">{{ t.title }}</span>
