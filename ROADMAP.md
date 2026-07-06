@@ -136,7 +136,7 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
   - ふりかえりで Retrospective が Try 集約 → 翌スプリント Planner に引き継ぎ (RAG で意味検索)
   - (スケジュール / 時刻ルーティングによる自動起動は不採用)
 - [x] FastAPI `/agents/{name}/invoke` + A2A (`to_a2a`) を実 ADK 経路で実装
-- [ ] Cloud Run に orchestrator-py をデプロイ (⚠ deployer SA の artifactregistry 権限が前提で未完 = 提出前の作業。A2A 委譲は既定 OFF なので本番 5 儀式は無傷)
+- [ ] Cloud Run に orchestrator-py をデプロイ (build+push は通る / ⚠ Secret Manager に `BELVEDERE_SERVICE_TOKEN` が未作成で deploy 段が未完 = 提出前のユーザー作業。A2A 委譲は既定 OFF なので本番 5 儀式は無傷)
 
 ### Phase 2 AI Integrity Panel リアル配線 / 7/1 〜 7/3 (3 日)
 - [x] 画面操作 → `/api/agents/:name` 同期起動 → Orchestrator が該当 Agent を協議招集・統括
