@@ -276,10 +276,12 @@ describe('startSprint', () => {
     expect((await repo.tickets.get('WC-3'))?.sprintId).toBe('sprint-14');
   });
 
-  it('WC-30: carryOverIds に含めない非done は旧 (completed) sprint に据え置き (履歴として残す)', async () => {
+  it('WC-30: carryOverIds に含めない非done は backlog へ戻す (sprintId 解除 / completed に残さない)', async () => {
     const res = await startSprint(repo, ADMIN, 'sprint-14', { goal: 'g' }); // 持ち越し指定なし
     expect(res.ok).toBe(true);
-    expect((await repo.tickets.get('WC-3'))?.sprintId).toBe('sprint-13');
+    const wc3 = await repo.tickets.get('WC-3');
+    expect(wc3?.sprintId).toBeUndefined(); // BACKLOG へ (sprintId 解除)
+    expect(wc3?.status).toBe('backlog');
   });
 
   it('WC-30: done チケットは carryOverIds に入れても付け替えない (velocity 実績を保つ)', async () => {

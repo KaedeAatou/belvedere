@@ -13,7 +13,7 @@
 //   Sprint 作成/開始 = sprint.manage (admin/sm)、goal/期間編集 = sprint.goal (admin/po/sm)。
 
 import { z } from 'zod';
-import type { Sprint } from '@belvedere/shared';
+import type { Sprint, Ticket } from '@belvedere/shared';
 import { generateId, computeCarryOverUpdates } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
@@ -236,18 +236,28 @@ export async function startSprint(
   }
   await repo.sprints.upsert(started);
 
-  // WC-30: 旧 active の未完了 (非done) チケットのうち開始者が「持ち越す」と選んだものを新 active (started)
-  // へ付け替える。付け替えないと current が completed 化した瞬間 partitionTicketsBySections が BACKLOG
-  // から除外し (sections.ts:68)、CURRENT/NEXT/BACKLOG のどの区画にも出ず全作業画面から消える。
-  if (current && parsed.data.carryOverIds && parsed.data.carryOverIds.length > 0) {
-    const carrySet = new Set(parsed.data.carryOverIds);
+  // WC-30: 旧 active の未完了 (非done) チケットを、開始者の選択に応じて振り分ける。
+  //   - 持ち越す (carryOverIds に含む) → 新 active (started) へ付け替え、CURRENT 区画で継続。
+  //   - 持ち越さない → sprintId を解除して status=backlog に戻す (BACKLOG 区画へ)。
+  // どちらも current の completed 化で作業画面から消えないようにするため (付け替え/解除しないと
+  // partitionTicketsBySections が completedSprintIds で BACKLOG から除外し全画面から消えていた)。
+  if (current) {
+    const carrySet = new Set(parsed.data.carryOverIds ?? []);
     const oldTickets = await repo.tickets.list({ workspaceId: ctx.workspaceId, sprintId: current.id });
-    const carryTickets = oldTickets.filter((t) => carrySet.has(t.id) && t.status !== 'done');
+    const nonDone = oldTickets.filter((t) => t.status !== 'done');
+    const now = new Date().toISOString();
+    // 持ち越す → 新 active の末尾へ密採番して付け替え。
+    const carryTickets = nonDone.filter((t) => carrySet.has(t.id));
     if (carryTickets.length > 0) {
       const targetExisting = await repo.tickets.list({ workspaceId: ctx.workspaceId, sprintId: started.id });
-      const now = new Date().toISOString();
       const updates = computeCarryOverUpdates(carryTickets, started.id, targetExisting, now);
       for (const u of updates) await repo.tickets.upsert(u);
+    }
+    // 持ち越さない → BACKLOG へ (sprintId 解除 + status=backlog)。completed に取り残さない。
+    for (const t of nonDone.filter((t) => !carrySet.has(t.id))) {
+      const next: Ticket = { ...t, status: 'backlog', updatedAt: now };
+      delete next.sprintId;
+      await repo.tickets.upsert(next);
     }
   }
 
