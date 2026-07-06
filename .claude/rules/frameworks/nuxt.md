@@ -1,3 +1,9 @@
+---
+paths:
+  - "apps/web/**"
+  - "**/*.vue"
+  - "**/nuxt.config.ts"
+---
 # Nuxt 3 Rules
 
 ## Principles
