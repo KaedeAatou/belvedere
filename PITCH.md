@@ -104,10 +104,10 @@
 スライド: アーキ図 (Cloud Run × 5 / Gemini + ADK / Firestore)
 
 - **Cloud Run**: Frontend (Nuxt 3 SSR) + Orchestrator + 5 Ceremony Agents + Tool Server を独立サービスに
-- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が gemini-2.5-flash で儀式エージェントを協議招集・統括 (単一窓口)、各 Ceremony Agent が gemini-2.5-pro で文脈理解した査読
+- **Gemini API + ADK**: マルチエージェント (Planner / Daily / **Refinement** / Reviewer / Retrospective + **Orchestrator**)。Orchestrator が儀式エージェントを協議招集・統括 (単一窓口)、各 Ceremony Agent が Gemini で文脈理解した査読 (本番は無料枠で **gemini-2.5-flash**、有料キーで gemini-2.5-pro に切替可)。Refinement は **ADK (google-adk) エージェントに A2A で委譲**もできる (Strangler Fig)
 - **チケット種別ルールエンジン**: Story / Task / Spike / Bug / Incident の 17 観点 (親なし Task / 価値の見えない DoD / 停滞 / 見積もり割れ…) を宣言的ルール表に集約、5 Agent が共有
 - **Firestore**: 5 階層データモデル (Workspace > Project > Epic > Story > Task / Project毎に idPrefix) + 見積もりポーカーのセッション + Retro Try carry-forward + マルチテナント (Workspace 作成・招待・切替)
-- **「まわす」= AI を継続的に改善するループ**: ふりかえりの Try が Agent の検出基準に積み上がり (`retro.tries.list`)、さらに **過去 Try を意味検索する RAG** で「前回の Try は守られたか」を AI が **sourceId 付きで参照** = 使うほどチームに賢くなる。RAG は **GCP ネイティブ Firestore Vector (Gemini 埋め込み 768 次元) で稼働、協賛 Elastic にも env 1 つで切替可** (両実装済 / 実 Gemini 埋め込み + findNearest をライブ実証)。プロンプト改善は **agent eval (golden) を CI で実行**して後退防止 → CI/CD (WIF 鍵レスデプロイ) で本番へ届ける
+- **「まわす」= AI を継続的に改善するループ**: ふりかえりの Try が Agent の検出基準に積み上がり (`retro.tries.list`)、さらに **過去 Try を意味検索する RAG** で「前回の Try は守られたか」を AI が **sourceId 付きで参照** = 使うほどチームに賢くなる。RAG は **GCP ネイティブ Firestore Vector (Gemini 埋め込み 768 次元) で稼働、協賛 Elastic にも env 1 つで切替可** (両実装済 / 実 Gemini 埋め込み + findNearest によるヒットを dev で実証済)。プロンプト改善は **agent eval (golden) を CI で実行**して後退防止 → CI/CD (WIF 鍵レスデプロイ) で本番へ届ける
 - **Cloud Build / WIF**: 個人 GitHub (KaedeAatou/belvedere) からの鍵レスデプロイ
 - **MCP Server (stdio + HTTP)**: Claude Code / Cursor / 他 AI Agent クライアントから Belvedere を呼べる API。「Belvedere の開発自体を Claude Code 経由で Belvedere に管理させている」究極のドッグフード
 
@@ -176,11 +176,11 @@ Jira を使うチームで広く起きる「なんちゃってアジャイル」
 スクラムで開発する PO / SM / Dev / EM。PO はチケット作成の手間を、SM は儀式運営の疲弊を、Dev はレビュー前の品質バラつきを、EM は「うちのスクラムは健康か」の可視化を求めている。
 
 ### ストーリー③ 特徴 ── つくる・まわす・とどける
-- **つくる (自律的 AI エージェント)**: Orchestrator + Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを **ADK で宣言的にマルチエージェント編成**。画面操作を単一窓口で受け、Orchestrator が必要なエージェントを `agent.invoke` で協議に招集・統括。各エージェントはチケット種別ルールエンジンを共有し、DoD/US/SP/停滞/戦略整合性 (Epic.rationale 欠落) を査読。**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の宣言的編成。
-- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で 462 テストをゲートしながら本番へ。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Elastic RAG で意味検索化)。プロンプト改善は **agent eval を CI ゲート**にして後退を防ぐ (設計済 / 実装は提出前)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード。
+- **つくる (自律的 AI エージェント)**: Orchestrator + Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを **単一窓口で協議編成**。画面操作を受けて Orchestrator が必要なエージェントを `agent.invoke` で招集・統括する (子には invoke を渡さず**深さ1を構造保証** + コストキャップ)。本番の編成は自前 TS runAgent、**Refinement は ADK (google-adk) エージェントに A2A で委譲**もできる (Strangler Fig / 不達時は自動 fallback)。各エージェントはチケット種別ルールエンジン (17 観点) を共有し、DoD/US/SP/停滞/戦略整合性 (Epic.rationale 欠落) を査読。**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の協議編成。
+- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で全テストをゲートしながら本番へ (prod は **dev E2E を通過したテスト済み SHA だけを昇格**する promotion by tested SHA + 承認ゲート)。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Firestore Vector RAG で意味検索 / Elastic にも env 1 つで切替可)。プロンプト改善は **agent eval (golden) を CI ゲート**にして後退を防ぐ (実装済)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード。
 - **とどける (本番品質を Cloud Run で)**: フロント (Nuxt 3 SSR) と API (Hono) を Cloud Run に、Firestore + Firebase Auth + マルチテナント (Workspace) で本番稼働。儀式ごとに専用画面 (Jira の 1 ボードに対し Backlog + 5 儀式の 6 画面) で形骸化を可視化。
 
 ### 提出フォーム (Google Form) 必須 3 URL
 1. 公開 GitHub: `https://github.com/KaedeAatou/belvedere`
-2. デプロイ URL: `https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health`
+2. デプロイ URL (公開デモ): `https://belvedere-scrum.web.app`
 3. Proto Pedia 作品 URL: ⬜ 上記登録後に確定
