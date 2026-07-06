@@ -5,7 +5,7 @@
 > 形だけ回るスクラムを **AI が「チケット品質」と「儀式運営」の両面から底上げする** Jira 型 PM サービス。
 > 比喩: 螺旋階段を上った先の眺望。
 
-[![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-2E7D32)](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health)
+[![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-2E7D32)](https://belvedere-api-prod-iuep3t4nma-an.a.run.app/health)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/CI%2FCD-WIF%20%E9%8D%B5%E3%83%AC%E3%82%B9-blue)](./.github/workflows/deploy-api.yml)
 [![Hackathon](https://img.shields.io/badge/Hackathon-DevOps%20%C3%97%20AI%20Agent%202026-FF6B35)](https://findy.notion.site/devops-ai-agent-hackathon-2026)
@@ -14,25 +14,24 @@
 
 ## 動いているもの (今すぐ触れる)
 
-> **DevOps × AI Agent Hackathon 2026 応募作品** — 7/10 提出予定 / 8/19 最終ピッチ (渋谷ストリーム)
-> 公開 URL は審査用デモ環境。Firestore に seed の 12 チケット + 4 Epic + 5 メンバが投入済で、API から実データが返ってきます。
+> **DevOps × AI Agent Hackathon 2026 応募作品** — 7/10 提出 / 8/19 最終ピッチ (渋谷ストリーム)
+> 公開 URL は審査用デモ環境。Cloud Run + **本番 Gemini 推論** で稼働し、Firestore に seed (12 チケット / 4 Epic / 3 Sprint / 5 メンバ) を投入済です。
 
 | 種類 | URL / 場所 |
 |---|---|
-| 🟢 **Web (Nuxt 3 SSR)** — 5 儀式 UI が見える | [https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/](https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/) |
-| 🟢 **API /health** (Firestore 接続状態) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health) |
-| 🟢 **API /epics** (Firestore 実データ) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics) |
-| 🟢 **API /tickets** (seed の 12 チケット) | [https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets](https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/tickets) |
+| 🟢 **公開デモ (Web / Nuxt 3 SSR)** — 5 儀式 UI + AI パネル | **[https://belvedere-scrum.web.app](https://belvedere-scrum.web.app)** |
+| 🟢 **API /health** (LLM / Firestore / RAG の稼働状態) | [https://belvedere-api-prod-iuep3t4nma-an.a.run.app/health](https://belvedere-api-prod-iuep3t4nma-an.a.run.app/health) |
 | 🟢 **アーキテクチャ図** (Eraser) | [https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa](https://app.eraser.io/workspace/qDqUGUjPxoBCq8nP6bKa) |
-| 🟢 **GitHub Actions (鍵レス WIF deploy)** | [`deploy-api.yml`](./.github/workflows/deploy-api.yml) / [`deploy-web.yml`](./.github/workflows/deploy-web.yml) |
+| 🟢 **GitHub Actions (鍵レス WIF deploy + prod 昇格ゲート)** | [`deploy-api.yml`](./.github/workflows/deploy-api.yml) / [`promote-prod.yml`](./.github/workflows/promote-prod.yml) |
+
+> 🔑 **審査員向けデモアカウント**: 公開デモはログイン制です。`demo@belvedere.demo` (admin ロール / seed 投入済ワークスペースを全操作可) の**資格情報は応募フォーム / ProtoPedia 作品ページに記載**しています。
 
 ```bash
-curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/health
-# {"status":"ok","llm":"mock","repo":"firestore"}
+# 本番 API は Gemini 実推論 + Firestore + Vector RAG で稼働 (LLM は mock ではなく gemini):
+curl https://belvedere-api-prod-iuep3t4nma-an.a.run.app/health
+# {"status":"ok","llm":"gemini","repo":"firestore","knowledge":"firestore"}
 
-# Firestore から本物データが返ってくる (Phase 1-B 完了 / 2026-06-09):
-curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
-# 4
+# 業務データ (/api/tickets 等) は Firebase Auth 必須のため、公開デモ (要ログイン) で確認してください。
 ```
 
 ---
@@ -41,10 +40,10 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 
 ![Architecture](./docs/images/architecture.png)
 
-**色凡例 (実装ステータス / 2026-06-09 時点)**:
-- 🟢 **緑** = Cloud Run / GCP で動作確認済 (deployed) — Web / API / Firestore backend / GitHub Actions (deploy-api + deploy-web) / WIF / Cloud Build / Artifact Registry / Cloud Logging
-- 🟡 **黄** = コードあり / ローカル動作 / 空インスタンス (implemented) — MCP (stdio) / Orchestrator + 5 Agent (Mock LLM で動作中)
-- ⚪ **灰** = 未実装、Phase 2 以降に着手予定 (planned) — Tool Server / IAP / Gemini 本物推論 / ADK ランタイム / Vector Search / Pub/Sub (アプリ内イベント配送 / スケジュール起動は不採用) / Firebase Auth
+**色凡例 (実装ステータス / 2026-07 提出時点)**:
+- 🟢 **緑** = Cloud Run / GCP で稼働 (deployed) — Web / API (**dev + prod 昇格ゲート**) / **Gemini 本番実推論** / Firestore backend / **Firebase Auth (個人 Google + Email/Password)** / **Firestore Vector RAG (Gemini 埋め込み)** / MCP server / GitHub Actions (WIF 鍵レス) / Cloud Build / Artifact Registry / Cloud Logging
+- 🟡 **黄** = 実装済み / flag で有効化 (implemented) — **ADK (google-adk) を A2A ピアとして公開** (`orchestrator-py` / Refinement を Strangler Fig で委譲・A2A 不達時は自前 TS runAgent へ自動 fallback) / Elastic 意味検索 (Firestore Vector と切替可)
+- ⚪ **灰** = 不採用 / 対象外 (not adopted) — IAP / Pub/Sub (スケジュール起動は思想として不採用 = 人が画面を操作した時だけ AI が動く)
 
 詳細: [`ARCHITECTURE.md`](./ARCHITECTURE.md)
 
@@ -63,7 +62,7 @@ curl https://belvedere-api-dev-cpszmcqmuq-an.a.run.app/epics | jq '. | length'
 
 - 人がチケットを起票する。AI Agent は **DoD / SP / User Story 紐付け / valueImpact / Epic.rationale** の不足を検出し提案 (人が承認 / L2 自律性)
 - スクラムの **5 儀式 (Planning / Daily / Refinement / Review / Retrospective)** ごとに **専用画面** を持ち、儀式特有の形骸化シグナルを AI が診断 (Jira の 1 Sprint Board に対する差別化軸)
-- ⭐ **Orchestrator** が単一窓口として 5 つの専門 Agent を協議編成 (ADK 宣言的マルチエージェント / 画面操作トリガ)。各 Agent は **チケット種別ルールエンジン (17 観点)** を共有
+- ⭐ **Orchestrator** が単一窓口として 5 つの専門 Agent を協議編成 (本番は自前 TS runAgent / Refinement は ADK ピアにも A2A 委譲可 / 人の画面操作がトリガ)。各 Agent は **チケット種別ルールエンジン (17 観点)** を共有
 - ⭐ **見積もりポーカー** を Belvedere 内で完結 (隠蔽投票 → 一斉開示 → 採用、AI が会を運営。スプレッドシート / 外部サイト不要)
 - ⭐ Refinement Agent の **第 6 観点「戦略整合性」** で Epic.rationale 欠落を検出
 - ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接呼べる (= AI Agent エコシステム統合)
@@ -132,13 +131,13 @@ ai-agent-hackathon/
 │   ├── web/                 # Nuxt 3 + Vue 3 SSR (Claude Designer 由来 5 画面)
 │   ├── api/                 # Hono on Cloud Run ⭐ deployed
 │   ├── cli/                 # Mock LLM CLI (5 ロール)
-│   ├── orchestrator-py/     # FastAPI + ADK 雛形 (Python)
-│   └── mcp-server/          # MCP server (stdio + HTTP / 11 Tools)
+│   ├── orchestrator-py/     # FastAPI + ADK (google-adk) — Refinement を A2A ピアとして公開 (Python)
+│   └── mcp-server/          # MCP server (stdio + HTTP / 14 Tools)
 ├── packages/
 │   ├── shared/              # 型 (Project / Epic / UserStory / Ticket / CeremonyHealthScore)
 │   ├── seed/                # 不変 fixture (1 project / 4 epics / 12 tickets / 3 sprints / 5 members)
-│   ├── repo/                # Repository 抽象 (memory ✅ / firestore は Phase 1-B)
-│   ├── llm/                 # LLMProvider 抽象 (mock ✅ / gemini / vertex は Phase 3)
+│   ├── repo/                # Repository 抽象 (memory / firestore ✅ 本番稼働)
+│   ├── llm/                 # LLMProvider 抽象 (mock / gemini ✅ 本番稼働 / vertex)
 │   ├── agent/               # Agent runtime (thought→tool→output ループ)
 │   └── tools/               # Tool 実装 (refinement.check / quality.check / ticket.rules.check 等) + ticket-rules.ts (17 ルール)
 ├── infra/
@@ -183,7 +182,7 @@ pnpm --filter @belvedere/cli dev retro      "Sprint 12 のTry抽出"
 
 pnpm --filter @belvedere/api dev                            # Hono :8080
 pnpm --filter @belvedere/web dev                            # Nuxt 3 :3000
-pnpm --filter @belvedere/mcp-server smoke                   # MCP server 14 ケース動作確認
+pnpm --filter @belvedere/mcp-server smoke                   # MCP server 19 ケース動作確認
 pnpm --filter @belvedere/mcp-server dev                     # stdio MCP (Claude Code 接続用)
 
 cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 8081
@@ -192,43 +191,39 @@ cd apps/orchestrator-py && uv run uvicorn orchestrator.main:app --reload --port 
 ### LLM プロバイダ切替
 
 ```bash
-LLM_PROVIDER=mock pnpm demo            # デフォルト (動作版)
-LLM_PROVIDER=gemini pnpm demo          # Phase 3 で実装 (現状 throw)
-LLM_PROVIDER=vertex pnpm demo          # 〃
+LLM_PROVIDER=mock pnpm demo            # ローカル既定 (キー不要 / 役割別テンプレ応答)
+LLM_PROVIDER=gemini pnpm demo          # 本番稼働中 (Cloud Run dev/prod は gemini)。GEMINI_API_KEY 必須
+LLM_PROVIDER=vertex pnpm demo          # Vertex AI 経路 (未配線 / throw)
 ```
 
-未実装プロバイダは silent fallback せず **明示的に throw** (= GCP セットアップ前提のサインポスト)。
+本番 (Cloud Run dev/prod) は `LLM_PROVIDER=gemini` で実推論。ローカル既定は `mock`。未配線プロバイダ (vertex) は silent fallback せず **明示的に throw** (= セットアップ前提のサインポスト)。
 
 ---
 
-## 進捗状況 (2026-05-06 現在)
+## 実装ハイライト (2026-07 提出時点)
 
-### ✅ Phase 0 完了
+設計 → 実装 → 本番デプロイまで完走。主要機能は Cloud Run 上で **本番 Gemini 推論** で稼働している。ハッカソンの企画3軸で整理する。
 
-- 設計ドキュメント全揃い (5 儀式 / Project / valueImpact / Epic.rationale / Reviewer Multimodal)
-- ローカル動作の最小スキャフォールド (Mock LLM で 6 ロール: 5 儀式 + Orchestrator)
-- Repository / LLM の抽象化 (memory / mock)
-- Hono API / Nuxt 3 web / FastAPI orchestrator 雛形
-- **MCP server (stdio + 11 Tools)** smoke 14/14 pass
+### つくる — AI を価値の中心に
 
-### ✅ Phase 1-A 完了 (2026-05-06)
+- スクラムの **5 儀式それぞれに専用画面 + 専用 Agent** (Planner / Daily / Refinement / Reviewer / Retrospective)。Jira の 1 Sprint Board に対する差別化軸。
+- ⭐ **Orchestrator 単一窓口** が 5 Agent を協議編成。子には `agent.invoke` を渡さず**孫協議を構造的に不可能化 (深さ1保証)**、1 リクエストにコストキャップ + 反復上限で暴走を抑止。
+- ⭐ チケット種別 **ルールエンジン (17 観点)** を 5 Agent が共有し、DoD / SP / Story 紐付け / valueImpact / Epic.rationale 欠落を検出 (人が承認 = L2 自律性)。golden test で回帰を固定。
+- ⭐ **見積もりポーカー**を Belvedere 内で完結。投票の隠蔽はサーバ側で強制 (一斉開示まで他人の値を返さない) → 採用まで AI が会を運営。
 
-- GCP セットアップ全 10 ステップ (project / billing / API / Firestore / Artifact Registry / SA / 課金アラート $10/月)
-- **WIF 鍵レス CI/CD**: `belvedere-ci-pool` / `belvedere-ci-github` Provider / `belvedere-deployer` SA + 6 ロール / principalSet で `KaedeAatou/belvedere` repo に絞込
-- **Cloud Run 初回 deploy**: `belvedere-api-dev` が `asia-northeast1` で稼働、`/health` 200 OK 確認済
-- ARCHITECTURE.md / Eraser 図に **実装ステータス色分け** 導入
-- リポジトリ public 化 (MIT License)
+### まわす — CI/CD + AI 継続改善
 
-### 🟡 Phase 1-B (5/18-22 予定 / 11 日バッファあり)
-- Firestore データ層 (`packages/repo/src/firestore.ts`)
-- Firebase Auth (個人 Google) で `/api/*` JWT 必須
-- seed の Firestore 投入
+- **WIF 鍵レス CI/CD** (typecheck / test / dev deploy / E2E)。prod は **テスト済み SHA だけを昇格**する `promote-prod.yml` (dev E2E 通過の verify ゲート + 承認ゲート = DevOps の promotion by tested SHA)。
+- **継続改善ループ**: 前スプリントの Retrospective Try を全 Agent が起動時に参照し、次スプリントの診断基準へ反映 (**Firestore Vector RAG** / Gemini 埋め込みで意味検索)。
+- ⭐ **ADK (google-adk)** を A2A ピアとして実装。Refinement を Strangler Fig で ADK へ委譲 (A2A 不達時は自前 TS runAgent へ**自動 fallback** = 本番 5 儀式は無傷)。
 
-### 🟡 Phase 1-C (5/23-29) — Web UI で CRUD 動作
-### 🟡 Phase 1-D (5/30-6/3) — MCP server を Cloud Run へ
-### 🟡 Phase 2 (6/10-6/30) — 画面操作トリガの AI パネル可視化
-### 🟡 Phase 3 (7/1-7/27) — Gemini + ADK 本実装 + Reviewer Multimodal + RAG
-### 🔴 Phase 4 (7/31-8/19) — 仕上げ + ピッチ + 最終発表
+### とどける — マルチテナント + エコシステム統合
+
+- **Firebase Auth** (個人 Google + Email/Password) + Workspace ベースの**マルチテナント**。全 tool が workspaceId を closure に閉じ込め、**IDOR / 越境を構造的に防止**。
+- ロール権限 (`admin` / `po` / `sm` / `dev`) を `can()` 純粋関数に集約。
+- ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接操作 (AI Agent エコシステム統合)。
+
+> テストは全ワークスペースで vitest 緑 (純粋関数 unit / component unit / API 統合 / Playwright E2E / agent golden)。開発マイルストーンの詳細は [`ROADMAP.md`](./ROADMAP.md) / [`HACKATHON_COMPLIANCE.md`](./HACKATHON_COMPLIANCE.md)。
 
 ---
 
