@@ -105,6 +105,11 @@ COMMON_OUTPUT_FORMAT = """
 <output_format>
   responseSchema 指定時は JSON で返す。
   指定が無ければ tool 結果を踏まえた日本語 markdown 要約 (見出し + 箇条書き)。
+  <conciseness>
+  - 重要度・優先度の高い上位 3〜5 件だけを本文に出す。1 指摘 = 1 行で簡潔に書く。
+  - 全観点の全該当を羅列しない。残りは「ほか N 件 (種別: …)」の要約行 1 行にまとめる。
+  - 前置き・結語は省き、読み手が最初の数行で最優先事項を掴めるようにする。冗長な列挙は読まれない。
+  </conciseness>
 </output_format>
 """
 
