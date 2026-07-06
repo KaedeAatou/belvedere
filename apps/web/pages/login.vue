@@ -10,20 +10,11 @@ const router = useRouter();
 const errorMessage = ref<string | null>(null);
 const isLoading = ref(false);
 
-const email = ref('');
-const password = ref('');
-
-// ハッカソン審査員向け: ワンクリックで共有デモアカウントにログインする。
-// 資格情報は公開して良い使い捨てデモ用 (個人アカウントではない)。README を読まなくても
-// ログイン画面で完結するように、画面に明示 + ボタンで自動入力+送信する。
-const DEMO_EMAIL = 'demo@belvedere.demo';
-const DEMO_PASSWORD = 'BelvedereDemo2026!';
-
-async function loginAsDemo(): Promise<void> {
-  email.value = DEMO_EMAIL;
-  password.value = DEMO_PASSWORD;
-  await loginWithEmail();
-}
+// ハッカソン審査員向け: メール/パスワード欄に共有デモアカウントを既定で入れておく
+// (使い捨てデモ用 / 個人アカウントではない)。README を読まずに、審査員はそのまま
+// 「メール / パスワードでログイン」を押すだけで入れる。
+const email = ref('demo@belvedere.demo');
+const password = ref('BelvedereDemo2026!');
 
 // 既にログイン済なら自動で / にリダイレクト (B→ログインボタン→/login の URL 直叩き等)
 watch([isAuthenticated, isInitialized], ([authed, ready]) => {
@@ -87,23 +78,6 @@ async function loginWithEmail(): Promise<void> {
       <h1 class="brand">BELVEDERE</h1>
       <p class="brand-sub">Spiral Project Management</p>
 
-      <div class="demo-callout">
-        <p class="demo-label">審査員の方へ</p>
-        <button
-          class="demo-button"
-          :disabled="isLoading"
-          @click="loginAsDemo"
-        >
-          <span v-if="isLoading">サインイン中…</span>
-          <span v-else>デモアカウントでログイン</span>
-        </button>
-        <p class="demo-creds">
-          <code>demo@belvedere.demo</code> / <code>BelvedereDemo2026!</code>
-        </p>
-      </div>
-
-      <div class="divider"><span>その他のログイン</span></div>
-
       <button
         class="google-button"
         :disabled="isLoading"
@@ -145,7 +119,7 @@ async function loginWithEmail(): Promise<void> {
 
       <p v-if="errorMessage" class="error-message">{{ errorMessage }}</p>
 
-      <p class="hint">招待制 — Workspace owner にメンバ追加を依頼してください</p>
+      <p class="hint">審査員の方: デモアカウントを入力済みです。そのまま「メール / パスワードでログイン」を押してください。</p>
     </div>
   </div>
 </template>
@@ -187,60 +161,6 @@ async function loginWithEmail(): Promise<void> {
   margin: 12px 0 48px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-}
-
-.demo-callout {
-  border: var(--hairline) solid var(--accent);
-  border-radius: var(--radius);
-  padding: 18px 16px 14px;
-  margin-bottom: 24px;
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
-}
-
-.demo-label {
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-  margin: 0 0 10px;
-  letter-spacing: 0.04em;
-}
-
-.demo-button {
-  width: 100%;
-  padding: 14px 20px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius);
-  font-family: var(--sans);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.demo-button:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.demo-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.demo-creds {
-  margin: 10px 0 0;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-2);
-  line-height: 1.6;
-}
-
-.demo-creds code {
-  background: var(--bg-0);
-  padding: 1px 5px;
-  border-radius: 4px;
 }
 
 .google-button {
