@@ -3,6 +3,7 @@
 // 会話履歴に追記する。画面切替時も会話を維持するため useState で共有する。
 
 import type { ScreenId } from '~/composables/useUiMeta';
+import type { Sprint } from '@belvedere/shared';
 
 export interface ChatMessage {
   role: 'user' | 'agent';
@@ -29,6 +30,28 @@ export function resolveAgentName(screen: ScreenId, useOrchestratorWindow: boolea
   return useOrchestratorWindow ? 'orchestrator' : SCREEN_TO_AGENT[screen];
 }
 
+/**
+ * WC-39/29: AI パネルへ渡す現在スプリント文脈を組む純粋関数 (Nuxt 非依存で直接テスト)。
+ * ユーザーが sprintId を明示しなくても agent が active/next スプリント (velocity/ゴール含む) を
+ * 把握できるようにする。該当スプリントが無ければ undefined (payload に載せない)。
+ */
+export function buildAgentContext(sprints: Sprint[]): string | undefined {
+  const active = sprints.find((s) => s.status === 'active');
+  const next = sprints.filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number)[0];
+  const lines: string[] = [];
+  if (active) {
+    const nm = active.name?.trim() || `Sprint ${active.number}`;
+    lines.push(
+      `現在のアクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'} / velocity=${active.velocity ?? '(未確定)'}`,
+    );
+  }
+  if (next) {
+    const nm = next.name?.trim() || `Sprint ${next.number}`;
+    lines.push(`次の計画中スプリント: id=${next.id} / 名前=${nm}`);
+  }
+  return lines.length > 0 ? `[現在のスプリント状況]\n${lines.join('\n')}` : undefined;
+}
+
 export const useAgentChat = () => {
   const messages = useState<ChatMessage[]>('agent-chat-messages', () => []);
   const isSending = useState<boolean>('agent-chat-sending', () => false);
@@ -36,6 +59,7 @@ export const useAgentChat = () => {
 
   const api = useApiClient();
   const config = useRuntimeConfig();
+  const { sprints } = useSprints();
 
   async function send(screen: ScreenId, prompt: string): Promise<void> {
     const trimmed = prompt.trim();
@@ -48,12 +72,14 @@ export const useAgentChat = () => {
     // ④ feature flag (既定 OFF = 回帰ゼロ): ON で Orchestrator (単一窓口=協議統括) に集約、OFF で画面対応 agent。
     const agentName = resolveAgentName(screen, Boolean(config.public.useOrchestratorWindow));
     try {
+      // WC-39/29: 現在のスプリント文脈を自動付与し、ユーザーが sprintId を書かなくても診断できるようにする。
+      const context = buildAgentContext(sprints.value);
       const run = await api.post<{
         status: string;
         outputArtifacts?: { summary?: string };
         steps?: Array<{ type: string; content: unknown }>;
         error?: { message: string };
-      }>(`/api/agents/${agentName}`, { prompt: trimmed });
+      }>(`/api/agents/${agentName}`, { prompt: trimmed, ...(context && { context }) });
 
       // summary が最優先。無ければ output 型 step の content を文字列化。
       let responseText = run.outputArtifacts?.summary ?? '';

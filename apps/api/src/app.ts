@@ -473,7 +473,9 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     if (!VALID_AGENTS.includes(name)) {
       return c.json({ error: `unknown agent: ${name}`, valid: VALID_AGENTS }, 400);
     }
-    const body: { prompt?: string } = await c.req.json<{ prompt?: string }>().catch(() => ({}));
+    const body: { prompt?: string; context?: string } = await c.req
+      .json<{ prompt?: string; context?: string }>()
+      .catch(() => ({}));
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
     // Refinement を ADK + A2A ピアへ委譲する flag ルート (既定 OFF / 自前くるくるは本体のまま)。
@@ -510,6 +512,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         systemPrompt: buildSystemPrompt(name),
         tools,
         trigger: 'human',
+        ...(body.context && { contextText: body.context }),
       },
       prompt,
     );

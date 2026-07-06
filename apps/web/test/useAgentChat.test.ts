@@ -7,7 +7,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { ScreenId } from '~/composables/useUiMeta';
-import { resolveAgentName } from '~/composables/useAgentChat';
+import type { Sprint } from '@belvedere/shared';
+import { resolveAgentName, buildAgentContext } from '~/composables/useAgentChat';
 
 const ALL_SCREENS: ScreenId[] = ['backlog', 'refinement', 'planning', 'daily', 'review', 'retro'];
 
@@ -25,5 +26,38 @@ describe('resolveAgentName (④ orchestrator window flag)', () => {
     for (const s of ALL_SCREENS) {
       expect(resolveAgentName(s, true)).toBe('orchestrator');
     }
+  });
+});
+
+const sp = (over: Partial<Sprint> & { id: string; status: Sprint['status'] }): Sprint => ({
+  workspaceId: 'ws', number: 1, startsAt: '', endsAt: '', goal: '', capacity: 0, ...over,
+});
+
+describe('buildAgentContext (WC-39/29 — スプリント文脈の自動付与)', () => {
+  it('active スプリントの id / velocity / ゴールを文脈に含める', () => {
+    const ctx = buildAgentContext([sp({ id: 's1', status: 'active', number: 5, goal: 'G', velocity: 12, name: 'Sprint5' })]);
+    expect(ctx).toContain('id=s1');
+    expect(ctx).toContain('velocity=12');
+    expect(ctx).toContain('G');
+  });
+
+  it('active + planned の両方を含める', () => {
+    const ctx = buildAgentContext([
+      sp({ id: 's1', status: 'active' }),
+      sp({ id: 's2', status: 'planned', number: 6 }),
+    ]);
+    expect(ctx).toContain('id=s1');
+    expect(ctx).toContain('id=s2');
+  });
+
+  it('velocity 未確定 / ゴール未設定はフォールバック表記', () => {
+    const ctx = buildAgentContext([sp({ id: 's1', status: 'active' })]);
+    expect(ctx).toContain('(未確定)');
+    expect(ctx).toContain('(未設定)');
+  });
+
+  it('該当スプリント (active/planned) が無ければ undefined を返す (payload に載せない)', () => {
+    expect(buildAgentContext([])).toBeUndefined();
+    expect(buildAgentContext([sp({ id: 'c', status: 'completed' })])).toBeUndefined();
   });
 });

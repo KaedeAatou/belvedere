@@ -14,6 +14,12 @@ export interface AgentRuntimeOpts {
   maxIterations?: number;
   /** 各ステップを観測したい時の hook */
   onStep?: (step: AgentStep) => void;
+  /**
+   * WC-39: LLM に注入する現在スプリント等の文脈 (sprintId / velocity / ゴール等)。指定時は user
+   * メッセージにプレフィックスする。system は不変に保つ (Mock LLM の detectRole が system の
+   * 英語 Agent 名で役割判定するため、context を system に混ぜると判定が壊れる)。
+   */
+  contextText?: string;
 }
 
 /**
@@ -32,7 +38,10 @@ export async function runAgent(
 
   const messages: LLMMessage[] = [
     { role: 'system', content: opts.systemPrompt },
-    { role: 'user', content: userInput },
+    {
+      role: 'user',
+      content: opts.contextText ? `${opts.contextText}\n\n---\n\n${userInput}` : userInput,
+    },
   ];
 
   let totalInputTokens = 0;
