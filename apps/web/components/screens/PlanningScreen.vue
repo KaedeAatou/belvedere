@@ -52,6 +52,8 @@ const smart = computed(() =>
     ? smartVerdict.value.criteria.map((c) => ({ letter: c.letter, name: c.name, ok: c.ok, note: c.note, evaluated: true }))
     : SMART_GUIDE.map((g) => ({ ...g, ok: null as boolean | null, evaluated: false })),
 );
+// Planning コンパクト化: SMART 分析はデフォルト折りたたみ、ヘッダクリックで展開 (チケットリストを主役にする)。
+const smartCollapsed = ref(true);
 
 // 自動評価 (WC-14 / A 案): Goal が変わった時だけ実評価し、開いた時は前回結果 (キャッシュ) を表示する。
 // SMART 評価は実 Gemini 呼び出しなので無駄打ちを避ける。チケット追加で SP を見直したい時等は手動「再評価」で。
@@ -256,37 +258,41 @@ onMounted(() => {
         <span v-else class="pg-ref-empty">未設定 — Home で設定すると Sprint Goal の整合 (R) を評価できます</span>
       </div>
       <div class="goal-text">{{ goal }}</div>
-      <div class="smart-head">
-        <span class="t-cap">SMART GOAL</span>
-        <button class="h-btn" data-testid="smart-eval-btn" :disabled="smartLoading" @click="evaluateSmart">
+      <div class="smart-head smart-toggle" data-testid="smart-toggle" style="cursor: pointer" @click="smartCollapsed = !smartCollapsed">
+        <span class="t-cap" style="display: flex; align-items: center; gap: 6px">
+          <span :style="{ display: 'inline-flex', transition: 'transform 0.15s ease', transform: smartCollapsed ? 'none' : 'rotate(90deg)' }">▸</span>SMART GOAL
+        </span>
+        <button v-if="!smartCollapsed" class="h-btn" data-testid="smart-eval-btn" :disabled="smartLoading" @click.stop="evaluateSmart">
           <Icon name="sparkle" /> {{ smartLoading ? '評価中…' : smartVerdict ? '再評価' : 'AI で評価' }}
         </button>
       </div>
-      <!-- SMART の目的を 1 行で説明 (WC-14: 使い方が分からない指摘)。曖昧なゴールを事前に捕まえる診断。 -->
-      <p class="smart-explain" data-testid="smart-explain">
-        Sprint Goal が「具体的・測定可能・達成可能・整合・期限明確」かを AI が採点します。△ の観点を潰すと
-        Review で達成を判定できるゴールになります。Goal を変えると自動で再評価します。
-      </p>
-      <div class="smart-row">
-        <div v-for="s in smart" :key="s.letter"
-             :class="['smart-cell', s.evaluated ? (s.ok ? 'ok' : 'weak') : 'neutral']"
-             :data-testid="`smart-cell-${s.letter}`" :title="s.note">
-          <div class="letter">{{ s.letter }}</div>
-          <div class="name">{{ s.name }}</div>
-          <div class="check" :style="{ color: !s.evaluated ? 'var(--ink-4)' : s.ok ? 'var(--ok)' : 'var(--accent)' }">
-            {{ !s.evaluated ? '—' : s.ok ? '✓' : '△' }}
+      <template v-if="!smartCollapsed">
+        <!-- SMART の目的を 1 行で説明 (WC-14: 使い方が分からない指摘)。曖昧なゴールを事前に捕まえる診断。 -->
+        <p class="smart-explain" data-testid="smart-explain">
+          Sprint Goal が「具体的・測定可能・達成可能・整合・期限明確」かを AI が採点します。△ の観点を潰すと
+          Review で達成を判定できるゴールになります。Goal を変えると自動で再評価します。
+        </p>
+        <div class="smart-row">
+          <div v-for="s in smart" :key="s.letter"
+               :class="['smart-cell', s.evaluated ? (s.ok ? 'ok' : 'weak') : 'neutral']"
+               :data-testid="`smart-cell-${s.letter}`" :title="s.note">
+            <div class="letter">{{ s.letter }}</div>
+            <div class="name">{{ s.name }}</div>
+            <div class="check" :style="{ color: !s.evaluated ? 'var(--ink-4)' : s.ok ? 'var(--ok)' : 'var(--accent)' }">
+              {{ !s.evaluated ? '—' : s.ok ? '✓' : '△' }}
+            </div>
           </div>
         </div>
-      </div>
-      <p v-if="smartError" class="smart-error" data-testid="smart-error">{{ smartError }}</p>
-      <!-- AI 評価後: summary + 弱い観点の改善提案 (note) を出す。 -->
-      <div v-if="smartVerdict" class="smart-notes" data-testid="smart-notes">
-        <p v-if="smartVerdict.summary" class="smart-summary">{{ smartVerdict.summary }}</p>
-        <div v-for="c in smartVerdict.criteria.filter((x) => !x.ok)" :key="c.letter" class="smart-note">
-          <span class="smart-note-letter">{{ c.letter }}</span>
-          <span>{{ c.note }}</span>
+        <p v-if="smartError" class="smart-error" data-testid="smart-error">{{ smartError }}</p>
+        <!-- AI 評価後: summary + 弱い観点の改善提案 (note) を出す。 -->
+        <div v-if="smartVerdict" class="smart-notes" data-testid="smart-notes">
+          <p v-if="smartVerdict.summary" class="smart-summary">{{ smartVerdict.summary }}</p>
+          <div v-for="c in smartVerdict.criteria.filter((x) => !x.ok)" :key="c.letter" class="smart-note">
+            <span class="smart-note-letter">{{ c.letter }}</span>
+            <span>{{ c.note }}</span>
+          </div>
         </div>
-      </div>
+      </template>
 
       <!-- PLANNED / VELOCITY — CURRENT (active sprint) の積み上げ SP vs velocity 実績 -->
       <div class="vel-inline">

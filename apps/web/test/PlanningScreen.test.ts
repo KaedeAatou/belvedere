@@ -53,6 +53,7 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
 
   it('未評価時は 5 セルが neutral (— 表示)', async () => {
     const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=smart-toggle]').trigger('click'); // SMART は既定折りたたみ → 展開
     for (const l of ['S', 'M', 'A', 'R', 'T']) {
       const cell = wrapper.find(`[data-testid=smart-cell-${l}]`);
       expect(cell.exists()).toBe(true);
@@ -61,8 +62,9 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
     expect(wrapper.find('[data-testid=smart-notes]').exists()).toBe(false);
   });
 
-  it('目的説明 (smart-explain) が常に表示される (WC-14: 使い方が分からない対策)', async () => {
+  it('SMART を展開すると目的説明 (smart-explain) が表示される (WC-14)', async () => {
     const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=smart-toggle]').trigger('click');
     expect(wrapper.find('[data-testid=smart-explain]').exists()).toBe(true);
   });
 
@@ -89,6 +91,7 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
 
   it('「再評価」ボタンで evaluate を呼ぶ (mount 時の自動評価とは別に手動でも)', async () => {
     const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=smart-toggle]').trigger('click'); // 展開して再評価ボタンを出す
     evaluateSpy.mockClear(); // mount 時の自動評価を除外し、クリック分だけを見る
     await wrapper.find('[data-testid=smart-eval-btn]').trigger('click');
     expect(evaluateSpy).toHaveBeenCalledTimes(1);
@@ -97,6 +100,7 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
   it('verdict があると ok/weak が反映され、弱い観点の note が出る', async () => {
     verdictRef.value = fullVerdict(MOCK_GOAL);
     const wrapper = await mountSuspended(PlanningScreen, { props: { tickets: [], selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=smart-toggle]').trigger('click');
     expect(wrapper.find('[data-testid=smart-cell-M]').classes()).toContain('weak');
     expect(wrapper.find('[data-testid=smart-cell-S]').classes()).toContain('ok');
     const notes = wrapper.find('[data-testid=smart-notes]');
