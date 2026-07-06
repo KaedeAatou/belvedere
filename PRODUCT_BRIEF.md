@@ -3,7 +3,7 @@
 > 1人1分で読める版。審査基準①〜⑤ に沿って組み立てた。
 > 2026-04-30: 「風 (WindEvent)」概念を廃止。
 > 2026-05-03: Refinement Agent (5番目) を追加 + Project エンティティ + valueImpact (priority と独立した high/medium/low 軸) を導入。
-> 2026-05-05: **MCP (Model Context Protocol) サーバ追加** — Belvedere は単独 SaaS ではなく **Claude Code / Cursor / 他 AI Agent クライアントから直接呼べる** 開発支援エージェント。Phase 0 で stdio + 11 Tools (read 6 + invoke 1 + CRUD 4) 動作確認済 (smoke test 14/14 pass)、Phase 1 で HTTP + Cloud Run + OAuth。
+> 2026-05-05: **MCP (Model Context Protocol) サーバ追加** — Belvedere は単独 SaaS ではなく **Claude Code / Cursor / 他 AI Agent クライアントから直接呼べる** 開発支援エージェント。Phase 0 で stdio + 11 Tools (read 6 + invoke 1 + CRUD 4) 動作確認済 (smoke test 14/14 pass)、以降 stdio + HTTP (Belvedere API の HTTP クライアント) に拡張し per-user API キー・サービストークンで認証 (OAuth ではない)。
 > 2026-06-11: **Reviewer Multimodal (録画→指摘抽出) を縮退** (2026-06-10)。代わりに **Orchestrator マルチエージェント + チケット種別ルールエンジン (17 観点) + 見積もりポーカー** を差別化の中心に。「なぜ Gemini か」は ADK で Orchestrator + 5 Agent を宣言的に編成できる点に統一。
 > 2026-06-13: **儀式モデル確定**。チケットライフサイクルを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike に分割し CURRENT 確定)** の一方向フローに整理。Backlog / Refinement / Planning の 3 画面を **CURRENT / NEXT / BACKLOG の 3 区画ビュー (orderIndex 共有 / 区画跨ぎ d&d でスプリント移動)** に統一し、画面差は「起票できる種別」と目的のみ。Refinement の「ルール別グループ表示」は廃止 (品質指摘は行内 finding ピルで提示)。
 
@@ -57,10 +57,10 @@ Jiraを使っているチームで広く起きる症状:
 | 1機能 = 1ボタン | チケット品質チェック → User Story候補抽出 → 過去類似タスクからSP推定 を **連鎖** |
 | 静的なルール | 過去ふりかえりやチームの判断履歴から **学習** (ベクトル検索) |
 | ユーザー起点 | 画面操作を **トリガに必要な Agent を協議に招集して動く** |
-| 1 体の AI | **Orchestrator が単一窓口として 5 つの専門 Agent を協議編成** (ADK マルチエージェント) |
+| 1 体の AI | **Orchestrator が単一窓口として 5 つの専門 Agent を協議編成** (自前 TS マルチエージェント / Refinement は ADK ピアに A2A 委譲可) |
 | 単独 SaaS に閉じる | **MCP** で Claude Code / Cursor / 他 AI Agent から直接呼べる ── 「Belvedere の開発自体を Belvedere で管理する」究極のドッグフードが可能 |
 
-ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**。各儀式に専用画面 + 専用 Agent。Orchestrator がスクラムマスターとして単一窓口になり、必要な儀式 Agent を agent.invoke で協議に招集して統括する (深さ1。トリガは画面操作のみ)。
+自前 TS `runAgent` で **Planner / Daily / Refinement / Reviewer / Retrospective + Orchestrator** の **5+1 マルチエージェント構成**を協議編成する。各儀式に専用画面 + 専用 Agent。Orchestrator がスクラムマスターとして単一窓口になり、必要な儀式 Agent を agent.invoke で協議に招集して統括する (深さ1。トリガは画面操作のみ)。**Refinement だけ**は ADK ピア (`apps/orchestrator-py` / `google-adk` の実 `LlmAgent`) に **A2A (`to_a2a`)** 越しに委譲でき (Strangler Fig)、不達時は自前 TS runAgent へ自動 fallback する。
 
 各 Agent の査読は **チケット種別ルールエンジン (17 観点)** を共有する。Story / Task / Spike / Bug / Incident の種別ごとに「親なし Task」「価値の見えない DoD」「停滞」「再現手順なし」「見積もり割れ」等を宣言的ルール表で判定。
 
@@ -122,11 +122,10 @@ ADK (Agent Development Kit) で **Planner / Daily / Refinement / Reviewer / Retr
 
 GCPスタック (必須要件):
 - **実行**: Cloud Run (各エージェントを独立サービスに)
-- **AI**: Gemini API + ADK (**Orchestrator + 5 Agent の宣言的マルチエージェント構成**)
+- **AI**: Gemini API + ADK (**自前 TS runAgent が Orchestrator + 5 Agent を協議編成 / Refinement のみ ADK ピアへ A2A 委譲可・Strangler Fig**)
 - **データ**: Firestore (5 階層データモデル + 見積もりポーカーのセッション / エージェントログ)
-- **イベント**: Pub/Sub (チケット保存などアプリ内イベントの配送。儀式時刻による自動起動は持たない)
 - **観測**: Cloud Logging + Cloud Trace
-- **CI/CD**: Cloud Build + Cloud Deploy
+- **CI/CD**: GitHub Actions (WIF) + Cloud Build + Artifact Registry
 - **AI Agent エコシステム連携**: MCP server (stdio + HTTP / Cloud Run) — Claude Code / Cursor から Belvedere の Agent を直接呼べる
 
 ## 9. ピッチで使うフレーズ

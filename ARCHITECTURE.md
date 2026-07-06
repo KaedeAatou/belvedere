@@ -7,7 +7,7 @@
 
 ## 0. 結論 (採用案)
 
-**「Cloud Run + Gemini API + Firestore + Pub/Sub」のサーバーレス構成**を採用する。
+**「Cloud Run + Gemini API + Firestore」のサーバーレス構成**を採用する。
 
 理由:
 - 必須要件 (Cloud Run + Gemini) を最小コストで満たす
@@ -34,7 +34,7 @@ graph TB
     end
 
     subgraph CICD["🔧 まわす: Build & Deploy (鍵レス CI/CD + AI改善)"]
-        GH["GitHub Actions<br/>(deploy-api/web + 462 テスト & agent eval gate)"]
+        GH["GitHub Actions<br/>(deploy-api/web + 600+ テスト & agent eval gate)"]
         WIF["Workload Identity<br/>belvedere-ci-pool<br/>belvedere-ci-github"]
         CB["Cloud Build<br/>(_TAG = short SHA)"]
         AR["Artifact Registry<br/>belvedere/api"]
@@ -189,7 +189,7 @@ graph TB
 | **VPC / 専用線** | VPC + Serverless VPC Access | VPC + PrivateLink | サーバーレスからVPCに繋ぐ |
 | **WAF** | Cloud Armor | WAF | DDoS / OWASPルール |
 | **DNS** | Cloud DNS | Route 53 | 同等 |
-| **意味検索 / RAG** | Elastic (Elastic Cloud) | OpenSearch k-NN / Bedrock KB | Belvedere では過去ふりかえり (Try) と Scrum Guide の意味検索に使う。Firestore=正本 / Elastic=意味検索層 |
+| **意味検索 / RAG** | Firestore Vector (本番の主) / Elastic (切替可) | OpenSearch k-NN / Bedrock KB | Belvedere では過去ふりかえり (Try) と Scrum Guide の意味検索に使う。Firestore=正本 / Firestore Vector (gemini-embedding-001) が本番の主、`SEARCH_BACKEND` で Elastic に切替可 |
 
 ---
 

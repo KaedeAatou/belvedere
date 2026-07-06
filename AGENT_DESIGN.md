@@ -23,7 +23,7 @@
 | 系統 | 実体 | 性質 | 出方 | 状態 |
 |---|---|---|---|---|
 | **(A) ルールエンジン** | `ticket-rules.ts` (17 ルール) + `refinement.ts` (6 観点) + `quality.ts` (DoD/SP/US) の **pure function** | 決定論的・テスト可能。データを見て確定的に finding を出す | チケット行の **行内 finding ピル (赤/黄)** / `GET /api/findings` | **実装・配線済** |
-| **(B) AI Agent** | `runAgent` ループ + Gemini (現状 Mock LLM)。Tool 越しに (A) を呼び、文脈を踏まえ自然言語で診断・提案 | 文脈依存・説明的。分割案・要約・デモ台本など非定型を生成 | **右レール Integrity AI パネル** (`POST /api/agents/:name`) | チャットは配線済 / 画面ボタン自動トリガーは未配線 |
+| **(B) AI Agent** | `runAgent` ループ + Gemini (本番 Cloud Run は実 Gemini 稼働 / ローカル既定は Mock LLM)。Tool 越しに (A) を呼び、文脈を踏まえ自然言語で診断・提案 | 文脈依存・説明的。分割案・要約・デモ台本など非定型を生成 | **右レール Integrity AI パネル** (`POST /api/agents/:name`) | チャットは配線済 / 画面ボタン自動トリガーは未配線 |
 
 > **Try は第 3 の横串**: 過去スプリントの改善 Try (例「AC に期日を入れる」) は **バックログに積まず**、全 Agent が起動時に `retro.tries.list` で読み込み「検出ルール」として各儀式に動的適用する (§2-5 / ケース⑤)。定型 Try は将来 (A) の pure fn に昇格、非定型は (B) の LLM 判断 (論点 B)。
 
@@ -163,7 +163,7 @@ Backlog でユーザーストーリー起票
 | 起動 | **ユーザーの画面操作のみ**（時間・イベント・スケジュール起動は持たない）|
 | LLM | gemini-2.5-flash (軽量) — 判断・取り回しのみ。深い推論は各達人(pro)が担う (§2.6 agent→model マップ) |
 | Tool | sub-agent invocation（子 agent 呼び出し + 協議の仲介）|
-| 実行方式 (2026-06-18 確定 / 論点 A) | **ハイブリッド**。トリガーは**画面操作のみ**（スケジューラは使わない）。ユーザーの操作を受けて **TS 実行ランナー** が Orchestrator(flash) の判定どおりに `POST /api/agents/:name` を順次/並列に起動し、**達人間の協議（agent↔agent 呼び出し）を中継**する (tool 実体が TS 側 `packages/tools` にあるため確実)。ピッチ差別化用に **Python ADK** (`apps/orchestrator-py`) で「Orchestrator が 5 子 agent を宣言的に編成」する最小デモを 1 本成立させ、PITCH §5「Gemini である必然性 = ADK 編成」を満たす。**ADK への全乗せ替えはしない** (回帰リスク大 / 単一 agent ループは TS runAgent で足りる)。`USE_REAL_ADK=false` の間はスタブ、デモ経路のみ `true` で実体化 |
+| 実行方式 (2026-06-25 改訂 / 論点 A) | **Strangler Fig**。本番の編成は**自前 TS runAgent が本体**。トリガーは**画面操作のみ**（スケジューラは使わない）。ユーザーの操作を受けて **TS 実行ランナー** が Orchestrator(flash) の判定どおりに `POST /api/agents/:name` を順次/並列に起動し、**達人間の協議（agent↔agent 呼び出し）を中継**する (tool 実体が TS 側 `packages/tools` にあるため確実)。**Refinement だけ** は `REFINEMENT_VIA_ADK=true` で **Python ADK** (`apps/orchestrator-py`) の実 `LlmAgent` に **A2A (`to_a2a`)** 越しに委譲でき、**不達時は TS runAgent へ自動 fallback**（退避路）する。**ADK への全乗せ替えはしない** (回帰リスク大 / 本体の協議と他 4 儀式は TS runAgent で足りる)。`USE_REAL_ADK` / `REFINEMENT_VIA_ADK` は既定 `false` で本番ゼロ変更 |
 
 ### 2-1. Planner Agent
 
@@ -212,7 +212,7 @@ Backlog でユーザーストーリー起票
 5. **SP 見積バラつき異常**: 同 Epic 配下の SP の変動係数 (CV = stddev/mean) が 0.6 超 → 再見積推奨
 6. **戦略整合性 (Strategic Intent Drift) ⭐NEW**:
    - `Epic.rationale` (戦略意図 / Why) が空のものを警告 → 配下チケットが「何のために?」を見失う形骸化サイン
-   - rationale が存在する場合、各チケットの内容が rationale と整合しているかを判定 (本物 Gemini 接続後に prompt 駆動で実装)
+   - rationale が存在する場合、各チケットの内容が rationale と整合しているかを判定 (本番 Gemini 接続済 / prompt 駆動で実装済)
    - **解く課題**: 「戦略があるから開発するはずだが、その戦略が開発者に伝わっていない」現象 (チケット → Epic 階層を 1 クリックで遡って Why が見える状態を作る)
 
 ### 2-4. Reviewer Agent
@@ -241,7 +241,7 @@ Backlog でユーザーストーリー起票
 | 入力 | 議事テキスト (手動ペースト), 過去 `CeremonyHealthScore`, 過去 Try の達成率 |
 | 出力 | Try 一覧 + ownerId, 翌スプリント計画への WIP 転記候補, 健全性スコア更新。carry-forward 積み上げ (RetroTry / Firestore 永続) への蓄積は人間の d&d 操作 (L2 原則) |
 | LLM | gemini-2.5-pro |
-| 主な Tool | `retro.tries.list`, `vector.search`, `firestore.write` |
+| 主な Tool | `retro.tries.list`, `knowledge.search`, `firestore.write` |
 | 自律性 | L2 (Try 転記は人間確認後) |
 
 > (prompt への参照誘導は Phase 3-A の Gemini 接続時に実装)
@@ -250,7 +250,7 @@ Backlog でユーザーストーリー起票
 
 ## 2.6. agent → model マップ (2026-06-18 確定 / 論点 D)
 
-agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `apps/api/src/app.ts` が全 agent を `gemini-2.5-pro` でハードコードしている (`POST /api/agents/:name`) が、これを除去し、下記マップを `packages/agent` (または `packages/shared`) に置いて `apps/api` / `apps/orchestrator-py` 双方が参照する (二重定義・drift 防止)。
+agent ごとに使う Gemini model を **1 箇所に集約**する。**実装済**: `packages/shared/src/constants.ts` の `AGENT_MODEL` マップ + `modelForAgent(name)` に集約し、`apps/api/src/app.ts` (`POST /api/agents/:name`) はこれを参照する (ハードコード除去済 / `apps/orchestrator-py` も同マップと 1:1 同期)。
 
 | Agent | model | 理由 |
 |---|---|---|
@@ -258,7 +258,7 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 | Planner / Refinement / Reviewer / Retrospective | `gemini-2.5-pro` | 分割・診断・生成の推論が重い |
 | Daily | `gemini-2.5-flash` | 高頻度・短い要約処理 |
 
-> Gemini Provider 自体は実装済 (§8)。本マップ導入は Phase A の作業。
+> Gemini Provider 自体は実装済 (§8)。本マップも実装済み。本番 Cloud Run は無料枠キーで `pro` が limit0 のため、deploy が `GEMINI_MODEL_OVERRIDE=gemini-2.5-flash` を注入し全 agent を flash に固定している。
 
 ## 2.7. 設計判断ログ (2026-06-18 / 実装着手前に確定)
 
@@ -266,10 +266,10 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 
 | 論点 | 確定 |
 |---|---|
-| **A. Orchestrator を TS か ADK か** | **ハイブリッド** (§2-0 参照)。TS 実行ランナー（画面操作トリガ）+ ADK 編成デモ 1 本 |
+| **A. Orchestrator を TS か ADK か** | **Strangler Fig** (§2-0 参照)。本体は TS 実行ランナー（画面操作トリガ）/ Refinement のみ A2A 越しに ADK ピアへ委譲可・不達は TS へ自動 fallback |
 | **B. Try のルール化** | **二層**。定型 Try (「AC に期日」「BLOCKED 理由必須」) は `ticket-rules.ts` の pure fn に昇格 (確定的・テスト可能) / 非定型 Try は LLM 判断。新規は LLM → 定着で pure fn 昇格 |
 | **C. 画面トリガー** | **全 agent は画面操作で同期起動**（チャットと同じ `/api/agents/:name` 即応答、出力は AI パネル）。**スケジュール / Pub-Sub による自動起動・自動 Slack は持たない**（2026-06-18 改訂(2)）|
-| **D. agent 別 model** | §2.6 のマップに集約。`app.ts` のハードコード除去 |
+| **D. agent 別 model** | §2.6 のマップに集約 (実装済 / `app.ts` のハードコード除去済)。本番は `GEMINI_MODEL_OVERRIDE=gemini-2.5-flash` で上書き |
 | **E. prompt 二重管理** (`prompts.ts` ↔ `agents.py`) | 当面は二重管理 + `agent-prompt-sync` skill 監視を維持。ADK が Python を本当に使う段階で「TS を正・Python を生成物」へ寄せる |
 
 ---
@@ -293,7 +293,7 @@ agent ごとに使う Gemini model を **1 箇所に集約**する。現状 `app
 | `cloudrun.previewUrl` | preview revision URL 発行 | SA |
 | `ticket.rules.check` | チケット種別ルール (17 観点) を儀式単位で実行 | SA |
 | `retro.tries.list` | レトロ carry-forward 積み上げ一覧 (儀式 Agent のコンテキスト) | SA |
-| `vector.search` | Vector Search クエリ | SA |
+| `knowledge.search` | RAG 意味検索クエリ (Firestore Vector が本番の主 / Elastic 切替可) | SA |
 | `human.ask` | (HITL) 不確実な時に人間に投げる | AI パネル |
 
 ---
@@ -356,7 +356,7 @@ TASK:
 ## 7. 失敗・回復
 
 - 各 `AgentRun` は冪等にする (同じ input なら同じ output)
-- 失敗時は `error` フィールドに詳細、リトライは Pub/Sub の dead-letter
+- 失敗時は `error` フィールドに詳細、リトライは呼び出し側 (画面操作の再実行 / AI パネルの再送信) が担う (Pub/Sub は不採用)
 - LLM のハルシネーション対策: 重要な書込前に `tool_call.dry_run = true` で人間確認 (L2)
 - コスト爆発対策: `AgentRun.llmUsage.costUsd` で workspace 単位のキャップ
 

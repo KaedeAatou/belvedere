@@ -128,27 +128,27 @@ test 58/58 緑 (llm 15 + repo 29 + api 14)、typecheck 10/10 緑。
 
 ### Phase 3-A Gemini + ADK + Orchestrator Multi-Agent / 6/27 〜 6/30 (4 日) ★★ B-1 キラー
 
-- [ ] **`packages/llm/src/gemini.ts` 実装** — `LLM_PROVIDER=gemini` で Mock を置換
-- [ ] **ADK 本物実装** (`apps/orchestrator-py/src/orchestrator/agents.py:build_agents(use_real_adk=True)`)
-- [ ] **Orchestrator Multi-Agent (= スクラムマスター AI / 単一窓口)**:
-  - Orchestrator が SubAgent として 5 儀式 Agent を持つ ADK 構成
-  - Orchestrator が画面操作を受けて該当 Agent を agent.invoke で協議招集・統括 (深さ1 / トリガは画面操作のみ)
-  - ふりかえりで Retrospective が Try 集約 → 翌スプリント Planner に引き継ぎ
+- [x] **`packages/llm/src/gemini.ts` 実装** — `LLM_PROVIDER=gemini` で Mock を置換 (本番 Cloud Run dev/prod で稼働 / `/health` llm=gemini)
+- [x] **ADK 本物実装** (`apps/orchestrator-py/src/orchestrator/agents.py:build_agents(use_real_adk=True)` が実 `LlmAgent`×6 + `FunctionTool` を構築)
+- [x] **Orchestrator Multi-Agent (= スクラムマスター AI / 単一窓口)**:
+  - Orchestrator が画面操作を受けて 5 儀式 Agent を `agent.invoke` で協議招集・統括 (**本番編成は自前 TS runAgent** / 子には invoke を渡さず**深さ1を構造保証** + コストキャップ / トリガは画面操作のみ)
+  - **Refinement のみ ADK ピアに A2A 委譲**できる (Strangler Fig / 不達時は TS へ自動 fallback)。← 旧「Orchestrator が 5 子を ADK で宣言編成」案は不採用、Refinement 単位の A2A 委譲に確定 (2026-06-25)
+  - ふりかえりで Retrospective が Try 集約 → 翌スプリント Planner に引き継ぎ (RAG で意味検索)
   - (スケジュール / 時刻ルーティングによる自動起動は不採用)
-- [ ] FastAPI `/agents/{name}/invoke` を本物 ADK 経路で動かす
-- [ ] Cloud Run に orchestrator-py をデプロイ (Phase 1-D の延長)
+- [x] FastAPI `/agents/{name}/invoke` + A2A (`to_a2a`) を実 ADK 経路で実装
+- [ ] Cloud Run に orchestrator-py をデプロイ (⚠ deployer SA の artifactregistry 権限が前提で未完 = 提出前の作業。A2A 委譲は既定 OFF なので本番 5 儀式は無傷)
 
 ### Phase 2 AI Integrity Panel リアル配線 / 7/1 〜 7/3 (3 日)
-- [ ] 画面操作 → `/api/agents/:name` 同期起動 → Orchestrator が該当 Agent を協議招集・統括
-- [ ] AI Integrity Panel が本物の Agent 出力を表示 (同期応答 + Web polling)
-- [ ] (スケジュール / Pub-Sub による自動起動・自律 Slack 通知は不採用)
+- [x] 画面操作 → `/api/agents/:name` 同期起動 → Orchestrator が該当 Agent を協議招集・統括
+- [x] AI Integrity Panel が本物の Agent 出力を表示 (同期応答 + Web polling)
+- [x] (スケジュール / Pub-Sub による自動起動・自律 Slack 通知は不採用)
 
-### Phase 3-B Elastic + Gemini RAG / 7/4 〜 7/7 (4 日)
-- [ ] **U-Sub2 (👤)**: Elastic Cloud 14 日トライアル契約
-- [ ] `references/agile-knowledge-base/*` を chunk して Gemini Embeddings で vector 化 → Elastic に投入
-- [ ] Refinement / Retrospective Agent に `knowledge.search` Tool 追加
-- [ ] 過去 Try (Ceremony.tries[]) も同じ index に投入 (workspace 別)
-- [ ] デモシナリオ: 「テストが遅い」相談 → Refinement Agent が過去 3 回の Try と公式 Scrum Guide 引用を提示
+### Phase 3-B Gemini RAG (Firestore Vector / Elastic 切替可) / 7/4 〜 7/7 (4 日)
+- [x] `references/agile-knowledge-base/*` を chunk して Gemini Embeddings (768 次元) で vector 化 → **Firestore Vector に投入** (Elastic にも env 1 つで切替可)
+- [x] Refinement / Retrospective Agent に `knowledge.search` Tool 追加
+- [x] 過去 Try (retro.tries) も同じ RAG に投入 (workspace 別) → 「前回 Try は守られたか」を sourceId 付きで参照
+- [x] デモシナリオ: 相談 → Agent が過去 Try + Scrum 知識を引いて講評 (dev で findNearest ヒット実証済)
+- [ ] U-Sub2 (👤): Elastic Cloud トライアル契約 (任意 / 本番は Firestore Vector を主に採用)
 
 ### Phase 3-C 提出準備 / 7/8 〜 7/10 (3 日 + 徹夜カバー)
 - [ ] **ピッチ動画 (3 分以下)** 撮影 + 編集

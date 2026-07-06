@@ -281,7 +281,7 @@ export interface CeremonyHealthScore {
 |---|---|
 | ドキュメント (型定義のもの) | Firestore |
 | エージェントの長文プロンプト履歴 | Cloud Storage `gs://belvedere-{env}-agent-logs/` |
-| ベクトル (過去ふりかえりや過去類似タスク) | Vertex AI Vector Search |
+| ベクトル (過去ふりかえりや過去類似タスク) | Firestore Vector (`gemini-embedding-001` / 768次元) が本番の主、`SEARCH_BACKEND` で Elastic に切替可 |
 | バックアップ | Firestore Daily Export → Cloud Storage |
 
 ---
