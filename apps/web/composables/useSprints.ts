@@ -59,7 +59,8 @@ export const useSprints = () => {
   /** NEXT 区画ラベル (planned sprint)。 */
   const nextLabel = computed(() => sprintLabel(nextPlanned.value, 'planned', 'Next Sprint'));
 
-  type SprintEdit = { name?: string; goal?: string; startsAt?: string; endsAt?: string };
+  // carryOverIds (WC-30): 開始時に旧 active から新 active へ持ち越す未完了チケット id。
+  type SprintEdit = { name?: string; goal?: string; startsAt?: string; endsAt?: string; carryOverIds?: string[] };
 
   /** goal / 期間の編集 (status は変えない)。成功後に再 fetch して画面へ反映。 */
   async function patchSprint(id: string, body: SprintEdit): Promise<void> {
@@ -88,3 +89,14 @@ export const useSprints = () => {
 
   return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, completedSprints, sprintLabel, currentLabel, nextLabel, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
 };
+
+/**
+ * WC-35: チケット編集のスプリント選択候補。active + planned のみに絞る (completed は新規に選ばせない) が、
+ * 現在割当済 (currentSprintId) が completed の場合はそれだけ残す (セレクトの現値が空表示になるのを防ぐ)。
+ * Nuxt 非依存の純粋関数として直接テストする。
+ */
+export function sprintOptionsForEdit(sprints: Sprint[], currentSprintId: string | undefined): Sprint[] {
+  return sprints.filter(
+    (s) => s.status === 'active' || s.status === 'planned' || s.id === currentSprintId,
+  );
+}
