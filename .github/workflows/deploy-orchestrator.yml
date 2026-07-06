@@ -20,6 +20,11 @@ on:
         type: choice
         options: [dev, prod]
         default: dev
+      gemini_model:
+        description: "ADK エージェントの Gemini モデル(flash=無料枠で安全 / pro=有料キー必須。TS 側 promote-prod.yml と揃える)"
+        type: choice
+        options: [gemini-2.5-flash, gemini-2.5-pro]
+        default: gemini-2.5-flash
 
 permissions:
   contents: read
@@ -77,15 +82,19 @@ jobs:
         run: |
           ENV="${{ github.event.inputs.env || 'dev' }}"
           PROJECT="${{ steps.target.outputs.project }}"
+          MODEL="${{ github.event.inputs.gemini_model || 'gemini-2.5-flash' }}"
           API_URL=$(gcloud run services describe belvedere-api-$ENV \
             --region=${{ env.GCP_REGION }} --project=$PROJECT --format='value(status.url)' 2>/dev/null || echo "")
+          # GEMINI_MODEL_OVERRIDE で ADK 全 agent のモデルを固定する。無指定だと agents.py の既定で
+          # Refinement 等が gemini-2.5-pro を叩き、無料枠キー (pro=limit0) では 429 → A2A エラー →
+          # TS runAgent へ静かに fallback してしまい「ADK が本番で動いた」実証にならない。既定 flash で安全側に倒す。
           gcloud run deploy ${{ env.SERVICE }}-$ENV \
             --source apps/orchestrator-py \
             --region ${{ env.GCP_REGION }} \
             --project $PROJECT \
             --service-account ${{ steps.target.outputs.runtime_sa }} \
             --allow-unauthenticated \
-            --set-env-vars USE_REAL_ADK=true,GOOGLE_CLOUD_PROJECT=$PROJECT,BELVEDERE_API_URL=$API_URL \
+            --set-env-vars USE_REAL_ADK=true,GOOGLE_CLOUD_PROJECT=$PROJECT,BELVEDERE_API_URL=$API_URL,GEMINI_MODEL_OVERRIDE=$MODEL \
             --set-secrets GEMINI_API_KEY=GEMINI_API_KEY:latest,BELVEDERE_SERVICE_TOKEN=BELVEDERE_SERVICE_TOKEN:latest
 
       - name: Output service URL
