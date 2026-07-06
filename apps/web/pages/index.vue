@@ -137,6 +137,9 @@ const ticket = computed(() =>
                     :tickets="tickets" :selected-id="selected"
                     @select="onSelect" @go-retro="screen = 'retro'" />
       <RetroScreen v-else-if="screen === 'retro'" />
+      <SprintHistoryScreen v-else-if="screen === 'sprint-history'"
+                           :tickets="tickets" :selected-id="selected"
+                           @select="onSelect" />
 
       <DetailSheet v-if="ticket" :ticket="ticket" @close="onClose" />
     </div>

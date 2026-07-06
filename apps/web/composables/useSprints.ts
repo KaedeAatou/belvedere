@@ -40,6 +40,9 @@ export const useSprints = () => {
   /** 直近の次スプリント (最小 number の planned)。無ければ null。 */
   const nextPlanned = computed<Sprint | null>(() => plannedSprints.value[0] ?? null);
 
+  /** 完了済スプリント (status==='completed'、number 降順=新しい順)。スプリント履歴ビュー + backlog 除外用。 */
+  const completedSprints = computed(() => [...sprints.value.filter((s) => s.status === 'completed')].sort((a, b) => b.number - a.number));
+
   /**
    * スプリント表示ラベル (WC-c6d339fb)。**番号 (Sprint 13) は出さない**。
    * name 有り→ name のみ (例「決済MVP」)、name 無し→ fallback (例「Current Sprint」)。
@@ -83,5 +86,5 @@ export const useSprints = () => {
     return created;
   }
 
-  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, sprintLabel, currentLabel, nextLabel, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
+  return { sprints, activeSprint, velocityHistory, plannedSprints, nextPlanned, completedSprints, sprintLabel, currentLabel, nextLabel, isLoading, error, fetchSprints, patchSprint, startSprint, createSprint };
 };

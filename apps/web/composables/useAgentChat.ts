@@ -18,6 +18,7 @@ const SCREEN_TO_AGENT: Record<ScreenId, string> = {
   review:     'reviewer',
   retro:      'retrospective',
   events:     'daily',        // events ホームの概要は Daily Agent (スプリント状態) に寄せる (WC-cba82df1)
+  'sprint-history': 'retrospective', // 完了スプリントの振り返り文脈 → Retrospective Agent
 };
 
 /**

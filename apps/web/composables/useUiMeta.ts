@@ -5,10 +5,12 @@
 // Review→04 / Retro→05 に振り直した (2026-06-11 完了)。
 
 // 'events' = events タブの概要ホーム (WC-cba82df1)。儀式ではないので CEREMONIES には含めない。
-export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro' | 'events';
+// 'events' = events タブの概要ホーム / 'sprint-history' = 完了済スプリントの振り返りビュー。
+// どちらも 5 儀式ではないので CEREMONIES には含めない。
+export type ScreenId = 'backlog' | 'planning' | 'daily' | 'refinement' | 'review' | 'retro' | 'events' | 'sprint-history';
 
 // 有効な ScreenId 一覧 (localStorage 復元時の検証用 / WC-17)。
-export const SCREEN_IDS: readonly ScreenId[] = ['backlog', 'planning', 'daily', 'refinement', 'review', 'retro', 'events'];
+export const SCREEN_IDS: readonly ScreenId[] = ['backlog', 'planning', 'daily', 'refinement', 'review', 'retro', 'events', 'sprint-history'];
 
 /** 任意値が有効な ScreenId か (壊れた localStorage 値を弾く純粋ガード / WC-17)。 */
 export function isScreenId(x: unknown): x is ScreenId {

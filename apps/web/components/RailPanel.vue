@@ -35,6 +35,16 @@ const showEvents = computed(() => props.railTab === 'events');
           <span class="l2">{{ s.sub }}</span>
         </span>
       </div>
+      <!-- スプリント履歴 (儀式ではないので CEREMONIES 外)。完了済スプリントの振り返りビューへの入口。 -->
+      <div :class="['rail-cer-item', screen === 'sprint-history' && 'active']"
+           data-testid="rail-sprint-history"
+           @click="emit('update:screen', 'sprint-history')">
+        <span class="num"><Icon name="clock" :size="16" /></span>
+        <span class="lbl">
+          <span class="l1">スプリント履歴</span>
+          <span class="l2">Past sprints</span>
+        </span>
+      </div>
     </div>
 
     <!-- Backlog tab -->
