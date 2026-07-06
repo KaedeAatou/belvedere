@@ -75,8 +75,8 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
       tag: 'グルーミング',
       msg: 'SP 未見積もりのストーリーは「ポーカー開始」で合意形成できます。種別なし・DoD 欠落も上から解消しましょう。',
       actions: [{
-        label: '一括提案', primary: true, kind: 'prompt',
-        prompt: 'バックログの品質指摘(粒度 SP>8 / 依存 / valueImpact / priority×valueImpact ミスマッチ / SP 分散 / Epic.rationale 欠落)を一括で洗い出し、上位から改善を提案して。',
+        label: '上位5件を提案', primary: true, kind: 'prompt',
+        prompt: 'バックログの品質で今すぐ直すべき最重要の指摘を上位5件だけ、1件1行で簡潔に教えて。観点(粒度SP>8/依存/valueImpact/priority×valueImpactミスマッチ/SP分散/Epic.rationale欠落)は内部判断に使うだけで、該当チケットの全列挙はしないで。何から着手すべきかが一目で分かる形にして。',
       }],
     });
 

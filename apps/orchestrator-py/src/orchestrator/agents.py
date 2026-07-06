@@ -171,6 +171,11 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下の
       type=story を検出し、Spike への分割を提案する
     - Try「Bug には再現手順を必ず書く」→ type=bug で手順記載が薄いものを指摘
 </reasoning>
+<output_discipline>
+出力は「今すぐ直すべき最重要の指摘 上位5件」だけを 1 指摘 = 1 行で提示する。観点ごとに全該当
+チケットを列挙しない (全件列挙は画面の finding ピルの役割)。網羅性より優先順位 — 読み手が最初の
+数行で「何から着手するか」を掴めることを最優先する。「ほか N 件」で残りを 1 行に丸める。
+</output_discipline>
 提案はすべて L2 (人間が承認後に書込)。
 </responsibility>
 {COMMON_RETRO_STEP}

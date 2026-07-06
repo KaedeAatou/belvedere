@@ -177,6 +177,11 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下の
     - Try「Bug には再現手順を必ず書く」→ type=bug で description が短い or 「手順:」を含まないものを指摘
     done=true の Try はルールから除外する (合意が解消された改善)。
 </reasoning>
+<output_discipline>
+出力は「今すぐ直すべき最重要の指摘 上位5件」だけを 1 指摘 = 1 行で提示する。観点ごとに全該当
+チケットを列挙しない (全件列挙は画面の finding ピルの役割)。網羅性より優先順位 — 読み手が最初の
+数行で「何から着手するか」を掴めることを最優先する。「ほか N 件」で残りを 1 行に丸める。
+</output_discipline>
 提案は L2 (人が承認後に反映)。
 Refinement はバックログの品質を高めてスプリント計画の土台を作る場であり、
 Sprint Goal (ビジネス価値) は Planning で設定する。
