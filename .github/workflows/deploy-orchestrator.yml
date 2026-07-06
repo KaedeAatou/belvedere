@@ -83,12 +83,17 @@ jobs:
         # --source は cloud-run-source-deploy リポジトリを自動作成しようとし、deployer SA に
         # artifactregistry.repositories.create が無いと PERMISSION_DENIED で落ちる。api/web が既に使う
         # 既存 belvedere リポジトリ (SA は writer 保有) へ Cloud Build で build+push すれば追加 IAM 不要。
+        # config 経由 (CLOUD_LOGGING_ONLY) にするのは、--tag 直叩きだと GCS ログ stream 権限が要り
+        # deployer SA では "can only stream logs" で失敗するため (api/web と同じ回避)。
         run: |
           PROJECT="${{ steps.target.outputs.project }}"
           SHORT_SHA="${{ github.sha }}"; SHORT_SHA="${SHORT_SHA:0:7}"
           IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/$PROJECT/${{ env.REPO }}/orchestrator:$SHORT_SHA"
           echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
-          gcloud builds submit apps/orchestrator-py --tag "$IMAGE" --project "$PROJECT"
+          gcloud builds submit apps/orchestrator-py \
+            --config infra/cloudbuild.orchestrator.yaml \
+            --substitutions=_REGION=${{ env.GCP_REGION }},_REPO=${{ env.REPO }},_TAG=$SHORT_SHA \
+            --project "$PROJECT"
 
       - name: Deploy to Cloud Run (USE_REAL_ADK=true で A2A 公開)
         run: |

@@ -1,0 +1,47 @@
+# Belvedere Orchestrator (ADK / A2A) を build + push する Cloud Build 設定。
+#
+# deploy は deploy-orchestrator.yml が別途 `gcloud run deploy --image` で行う
+# (USE_REAL_ADK / GEMINI_MODEL_OVERRIDE / secret を env 別に注入するため、ここでは build+push のみ)。
+#
+# なぜ config を使うか (--tag 直叩きではなく):
+#   `gcloud builds submit --tag` はデフォルトの GCS ログバケットにログを書き、deployer SA が
+#   Viewer/Owner でないと "can only stream logs" で終了コード 1 になる (build 自体は走っているのに失敗扱い)。
+#   api/web と同じく `options.logging: CLOUD_LOGGING_ONLY` にすればログは Cloud Logging に出て、
+#   GCS ストリーミング権限が不要になる (追加 IAM なしで通る)。
+#
+# 起動方法 (deploy-orchestrator.yml から):
+#   gcloud builds submit apps/orchestrator-py \
+#     --config infra/cloudbuild.orchestrator.yaml \
+#     --substitutions=_REGION=asia-northeast1,_REPO=belvedere,_TAG=<short-sha> --project <PROJECT>
+
+substitutions:
+  _REGION: asia-northeast1
+  _REPO: belvedere          # api/web と共用の既存 Artifact Registry リポジトリ (SA は writer 保有)
+  _TAG: latest              # deploy-orchestrator が GITHUB_SHA::7 を渡す
+
+images:
+  - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/orchestrator:${_TAG}"
+
+steps:
+  # ---- Build (source = apps/orchestrator-py / Dockerfile はその直下) ----
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/orchestrator:${_TAG}"
+      - -f
+      - Dockerfile
+      - .
+
+  # ---- Push ----
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/orchestrator:${_TAG}"]
+    waitFor: [build]
+
+options:
+  logging: CLOUD_LOGGING_ONLY   # ← デフォルト GCS ログバケット依存を外し stream 権限問題を回避 (api/web と同じ)
+  machineType: E2_HIGHCPU_8
+
+timeout: 1200s
