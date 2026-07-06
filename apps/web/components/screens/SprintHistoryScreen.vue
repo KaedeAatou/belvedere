@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Sprint, Ticket } from '@belvedere/shared';
+import type { RetroTry, Sprint, Ticket } from '@belvedere/shared';
 
 // スプリント履歴ビュー。完了済スプリント (status==='completed') を新しい順に一覧し、
 // 各スプリントの実績 (velocity / 完了チケット数 / 期間 / Sprint Goal) を振り返る。
@@ -11,6 +11,10 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string] }>();
 
 const { completedSprints, sprintLabel } = useSprints();
+// WC-32: 完了スプリントの Retro Try を履歴でも振り返れるようにする。
+// tries は RetroScreen でしか取得されないため、履歴画面でも onMounted で読み込む。
+const { tries, fetchTries } = useRetroTries();
+onMounted(fetchTries);
 
 // 選択スプリント (一時 UI 状態なので Screen ローカル ref で十分)。
 const openSprintId = ref<string | null>(null);
@@ -21,6 +25,12 @@ function toggleSprint(id: string): void {
 // 選択スプリントの配下チケット (read-only 表示)。
 const openTickets = computed<Ticket[]>(() =>
   openSprintId.value ? props.tickets.filter((t) => t.sprintId === openSprintId.value) : [],
+);
+
+// WC-32: 選択スプリントの Try。RetroTry.sprintId は seed 由来で欠落し得るため sprintNumber で突合する。
+const openSprint = computed(() => completedSprints.value.find((s) => s.id === openSprintId.value));
+const openTries = computed<RetroTry[]>(() =>
+  openSprint.value ? tries.value.filter((t) => t.sprintNumber === openSprint.value!.number) : [],
 );
 
 /** 当該スプリントで done になったチケット数。 */
@@ -67,6 +77,16 @@ function period(s: Sprint): string {
 
         <!-- 選択時: 当時のチケット (read-only 列挙)。行クリックで DetailSheet を開く。 -->
         <div v-if="openSprintId === s.id" class="sh-tickets" @click.stop>
+          <!-- WC-32: この Sprint の Retro Try (振り返り)。sprintNumber で突合。 -->
+          <div v-if="openTries.length > 0" class="sh-tries" data-testid="sh-tries">
+            <div class="sh-tries-label">この Sprint の Try ({{ openTries.length }})</div>
+            <ul class="sh-tries-list">
+              <li v-for="t in openTries" :key="t.id" :class="['sh-try', t.done && 'done']" :data-testid="`sh-try-${t.id}`">
+                <span class="sh-try-check">{{ t.done ? '✓' : '›' }}</span>
+                <span class="sh-try-text">{{ t.text }}</span>
+              </li>
+            </ul>
+          </div>
           <TicketRow v-for="t in openTickets" :key="t.id" :t="t"
                      :selected="selectedId === t.id"
                      @click="emit('select', t.id)">
@@ -157,4 +177,11 @@ function period(s: Sprint): string {
   color: var(--ink-3);
   padding: 8px 0;
 }
+/* WC-32: Retro Try (振り返り) */
+.sh-tries { margin-bottom: 10px; }
+.sh-tries-label { font-family: var(--sans); font-size: 11px; color: var(--ink-3); margin-bottom: 4px; }
+.sh-tries-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.sh-try { display: flex; gap: 8px; font-family: var(--sans); font-size: 12.5px; color: var(--ink-1); }
+.sh-try.done { color: var(--ink-3); text-decoration: line-through; }
+.sh-try-check { color: var(--accent); flex-shrink: 0; }
 </style>
