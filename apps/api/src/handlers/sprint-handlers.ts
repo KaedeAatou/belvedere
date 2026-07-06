@@ -14,7 +14,7 @@
 
 import { z } from 'zod';
 import type { Sprint } from '@belvedere/shared';
-import { generateId } from '@belvedere/shared';
+import { generateId, computeCarryOverUpdates } from '@belvedere/shared';
 import type { RepoContainer } from '@belvedere/repo';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
 import { can, forbidden } from '../permissions';
@@ -81,11 +81,14 @@ export const SprintPatchBodySchema = z
   );
 
 // 開始時に最終ゴール/期間を同時確定できる (フロントは編集値を載せて「開始」1 クリックにする)。
+// carryOverIds (WC-30): 旧 active の未完了チケットのうち新 active へ持ち越すもの。
+// 開始ダイアログで既定全チェック → 選択解除したものは含めない (据え置き = 履歴に残す)。
 export const SprintStartBodySchema = z.object({
   name: z.string().max(80).optional(),
   goal: z.string().min(1).optional(),
   startsAt: z.string().min(1).optional(),
   endsAt: z.string().min(1).optional(),
+  carryOverIds: z.array(z.string()).optional(),
 });
 
 /** 完了させるスプリントの velocity を done チケットの SP 合計で確定する。 */
@@ -232,6 +235,21 @@ export async function startSprint(
     return { ok: false, status: 400, body: { error: 'starts_after_ends' } };
   }
   await repo.sprints.upsert(started);
+
+  // WC-30: 旧 active の未完了 (非done) チケットのうち開始者が「持ち越す」と選んだものを新 active (started)
+  // へ付け替える。付け替えないと current が completed 化した瞬間 partitionTicketsBySections が BACKLOG
+  // から除外し (sections.ts:68)、CURRENT/NEXT/BACKLOG のどの区画にも出ず全作業画面から消える。
+  if (current && parsed.data.carryOverIds && parsed.data.carryOverIds.length > 0) {
+    const carrySet = new Set(parsed.data.carryOverIds);
+    const oldTickets = await repo.tickets.list({ workspaceId: ctx.workspaceId, sprintId: current.id });
+    const carryTickets = oldTickets.filter((t) => carrySet.has(t.id) && t.status !== 'done');
+    if (carryTickets.length > 0) {
+      const targetExisting = await repo.tickets.list({ workspaceId: ctx.workspaceId, sprintId: started.id });
+      const now = new Date().toISOString();
+      const updates = computeCarryOverUpdates(carryTickets, started.id, targetExisting, now);
+      for (const u of updates) await repo.tickets.upsert(u);
+    }
+  }
 
   // 繰上げで planned が空く → 新しい next を自動生成し常時稼働を維持する。
   // number は当該 ws の max+1 (started=target は番号を消費しない)、期間は started の後ろ。

@@ -89,6 +89,21 @@ const dialogTitle = computed(() =>
   dialogTarget.value === 'current' ? `現スプリント (${currentLabel.value}) を編集` : `次スプリント (${nextLabel.value}) を計画`,
 );
 
+// WC-30: スプリント開始時に持ち越す未完了チケット。現 active の非done を候補にし、開始ダイアログで既定全チェック。
+// 外したものは付け替えられず旧 (completed) sprint に残る (= 履歴閲覧のみ / 作業画面から消える) ので UI で明示する。
+const carryOverCandidates = computed(() => {
+  const aid = activeSprint.value?.id;
+  if (!aid) return [];
+  return props.tickets.filter((t) => t.sprintId === aid && t.status !== 'done');
+});
+const carrySelected = ref<Set<string>>(new Set());
+function toggleCarry(id: string): void {
+  const nextSet = new Set(carrySelected.value);
+  if (nextSet.has(id)) nextSet.delete(id);
+  else nextSet.add(id);
+  carrySelected.value = nextSet;
+}
+
 function openSprintDialog(target: 'current' | 'next') {
   const s = target === 'current' ? activeSprint.value : nextPlanned.value;
   if (!s) return;
@@ -98,6 +113,8 @@ function openSprintDialog(target: 'current' | 'next') {
   draftStart.value = toDate(s.startsAt);
   draftEnd.value = toDate(s.endsAt);
   sprintError.value = null;
+  // 開始ダイアログを開くとき、現 active の未完了チケットを既定全チェックで持ち越し対象にする。
+  carrySelected.value = new Set(carryOverCandidates.value.map((t) => t.id));
   showSprintDialog.value = true;
 }
 
@@ -143,7 +160,7 @@ async function startNextSprint() {
   const s = nextPlanned.value; if (!s) return;
   sprintBusy.value = true; sprintError.value = null;
   try {
-    await startSprint(s.id, buildBody());
+    await startSprint(s.id, { ...buildBody(), carryOverIds: [...carrySelected.value] });
     showSprintDialog.value = false;
   } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
 }
@@ -402,6 +419,19 @@ onMounted(() => {
             <input id="sp-end" v-model="draftEnd" data-testid="sprint-end-input" type="date" class="text-input" />
           </div>
         </div>
+        <div v-if="dialogTarget === 'next' && carryOverCandidates.length > 0" class="field" data-testid="carryover-field">
+          <label class="label">未完了チケットの持ち越し
+            <span style="color: var(--ink-3)">({{ carrySelected.size }}/{{ carryOverCandidates.length }})</span>
+          </label>
+          <p class="carryover-hint">現在のスプリントで完了しなかったチケットを次スプリントへ引き継ぎます。外すと履歴に残り、作業画面から外れます。</p>
+          <div class="carryover-list">
+            <label v-for="t in carryOverCandidates" :key="t.id" class="carryover-row" :data-testid="`carryover-row-${t.id}`">
+              <input type="checkbox" :checked="carrySelected.has(t.id)" style="accent-color: var(--accent)" @change="toggleCarry(t.id)" />
+              <span class="carryover-id">{{ t.id }}</span>
+              <span class="carryover-title">{{ t.title }}</span>
+            </label>
+          </div>
+        </div>
         <p v-if="sprintError" class="msg-error" data-testid="sprint-error">{{ sprintError }}</p>
       </div>
       <div class="dialog-foot">
@@ -449,6 +479,13 @@ onMounted(() => {
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
+/* WC-30: 持ち越し確認チェックリスト */
+.carryover-hint { color: var(--ink-3); font-size: 12px; margin: 2px 0 8px; line-height: 1.5; }
+.carryover-list { display: flex; flex-direction: column; gap: 2px; max-height: 180px; overflow-y: auto; }
+.carryover-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.carryover-row:hover { background: var(--accent-bg, #fff3ee); }
+.carryover-id { font-family: var(--mono); font-size: 11px; color: var(--ink-2); flex-shrink: 0; min-width: 74px; }
+.carryover-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-1); }
 .label { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
 .req { color: var(--accent); }
 .text-input {

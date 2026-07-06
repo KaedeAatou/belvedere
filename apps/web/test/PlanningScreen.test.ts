@@ -5,18 +5,23 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref, type Ref } from 'vue';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import PlanningScreen from '~/components/screens/PlanningScreen.vue';
+import type { Ticket } from '@belvedere/shared';
 
 type Verdict = { goal: string; criteria: { letter: string; name: string; ok: boolean; note: string }[]; summary?: string };
 // mockNuxtImport の factory は遅延実行 (mount 時) なので、モジュールレベルの ref/spy を安全に参照できる。
 // vi.hoisted 内で ref() を呼ぶと import 前 (TDZ) で落ちるため、ここでは vi.hoisted を使わない。
 const verdictRef: Ref<Verdict | null> = ref(null);
 const evaluateSpy = vi.fn(() => Promise.resolve());
+// WC-30: 持ち越しテスト用に可変化する (既存 SMART テストは既定値のままで不変)。
+const startSprintSpy = vi.fn<(id: string, body: Record<string, unknown>) => Promise<void>>(() => Promise.resolve());
+const nextPlannedRef = ref<Record<string, unknown> | null>(null);
+const activeSprintRef = ref<Record<string, unknown> | null>({ id: 's-active', goal: '決済MVPを完成させる' });
 
 mockNuxtImport('useSprints', () => () => ({
   sprints: ref([]), velocityHistory: ref([]),
-  activeSprint: ref({ id: 's-active', goal: '決済MVPを完成させる' }),
-  nextPlanned: ref(null), currentLabel: ref('Sprint 1'), nextLabel: ref('Next'),
-  patchSprint: vi.fn(), startSprint: vi.fn(),
+  activeSprint: activeSprintRef,
+  nextPlanned: nextPlannedRef, currentLabel: ref('Sprint 1'), nextLabel: ref('Next'),
+  patchSprint: vi.fn(), startSprint: startSprintSpy,
 }));
 mockNuxtImport('useTickets', () => () => ({ tickets: ref([]), patchTicket: vi.fn() }));
 mockNuxtImport('useMembers', () => () => ({ members: ref([]) }));
@@ -98,5 +103,50 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
     expect(notes.exists()).toBe(true);
     expect(notes.text()).toContain('完了率%を追加しましょう');
     expect(notes.text()).toContain('弱い観点: M');
+  });
+});
+
+const tk = (over: Partial<Ticket> & { id: string }): Ticket => ({
+  workspaceId: 'ws', title: over.id, status: 'todo', priority: 'medium',
+  createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: 'human', ...over,
+});
+
+describe('PlanningScreen 持ち越し確認 (WC-30)', () => {
+  beforeEach(() => {
+    verdictRef.value = null;
+    startSprintSpy.mockClear();
+    activeSprintRef.value = { id: 's-active', goal: '決済MVPを完成させる' };
+    nextPlannedRef.value = {
+      id: 's-next', goal: 'G', status: 'planned', number: 2,
+      startsAt: '2026-08-01T00:00:00+09:00', endsAt: '2026-08-14T23:59:59+09:00',
+    };
+  });
+
+  it('開始ダイアログに現 active の未完了チケットだけが持ち越し候補に出る (done/別sprint は除外)', async () => {
+    const tickets = [
+      tk({ id: 'WC-1', sprintId: 's-active', status: 'todo' }),
+      tk({ id: 'WC-2', sprintId: 's-active', status: 'done' }),
+      tk({ id: 'WC-3', sprintId: 's-other', status: 'todo' }),
+    ];
+    const wrapper = await mountSuspended(PlanningScreen, { props: { tickets, selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=sprint-start-cta]').trigger('click');
+    expect(wrapper.find('[data-testid=carryover-row-WC-1]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=carryover-row-WC-2]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid=carryover-row-WC-3]').exists()).toBe(false);
+  });
+
+  it('既定全チェックの carryOverIds が startSprint に渡り、外したものは除外される', async () => {
+    const tickets = [
+      tk({ id: 'WC-1', sprintId: 's-active', status: 'todo' }),
+      tk({ id: 'WC-4', sprintId: 's-active', status: 'in-progress' }),
+    ];
+    const wrapper = await mountSuspended(PlanningScreen, { props: { tickets, selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=sprint-start-cta]').trigger('click');
+    // WC-4 の持ち越しを外す (既定は全チェック)。
+    await wrapper.find('[data-testid=carryover-row-WC-4] input').trigger('change');
+    await wrapper.find('[data-testid=sprint-start]').trigger('click');
+    expect(startSprintSpy).toHaveBeenCalledTimes(1);
+    const body = startSprintSpy.mock.calls[0]![1] as { carryOverIds?: string[] };
+    expect(body.carryOverIds).toEqual(['WC-1']);
   });
 });

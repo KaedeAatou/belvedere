@@ -8,7 +8,7 @@
 // reorderTickets は get/IDOR/upsert を担い、算術は本関数へ委譲する (挙動不変)。
 
 import type { Ticket } from './types';
-import { ORDER_STEP } from './utils';
+import { ORDER_STEP, compareTicketOrder } from './utils';
 
 export interface ReorderOptions {
   /** 区画跨ぎ移動したチケットの id。指定時、その 1 件だけ sprintId を変更する。 */
@@ -65,4 +65,33 @@ export function computeReorderUpdates(survivors: Ticket[], opts: ReorderOptions)
     updates.push(next);
   }
   return updates;
+}
+
+/**
+ * WC-30: スプリント開始時に旧 active から「持ち越す」非done チケットを新 active (targetSprintId) へ
+ * 付け替える更新を返す。付け替えないと旧 sprint が completed 化した瞬間 partitionTicketsBySections が
+ * BACKLOG から除外し (sections.ts)、CURRENT/NEXT/BACKLOG のどの区画にも出ず全作業画面から消える。
+ *
+ * orderIndex は targetExisting (新 active に既に居るチケット) の最大 (無ければ 0) の後ろへ、
+ * carryTickets を compareTicketOrder 順で `base + (i+1)*ORDER_STEP` で密採番して末尾に積む
+ * (前スプリントの計画済みチケットの後ろ。並びは後から d&d で調整可能)。
+ *
+ * 「持ち越さない」を選んだチケットは呼出側が carryTickets に含めなければよい (据え置き = 履歴に残る)。
+ * 純粋関数 (I/O なし)。対象抽出 (旧 active の非done かつ選択済) と upsert は呼出側 (startSprint handler) の責務。
+ */
+export function computeCarryOverUpdates(
+  carryTickets: Ticket[],
+  targetSprintId: string,
+  targetExisting: Ticket[],
+  now: string,
+): Ticket[] {
+  const base = targetExisting.reduce((m, t) => Math.max(m, t.orderIndex ?? 0), 0);
+  return [...carryTickets]
+    .sort(compareTicketOrder)
+    .map((t, i) => ({
+      ...t,
+      sprintId: targetSprintId,
+      orderIndex: base + (i + 1) * ORDER_STEP,
+      updatedAt: now,
+    }));
 }

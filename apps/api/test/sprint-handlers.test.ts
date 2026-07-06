@@ -266,6 +266,28 @@ describe('startSprint', () => {
     if (res.ok) return;
     expect(res.status).toBe(404);
   });
+
+  // WC-30: 旧 active の未完了チケットを持ち越さないと completed 化で全作業画面から消える。
+  it('WC-30: carryOverIds で指定した非done チケットを新 active へ付け替える', async () => {
+    const res = await startSprint(repo, ADMIN, 'sprint-14', { goal: 'g', carryOverIds: ['WC-3'] });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    // WC-3 (in-progress) は新 active (sprint-14) へ移り、CURRENT 区画で辿れる。
+    expect((await repo.tickets.get('WC-3'))?.sprintId).toBe('sprint-14');
+  });
+
+  it('WC-30: carryOverIds に含めない非done は旧 (completed) sprint に据え置き (履歴として残す)', async () => {
+    const res = await startSprint(repo, ADMIN, 'sprint-14', { goal: 'g' }); // 持ち越し指定なし
+    expect(res.ok).toBe(true);
+    expect((await repo.tickets.get('WC-3'))?.sprintId).toBe('sprint-13');
+  });
+
+  it('WC-30: done チケットは carryOverIds に入れても付け替えない (velocity 実績を保つ)', async () => {
+    const res = await startSprint(repo, ADMIN, 'sprint-14', { goal: 'g', carryOverIds: ['WC-1', 'WC-3'] });
+    expect(res.ok).toBe(true);
+    expect((await repo.tickets.get('WC-1'))?.sprintId).toBe('sprint-13'); // done は据え置き
+    expect((await repo.tickets.get('WC-3'))?.sprintId).toBe('sprint-14'); // 非done は持ち越し
+  });
 });
 
 describe('ensureSprintCadence (常時稼働ブートストラップ)', () => {

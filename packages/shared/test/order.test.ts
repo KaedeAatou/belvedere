@@ -6,7 +6,7 @@
 // (i+1)*1000 の密再採番・set/clear・変化行のみ返す挙動を退化入力ごと固定する。
 
 import { describe, it, expect } from 'vitest';
-import { computeReorderUpdates } from '../src/order';
+import { computeReorderUpdates, computeCarryOverUpdates } from '../src/order';
 import type { Ticket } from '../src/types';
 
 const NOW = '2026-06-18T00:00:00Z';
@@ -162,5 +162,36 @@ describe('computeReorderUpdates — current↔backlog の status 整合 (WC-676a
     const m = updates.find((u) => u.id === 'M')!;
     expect(m.status).toBe('backlog');
     expect(m.sprintId).toBeUndefined();
+  });
+});
+
+describe('computeCarryOverUpdates — スプリント持ち越し (WC-30)', () => {
+  it('空 target: carry を base 0 の後ろに密採番し sprintId を新 active へ付け替える', () => {
+    // orderIndex 無し同士は compareTicketOrder が priority 降順 → high(A) が先。
+    const carry = [t({ id: 'A', sprintId: 'old', priority: 'high' }), t({ id: 'B', sprintId: 'old', priority: 'low' })];
+    const updates = computeCarryOverUpdates(carry, 'new', [], NOW);
+    expect(updates.map((u) => [u.id, u.sprintId, u.orderIndex])).toEqual([
+      ['A', 'new', 1000],
+      ['B', 'new', 2000],
+    ]);
+    expect(updates.every((u) => u.updatedAt === NOW)).toBe(true);
+  });
+
+  it('target に既存チケットあり: その max orderIndex の後ろへ積む', () => {
+    const carry = [t({ id: 'A', sprintId: 'old' })];
+    const existing = [t({ id: 'X', sprintId: 'new', orderIndex: 5000 })];
+    const updates = computeCarryOverUpdates(carry, 'new', existing, NOW);
+    expect(updates.map((u) => [u.id, u.orderIndex])).toEqual([['A', 6000]]);
+  });
+
+  it('退化: 空 carry → 空配列', () => {
+    expect(computeCarryOverUpdates([], 'new', [], NOW)).toEqual([]);
+  });
+
+  it('退化: target 既存の orderIndex 未設定 (undefined) は base 0 扱い', () => {
+    const carry = [t({ id: 'A', sprintId: 'old' })];
+    const existing = [t({ id: 'X', sprintId: 'new' })]; // orderIndex undefined
+    const updates = computeCarryOverUpdates(carry, 'new', existing, NOW);
+    expect(updates[0]!.orderIndex).toBe(1000);
   });
 });
