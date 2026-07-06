@@ -112,3 +112,66 @@ describe('partitionTicketsBySections — compareTicketOrder ソート (退化 or
     expect(ids(backlog)).toEqual(['high', 'low']);
   });
 });
+
+describe('partitionTicketsBySections — completedSprintIds で完了済スプリントを BACKLOG から除外', () => {
+  it('completedSprintIds に含む sprint のチケットは全区画から消える (履歴ビューで見る)', () => {
+    const tickets = [
+      t({ id: 'A', sprintId: 's-active' }),
+      t({ id: 'B', sprintId: 's-next' }),
+      t({ id: 'DONE', sprintId: 's-done', status: 'done' }), // 完了済 sprint の done
+      t({ id: 'D' }), // 未割当 → 残る
+    ];
+    const { current, next, backlog } = partitionTicketsBySections(tickets, {
+      activeId: 's-active',
+      nextPlannedId: 's-next',
+      completedSprintIds: ['s-done'],
+    });
+    expect(ids(current)).toEqual(['A']);
+    expect(ids(next)).toEqual(['B']);
+    expect(ids(backlog)).toEqual(['D']); // 完了済は消え、未割当だけ残る
+    // DONE はどの区画にも現れない
+    expect([...current, ...next, ...backlog].map((x) => x.id)).not.toContain('DONE');
+  });
+
+  it('completedSprintIds 未指定なら完了済 sprint も従来どおり BACKLOG に残る (後方互換)', () => {
+    const tickets = [t({ id: 'C', sprintId: 's-done', status: 'done' }), t({ id: 'D' })];
+    const { backlog } = partitionTicketsBySections(tickets, { activeId: 's-active' });
+    expect(ids(backlog).sort()).toEqual(['C', 'D']);
+  });
+
+  it('completedSprintIds 空配列は除外なし (後方互換)', () => {
+    const tickets = [t({ id: 'C', sprintId: 's-done' })];
+    const { backlog } = partitionTicketsBySections(tickets, { completedSprintIds: [] });
+    expect(ids(backlog)).toEqual(['C']);
+  });
+
+  it('未割当 (sprintId 無し) は completedSprintIds に関わらず BACKLOG に残る', () => {
+    const tickets = [t({ id: 'D' })];
+    const { backlog } = partitionTicketsBySections(tickets, { completedSprintIds: ['s-done'] });
+    expect(ids(backlog)).toEqual(['D']);
+  });
+
+  it('active/next 所属は completedSprintIds に同 id が混入しても CURRENT/NEXT に残る (precedence)', () => {
+    const tickets = [t({ id: 'A', sprintId: 's-active' }), t({ id: 'B', sprintId: 's-next' })];
+    const { current, next, backlog } = partitionTicketsBySections(tickets, {
+      activeId: 's-active',
+      nextPlannedId: 's-next',
+      completedSprintIds: ['s-active', 's-next'], // 異常入力だが precedence を固定
+    });
+    expect(ids(current)).toEqual(['A']);
+    expect(ids(next)).toEqual(['B']);
+    expect(backlog).toEqual([]);
+  });
+
+  it('複数 completed id + 該当ゼロ id が混在しても該当のみ除外', () => {
+    const tickets = [
+      t({ id: 'X', sprintId: 's-done1' }),
+      t({ id: 'Y', sprintId: 's-done2' }),
+      t({ id: 'Z', sprintId: 's-other' }),
+    ];
+    const { backlog } = partitionTicketsBySections(tickets, {
+      completedSprintIds: ['s-done1', 's-done2', 's-nonexistent'],
+    });
+    expect(ids(backlog)).toEqual(['Z']); // 完了済 2 件だけ除外、s-other は残る
+  });
+});

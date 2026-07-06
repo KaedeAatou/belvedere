@@ -23,6 +23,11 @@ export interface PartitionOptions {
   activeId?: string | undefined;
   /** 次 planned sprint の id。無いなら NEXT は空。 */
   nextPlannedId?: string | undefined;
+  /**
+   * 完了済 (status==='completed') sprint の id 群。ここに属すチケットは BACKLOG から除外する。
+   * 未指定なら従来どおり BACKLOG に残す (後方互換 = opt-in)。
+   */
+  completedSprintIds?: readonly string[] | undefined;
 }
 
 /**
@@ -31,7 +36,8 @@ export interface PartitionOptions {
  *
  *   CURRENT  = sprintId === activeId
  *   NEXT     = sprintId === nextPlannedId
- *   BACKLOG  = sprintId 無し / active・next のどちらにも一致しない (完了済 sprint 含む)
+ *   BACKLOG  = sprintId 無し / active・next のどちらにも一致しない sprint
+ *              (completedSprintIds に含む完了済 sprint は除外 = スプリント履歴ビューで見る)
  *
  * @param tickets 対象チケット (フィルタ済みでも未フィルタでも可)
  */
@@ -39,7 +45,7 @@ export function partitionTicketsBySections(
   tickets: Ticket[],
   opts: PartitionOptions = {},
 ): TicketSections {
-  const { activeId, nextPlannedId } = opts;
+  const { activeId, nextPlannedId, completedSprintIds } = opts;
 
   // CURRENT: activeId が無ければ空 (composable の `if (!id) return []` を踏襲)。
   const current = !activeId
@@ -51,13 +57,15 @@ export function partitionTicketsBySections(
     : [...tickets.filter((t) => t.sprintId === nextPlannedId)].sort(compareTicketOrder);
 
   // BACKLOG: sprintId 無し (undefined) は当然 BACKLOG。active / next のどちらにも一致しない
-  // ものも BACKLOG (完了済 sprint に属す古いチケットを含む。CURRENT/NEXT のみが特別区画)。
+  // ものも BACKLOG。ただし completedSprintIds に含む完了済 sprint は除外する
+  // (完了したチケットが backlog に居座らないよう、スプリント履歴ビューで振り返る)。
   const backlog = [
     ...tickets.filter((t) => {
       const sid = t.sprintId;
       if (sid === undefined) return true;
       if (activeId !== undefined && sid === activeId) return false;
       if (nextPlannedId !== undefined && sid === nextPlannedId) return false;
+      if (completedSprintIds !== undefined && completedSprintIds.includes(sid)) return false;
       return true;
     }),
   ].sort(compareTicketOrder);

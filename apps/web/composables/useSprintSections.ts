@@ -33,12 +33,14 @@ export interface SprintSections {
  * @param tickets 全チケット配列 (ComputedRef)。フィルタ済みでも未フィルタでも可。
  */
 export function useSprintSections(tickets: ComputedRef<Ticket[]>): SprintSections {
-  const { activeSprint, nextPlanned } = useSprints();
+  const { activeSprint, nextPlanned, completedSprints } = useSprints();
 
   const sections = computed(() =>
     partitionTicketsBySections(tickets.value, {
       activeId: activeSprint.value?.id,
       nextPlannedId: nextPlanned.value?.id,
+      // 完了済スプリントのチケットは BACKLOG から除外し、スプリント履歴ビューで振り返る。
+      completedSprintIds: completedSprints.value.map((s) => s.id),
     }),
   );
 
