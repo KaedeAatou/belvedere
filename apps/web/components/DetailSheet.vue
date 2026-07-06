@@ -55,7 +55,9 @@ async function onPickImage(e: Event): Promise<void> {
     input.value = '';
   }
 }
-const { sprints } = useSprints();
+const { sprints, sprintLabel } = useSprints();
+// WC-38/35: 名前表示 (sprintLabel) + active/planned のみに絞る (現値が completed の場合だけ残す)。
+const sprintOptions = computed(() => sprintOptionsForEdit(sprints.value, props.ticket.sprintId));
 
 const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
@@ -237,8 +239,8 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
                未割当チケットは空値のまま → 保存時に sprintId を送らず現状維持。 -->
           <select v-model="editSprintId" class="edit-input" data-testid="sheet-edit-sprint">
             <option v-if="!ticket.sprintId" value="">（未割当）</option>
-            <option v-for="s in sprints" :key="s.id" :value="s.id">
-              S{{ s.number }} {{ s.goal.slice(0, 20) }}{{ s.goal.length > 20 ? '…' : '' }}
+            <option v-for="s in sprintOptions" :key="s.id" :value="s.id">
+              {{ sprintLabel(s, s.status === 'completed' ? '完了' : '', `Sprint ${s.number}`) }}
             </option>
           </select>
         </div>

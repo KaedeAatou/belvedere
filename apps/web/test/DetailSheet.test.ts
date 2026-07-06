@@ -7,8 +7,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
-import type { Ticket } from '@belvedere/shared';
+import { ref } from 'vue';
+import type { Ticket, Sprint } from '@belvedere/shared';
 import DetailSheet from '~/components/DetailSheet.vue';
+import { sprintOptionsForEdit } from '~/composables/useSprints';
 
 const mocks = vi.hoisted(() => {
   const patchTicket = vi.fn((_id: string, _patch: Record<string, unknown>) =>
@@ -25,14 +27,18 @@ const mocks = vi.hoisted(() => {
     useMembers: () => ({ memberName: () => 'Kaede', memberInitial: () => 'K', members: [] }),
     useFindings: () => ({ findingsFor: () => [] }),
     useTickets: () => ({ patchTicket, deleteTicket, addComment }),
-    useSprints: () => ({ sprints: [] }),
   };
 });
 
 mockNuxtImport('useMembers', () => mocks.useMembers);
 mockNuxtImport('useFindings', () => mocks.useFindings);
 mockNuxtImport('useTickets', () => mocks.useTickets);
-mockNuxtImport('useSprints', () => mocks.useSprints);
+// useSprints は ref を返すため factory (遅延実行) 内で ref を使う (vi.hoisted 内は TDZ で不可)。
+mockNuxtImport('useSprints', () => () => ({
+  sprints: ref([]),
+  sprintLabel: (s: { name?: string } | null, suffix = '', fb = '') =>
+    (s?.name?.trim() ? (suffix ? `${s.name.trim()} (${suffix})` : s.name.trim()) : fb),
+}));
 
 const ticket = (over: Partial<Ticket> & { id: string }): Ticket => ({
   workspaceId: 'ws-belvedere',
@@ -160,5 +166,30 @@ describe('コメント / 追記スレッド (WC-2640fecd)', () => {
     await wrapper.find('[data-testid="comment-submit"]').trigger('click');
     await flushPromises();
     expect(mocks.addComment).not.toHaveBeenCalled();
+  });
+});
+
+describe('sprintOptionsForEdit — 編集セレクトの候補 (WC-35)', () => {
+  const sp = (id: string, status: Sprint['status']): Sprint => ({
+    id, workspaceId: 'ws', number: 1, startsAt: '', endsAt: '', goal: '', capacity: 0, status,
+  });
+
+  it('active + planned のみを残し completed は除外する', () => {
+    const sprints = [sp('a', 'active'), sp('p', 'planned'), sp('c', 'completed')];
+    expect(sprintOptionsForEdit(sprints, undefined).map((s) => s.id)).toEqual(['a', 'p']);
+  });
+
+  it('現値 (currentSprintId) が completed のときはそれだけ残す (現値の空表示を防ぐ)', () => {
+    const sprints = [sp('a', 'active'), sp('c', 'completed'), sp('c2', 'completed')];
+    expect(sprintOptionsForEdit(sprints, 'c').map((s) => s.id)).toEqual(['a', 'c']);
+  });
+
+  it('現値 undefined なら completed は全除外', () => {
+    const sprints = [sp('a', 'active'), sp('c', 'completed')];
+    expect(sprintOptionsForEdit(sprints, undefined).map((s) => s.id)).toEqual(['a']);
+  });
+
+  it('退化: 空配列 → 空', () => {
+    expect(sprintOptionsForEdit([], 'x')).toEqual([]);
   });
 });
