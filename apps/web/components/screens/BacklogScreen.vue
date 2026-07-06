@@ -94,10 +94,10 @@ onMounted(() => {
 <template>
   <div class="screen-head">
     <div class="stat-row">
-      <div class="stat"><div class="label">Total</div><div class="v t-num">{{ tickets.length }}</div><div class="delta">issues</div></div>
-      <div class="stat"><div class="label">No SP</div><div class="v t-num accent">{{ noSP }}</div><div class="delta">unestimated</div></div>
-      <div class="stat"><div class="label">No AC</div><div class="v t-num accent">{{ noAcc }}</div><div class="delta">unverifiable</div></div>
-      <div class="stat"><div class="label">Σ Points</div><div class="v t-num">{{ totalSP }}</div><div class="delta">SP</div></div>
+      <div class="stat" title="全チケット数 (issue = 課題 / チケット)"><div class="label">Total</div><div class="v t-num">{{ tickets.length }}</div><div class="delta">issues</div></div>
+      <div class="stat" title="Story Point (相対見積もり) が未設定のチケット数"><div class="label">No SP</div><div class="v t-num accent">{{ noSP }}</div><div class="delta">unestimated</div></div>
+      <div class="stat" title="AC (Acceptance Criteria = 受け入れ基準 / DoD) が未設定のチケット数"><div class="label">No AC</div><div class="v t-num accent">{{ noAcc }}</div><div class="delta">unverifiable</div></div>
+      <div class="stat" title="Story Point (SP = 相対見積もり) の合計"><div class="label">Σ Points</div><div class="v t-num">{{ totalSP }}</div><div class="delta">SP</div></div>
     </div>
   </div>
 
