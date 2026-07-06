@@ -10,6 +10,11 @@ build/
 .cache/
 *.tsbuildinfo
 
+# Firebase (deploy のローカルキャッシュ / デバッグログ)
+.firebase/
+firebase-debug.log
+firestore-debug.log
+
 # env / secrets
 .env
 .env.local
