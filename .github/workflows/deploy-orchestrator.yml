@@ -35,6 +35,7 @@ env:
   GCP_PROJECT_PROD: belvedere-prod-atrium
   GCP_REGION: asia-northeast1
   SERVICE: belvedere-orchestrator
+  REPO: belvedere   # 既存 Artifact Registry リポジトリ (api/web と共用 / SA は writer 保有)
   # WIF / runtime SA は env 別 (dev=projectNumber 876087923874 / prod=909552127234)。Resolve step が env=prod 時に PROD を選ぶ。
   WIF_PROVIDER_DEV: projects/876087923874/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
   WIF_PROVIDER_PROD: projects/909552127234/locations/global/workloadIdentityPools/belvedere-ci-pool/providers/belvedere-ci-github
@@ -78,7 +79,18 @@ jobs:
         with:
           project_id: ${{ steps.target.outputs.project }}
 
-      - name: Deploy to Cloud Run (--source ビルド / USE_REAL_ADK=true で A2A 公開)
+      - name: Build orchestrator image to existing Artifact Registry repo (belvedere)
+        # --source は cloud-run-source-deploy リポジトリを自動作成しようとし、deployer SA に
+        # artifactregistry.repositories.create が無いと PERMISSION_DENIED で落ちる。api/web が既に使う
+        # 既存 belvedere リポジトリ (SA は writer 保有) へ Cloud Build で build+push すれば追加 IAM 不要。
+        run: |
+          PROJECT="${{ steps.target.outputs.project }}"
+          SHORT_SHA="${{ github.sha }}"; SHORT_SHA="${SHORT_SHA:0:7}"
+          IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/$PROJECT/${{ env.REPO }}/orchestrator:$SHORT_SHA"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          gcloud builds submit apps/orchestrator-py --tag "$IMAGE" --project "$PROJECT"
+
+      - name: Deploy to Cloud Run (USE_REAL_ADK=true で A2A 公開)
         run: |
           ENV="${{ github.event.inputs.env || 'dev' }}"
           PROJECT="${{ steps.target.outputs.project }}"
@@ -89,7 +101,7 @@ jobs:
           # Refinement 等が gemini-2.5-pro を叩き、無料枠キー (pro=limit0) では 429 → A2A エラー →
           # TS runAgent へ静かに fallback してしまい「ADK が本番で動いた」実証にならない。既定 flash で安全側に倒す。
           gcloud run deploy ${{ env.SERVICE }}-$ENV \
-            --source apps/orchestrator-py \
+            --image "$IMAGE" \
             --region ${{ env.GCP_REGION }} \
             --project $PROJECT \
             --service-account ${{ steps.target.outputs.runtime_sa }} \
