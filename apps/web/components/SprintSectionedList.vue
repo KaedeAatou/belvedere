@@ -488,9 +488,8 @@ const splitNeedsEpic = computed(
   () => props.splitMode !== 'task-spike' && splitParent.value?.epicId === undefined,
 );
 
-// task-spike モードの子種別候補。child-story モードは常に story。
-const splitChildTypes: TicketType[] = ['task', 'spike'];
-const splitChildLabel = computed(() => (props.splitMode === 'task-spike' ? 'Task / Spike に分割' : '子 Story に分割'));
+// WC-28: Story 分割の子は Task 固定 (spike への分割は廃止)。child-story モードは常に story。
+const splitChildLabel = computed(() => (props.splitMode === 'task-spike' ? 'Task に分割' : '子 Story に分割'));
 
 function defaultChildType(): TicketType {
   return props.splitMode === 'task-spike' ? 'task' : 'story';
@@ -931,10 +930,6 @@ async function submitSplit(): Promise<void> {
           <div v-for="(row, i) in splitRows" :key="i" class="split-row">
             <input v-model="row.title" :data-testid="`split-row-${i}`" type="text" class="text-input"
                    maxlength="160" :placeholder="splitMode === 'task-spike' ? '例: API エンドポイントを実装' : '例: 最小のゴール提案 1 案を返す'" />
-            <select v-if="splitMode === 'task-spike'" v-model="row.type"
-                    :data-testid="`split-type-${i}`" class="select-input split-type">
-              <option v-for="ct in splitChildTypes" :key="ct" :value="ct">{{ ct }}</option>
-            </select>
             <button type="button" class="split-row-del" :disabled="splitRows.length <= 1"
                     title="この行を削除" @click="removeSplitRow(i)">×</button>
           </div>
