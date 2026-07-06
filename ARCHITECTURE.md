@@ -152,7 +152,7 @@ graph TB
 | 🟢 deployed | LOG (Cloud Logging) | Cloud Run revision のログが流れている |
 | 🟢 deployed | WEB (`belvedere-web-dev`) | 2026-06-08 Cloud Run 公開 (https://belvedere-web-dev-cpszmcqmuq-an.a.run.app/ 200 OK)。実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | MCP | stdio / API HTTP クライアント (14 Tools) / サービストークン認証で API の workspace-scope・IDOR ガードを通る / smoke 19 + 統合テスト緑 / Firestore 直結しない |
-| 🟡 implemented | ORC + 5 Agent | TS `runAgent` で 5 Agent 動作 (Mock LLM)。Orchestrator は **スクラムマスター＝全画面操作の単一窓口** で、達人の協議を統括 (`AGENT_DESIGN.md §2-0`)。実行は **TS 実行ランナー**（**画面操作トリガのみ・スケジューラ無し**）+ ピッチ用 ADK 編成デモ。`orchestrator-py` は FastAPI + ADK 雛形 (`USE_REAL_ADK=true` は未実装)。**Gemini provider は実装済** (下記 GEM)、接続検証は Phase A |
+| 🟢 deployed | ORC + 5 Agent | TS `runAgent` で 5 Agent が **本番 Gemini** で動作。Orchestrator は **スクラムマスター＝全画面操作の単一窓口** で協議を統括 (`AGENT_DESIGN.md §2-0`)。実行は **TS 実行ランナー**（**画面操作トリガのみ・スケジューラ無し**）。`orchestrator-py` は **実 ADK (google-adk) 実装済**で `USE_REAL_ADK=true` 時に Refinement を **A2A ピアとして公開** (Strangler Fig / 不達時は TS へ自動 fallback)。**Gemini は Cloud Run dev/prod で本番稼働** |
 | 🟢 deployed | FS | Firestore (default) instance 作成済 / 実 API + Firestore seed 投入済 (2026-06-11) |
 | 🟡 implemented | GCS | Cloud Build が auto-create する `belvedere-dev-atrium_cloudbuild` bucket 存在 / エージェントログ bucket は Phase 2 |
 | ⚪ planned | TOOL | GitHub / Calendar Tool server (Phase 3)。**Slack は不採用**（agent 出力は AI パネル / `AGENT_DESIGN.md §6`）|
@@ -254,7 +254,7 @@ ai-agent-hackathon/
 │   ├── web/              # Nuxt 3 (Vue 3 SSR / Nitro=node-server) — Cloud Run
 │   ├── api/              # Hono on Cloud Run (TS) — Phase 1 で deploy
 │   ├── cli/              # Mock LLM CLI demo (5 + Orchestrator ロール)
-│   ├── orchestrator-py/  # FastAPI + ADK 雛形 (Python 3.11) — ADK 編成デモ担当 (Orchestrator が 5 子 agent を編成 / Phase C)。実運用の起動は TS 実行ランナー (画面操作トリガ・スケジューラ無し / AGENT_DESIGN.md §2-0)
+│   ├── orchestrator-py/  # FastAPI + 実 ADK (google-adk / Python 3.11) — Refinement を A2A ピアとして公開 (USE_REAL_ADK=true)。本番 5 儀式の起動は TS 実行ランナー (画面操作トリガ・スケジューラ無し / AGENT_DESIGN.md §2-0)、Refinement のみ A2A で ADK へ委譲
 │   └── mcp-server/       # MCP server (stdio / Belvedere API の HTTP クライアント / サービストークン認証)
 │       └── 14 Tools: read 8 (sprint 含む) + invoke_agent 1 + CRUD 5
 ├── packages/

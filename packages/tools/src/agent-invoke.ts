@@ -2,8 +2,8 @@
 //
 // 設計判断 (2026-06-19 確定):
 // - Orchestrator はスクラムマスター = 単一窓口。agent.invoke で 5 ceremony agent を子として
-//   起動し協議を統括する。トリガーは画面操作のみ (時刻ルーティングは別工程で prompts.ts から除去予定。
-//   現状 prompts.ts には時刻ルーティングの記述が残存 = agent-prompt-sync + mock-llm-reviewer で別途書換)。
+//   起動し協議を統括する。トリガーは画面操作のみ = 人が画面を操作した時にだけ動く
+//   (時刻・スケジュールでの自動起動はしない。時刻ルーティングは prompts.ts / mock.ts から除去済)。
 // - 深さ 1 固定: 子には agent.invoke を渡さない (handler 側で素の buildTools を使う) = 構造で再帰不能。
 // - validateInvocation は LLM 由来の args (agentName / prompt) を検証し、
 //   空名 / 未知名 / 自己参照 (orchestrator→orchestrator) / 空 prompt を reject する。

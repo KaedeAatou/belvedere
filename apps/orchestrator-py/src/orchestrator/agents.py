@@ -1,5 +1,7 @@
 """5儀式エージェントの定義 (Belvedere)。
-ADK (Google Agent Development Kit) を使ってマルチエージェント構成を組む雛形。
+ADK (Google Agent Development Kit) でマルチエージェント構成を組む。
+USE_REAL_ADK=true で実 ADK エージェント (LlmAgent) を構築し Refinement を A2A ピアとして公開、
+false では ADK/Gemini を import しない軽量スタブに分岐する (silent fallback しない)。
 
 GCP接続後の実装手順:
 1. uv sync で依存解決
