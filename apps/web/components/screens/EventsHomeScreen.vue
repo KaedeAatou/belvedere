@@ -2,7 +2,7 @@
 // events ホーム (WC-cba82df1)。events タブを押した時に「ぱっと見でスプリント状態」が分かる
 // ダッシュボード。現スプリントの ステータス別件数 + バーンダウン + 停滞チケット を 1 画面に集約し、
 // レールでさらに儀式へドリルダウンできる。表示集合は current sprint (Daily/Planning CURRENT と一致)。
-import type { Ticket, Status } from '@belvedere/shared';
+import type { Ticket, Status, Epic } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 
 const props = defineProps<{ tickets: Ticket[]; selectedId: string | null }>();
@@ -31,6 +31,36 @@ async function saveGoal(): Promise<void> {
   goalSaving.value = false;
   if (ok) editingGoal.value = false;
   else goalError.value = '保存に失敗しました';
+}
+
+// Epics (WC-22 派生): プロダクト全体の Epic 一覧 + 戦略意図の編集。Product Goal と同じ Home 本籍思想。
+// 編集ゲートは product.goal と同一 (admin/po = epic.write と一致)。一度に 1 Epic だけ編集する。
+const { epics, updateEpic } = useEpics();
+const canEditEpics = canEditGoal;
+const editingEpicId = ref<string | null>(null);
+const epicDraft = reactive({ name: '', rationale: '', successMetric: '', strategicTheme: '' });
+const epicSaving = ref(false);
+const epicError = ref<string | null>(null);
+function startEditEpic(e: Epic): void {
+  editingEpicId.value = e.id;
+  epicDraft.name = e.name;
+  epicDraft.rationale = e.rationale ?? '';
+  epicDraft.successMetric = e.successMetric ?? '';
+  epicDraft.strategicTheme = e.strategicTheme ?? '';
+  epicError.value = null;
+}
+async function saveEpic(id: string): Promise<void> {
+  if (epicSaving.value || !epicDraft.name.trim()) return;
+  epicSaving.value = true;
+  const ok = await updateEpic(id, {
+    name: epicDraft.name.trim(),
+    rationale: epicDraft.rationale.trim(),
+    successMetric: epicDraft.successMetric.trim(),
+    strategicTheme: epicDraft.strategicTheme.trim(),
+  });
+  epicSaving.value = false;
+  if (ok) editingEpicId.value = null;
+  else epicError.value = '保存に失敗しました';
 }
 
 const sprintTickets = computed(() =>
@@ -128,6 +158,44 @@ const stalled = computed(() =>
       </template>
     </section>
 
+    <!-- Epics (WC-22 派生): プロダクト全体の Epic 一覧 + 戦略意図の編集。Product Goal と同じ Home 本籍。編集は admin/po のみ。 -->
+    <section class="ehome-card epics-card" data-testid="ehome-epics">
+      <div class="ehome-card-head">
+        <h2>Epics</h2>
+        <span class="ehome-sp">{{ epics.length }} epics</span>
+      </div>
+      <p v-if="epics.length === 0" class="pg-empty" data-testid="epics-empty">
+        Epic がまだありません。Story 作成時に親 Epic を追加できます。
+      </p>
+      <ul v-else class="epic-list">
+        <li v-for="e in epics" :key="e.id" class="epic-item" :data-testid="`epic-row-${e.id}`">
+          <template v-if="editingEpicId !== e.id">
+            <div class="epic-head">
+              <span class="epic-id">{{ e.id }}</span>
+              <span class="epic-name">{{ e.name }}</span>
+              <button v-if="canEditEpics" class="pg-edit" :data-testid="`epic-edit-${e.id}`" @click="startEditEpic(e)">編集</button>
+            </div>
+            <p v-if="e.rationale" class="epic-field"><b>意図</b>{{ e.rationale }}</p>
+            <p v-if="e.successMetric" class="epic-field"><b>成功指標</b>{{ e.successMetric }}</p>
+            <p v-if="e.strategicTheme" class="epic-field"><b>テーマ</b>{{ e.strategicTheme }}</p>
+          </template>
+          <template v-else>
+            <div class="epic-form">
+              <input v-model="epicDraft.name" class="pg-input" :data-testid="`epic-name-input-${e.id}`" placeholder="Epic 名 (必須)" />
+              <textarea v-model="epicDraft.rationale" class="pg-input" rows="2" :data-testid="`epic-rationale-input-${e.id}`" placeholder="戦略意図 / なぜこの Epic か" />
+              <input v-model="epicDraft.successMetric" class="pg-input" :data-testid="`epic-metric-input-${e.id}`" placeholder="成功指標 (例: 誤検出率 10% 以下)" />
+              <input v-model="epicDraft.strategicTheme" class="pg-input" :data-testid="`epic-theme-input-${e.id}`" placeholder="戦略テーマ (任意)" />
+              <div class="pg-actions">
+                <button class="h-btn h-btn--primary" :data-testid="`epic-save-${e.id}`" :disabled="epicSaving || !epicDraft.name.trim()" @click="saveEpic(e.id)">{{ epicSaving ? '保存中…' : '保存' }}</button>
+                <button class="h-btn" :data-testid="`epic-cancel-${e.id}`" @click="editingEpicId = null">キャンセル</button>
+                <span v-if="epicError" class="pg-error">{{ epicError }}</span>
+              </div>
+            </div>
+          </template>
+        </li>
+      </ul>
+    </section>
+
     <!-- ステータス別件数 -->
     <div class="ehome-counts">
       <button v-for="c in cols" :key="c.key" class="count-card" :data-testid="`ehome-count-${c.key}`"
@@ -207,6 +275,17 @@ const stalled = computed(() =>
 .pg-input:focus { outline: none; border-color: var(--accent); }
 .pg-actions { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
 .pg-error { color: var(--err); font-size: 12px; }
+/* Epics カード (WC-22 派生: Home で戦略意図を編集) */
+.epics-card { border-left: 3px solid var(--line-2); }
+.epic-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.epic-item { border-top: var(--hairline) solid var(--line-1); padding-top: 12px; }
+.epic-item:first-child { border-top: none; padding-top: 0; }
+.epic-head { display: flex; align-items: baseline; gap: 10px; }
+.epic-id { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.06em; }
+.epic-name { font-size: 14px; color: var(--ink-0); flex: 1; }
+.epic-field { font-family: var(--sans); font-size: 12px; color: var(--ink-2); margin: 4px 0 0; }
+.epic-field b { color: var(--ink-1); font-weight: 600; font-size: 11px; margin-right: 6px; }
+.epic-form { display: flex; flex-direction: column; gap: 6px; }
 .ehome-counts { display: flex; gap: 12px; flex-wrap: wrap; }
 .count-card {
   flex: 1; min-width: 96px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;

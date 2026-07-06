@@ -3,7 +3,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ref } from 'vue';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
-import type { Ticket, Status } from '@belvedere/shared';
+import type { Ticket, Status, Epic } from '@belvedere/shared';
 import EventsHomeScreen from '~/components/screens/EventsHomeScreen.vue';
 
 mockNuxtImport('useSprints', () => () => ({
@@ -19,6 +19,11 @@ const wsCurrent = ref<{ id: string; name: string; role: string; productGoal: str
 );
 const updateGoalSpy = vi.fn((_g: string) => Promise.resolve(true));
 mockNuxtImport('useWorkspaces', () => () => ({ current: wsCurrent, updateProductGoal: updateGoalSpy }));
+
+// Epics (Home Epic インライン編集): epics 一覧 + 更新スパイ。テストで epicsRef を差し替える。
+const epicsRef = ref<Epic[]>([]);
+const updateEpicSpy = vi.fn((_id: string, _patch: Record<string, unknown>) => Promise.resolve(true));
+mockNuxtImport('useEpics', () => () => ({ epics: epicsRef, updateEpic: updateEpicSpy }));
 
 const t = (id: string, status: Status, over: Partial<Ticket> = {}): Ticket => ({
   id, workspaceId: 'ws-belvedere', title: id, status, priority: 'medium', sprintId: 's-active',
@@ -75,5 +80,49 @@ describe('EventsHomeScreen Product Goal (WC-23)', () => {
     wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
     const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
     expect(wrapper.find('[data-testid=pg-empty]').exists()).toBe(true);
+  });
+});
+
+describe('EventsHomeScreen Epics 編集 (Home Epic インライン編集)', () => {
+  const epic = (over: Partial<Epic> & { id: string }): Epic => ({
+    workspaceId: 'ws', name: over.id, status: 'active', createdAt: '2026-06-01T00:00:00Z', ...over,
+  });
+
+  it('admin/po は編集ボタンが出て、編集→保存で updateEpic(trim済/全4項目) を呼ぶ', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'po', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-1', name: '旧名', rationale: '旧意図' })];
+    updateEpicSpy.mockClear();
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    await wrapper.find('[data-testid=epic-edit-EP-1]').trigger('click');
+    await wrapper.find('[data-testid=epic-name-input-EP-1]').setValue('  新Epic名  ');
+    await wrapper.find('[data-testid=epic-rationale-input-EP-1]').setValue(' 新意図 ');
+    await wrapper.find('[data-testid=epic-save-EP-1]').trigger('click');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(updateEpicSpy).toHaveBeenCalledWith('EP-1', {
+      name: '新Epic名', rationale: '新意図', successMetric: '', strategicTheme: '',
+    });
+  });
+
+  it('Epic 名を空にすると保存ボタンが disabled (name 必須)', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-1', name: '名前あり' })];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    await wrapper.find('[data-testid=epic-edit-EP-1]').trigger('click');
+    await wrapper.find('[data-testid=epic-name-input-EP-1]').setValue('   ');
+    expect((wrapper.find('[data-testid=epic-save-EP-1]').element as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('dev は Epic 編集ボタンが出ない (epic.write は po/admin のみ)', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'dev', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-1', name: 'X' })];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    expect(wrapper.find('[data-testid=epic-edit-EP-1]').exists()).toBe(false);
+  });
+
+  it('Epic が無ければプレースホルダを出す', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    expect(wrapper.find('[data-testid=epics-empty]').exists()).toBe(true);
   });
 });

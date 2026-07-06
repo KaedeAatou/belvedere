@@ -45,10 +45,30 @@ export const useEpics = () => {
     }
   }
 
+  /**
+   * Epic を部分更新 (PATCH /api/epics/:id)。Home の Epics セクションでインライン編集する。
+   * 成功時はローカル epics を差し替えて即反映する。空文字 '' はそのまま送り項目クリアを許す
+   * (createEpic の「空は省略」とは意図的に異なる: 編集では明示的に消せるべき)。
+   */
+  async function updateEpic(
+    id: string,
+    patch: Partial<Pick<Epic, 'name' | 'rationale' | 'successMetric' | 'strategicTheme'>>,
+  ): Promise<boolean> {
+    error.value = null;
+    try {
+      const updated = await api.patch<Epic>(`/api/epics/${id}`, patch as Record<string, unknown>);
+      epics.value = epics.value.map((e) => (e.id === updated.id ? updated : e));
+      return true;
+    } catch (e) {
+      error.value = apiErrorMessage(e);
+      return false;
+    }
+  }
+
   /** story の親に選べる Epic (cancelled / completed は除外)。セレクタの候補に使う。 */
   const selectableEpics = computed<Epic[]>(() =>
     epics.value.filter((e) => e.status !== 'cancelled' && e.status !== 'completed'),
   );
 
-  return { epics, selectableEpics, isLoading, error, fetchEpics, createEpic };
+  return { epics, selectableEpics, isLoading, error, fetchEpics, createEpic, updateEpic };
 };
