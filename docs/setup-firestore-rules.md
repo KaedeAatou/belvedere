@@ -53,7 +53,7 @@ firebase login:list
 ## STEP 2: プロジェクトを指定 (30 秒)
 
 ```bash
-cd /Users/kaede/Projects/ai-agent-hackathon/infra
+cd ~/Projects/ai-agent-hackathon/infra
 
 firebase use belvedere-dev-atrium
 # → "Now using project belvedere-dev-atrium" が出れば OK
@@ -68,7 +68,7 @@ firebase use belvedere-dev-atrium
 `infra/.firebaserc` で default project = `belvedere-dev-atrium` を pin 済みなので STEP 2 の `firebase use` は省略可。
 
 ```bash
-cd /Users/kaede/Projects/ai-agent-hackathon/infra
+cd ~/Projects/ai-agent-hackathon/infra
 firebase deploy --only firestore:rules
 ```
 

@@ -132,7 +132,7 @@ claude mcp add belvedere \
   --env BELVEDERE_API_BASE_URL=https://belvedere-api-dev-cpszmcqmuq-an.a.run.app \
   --env BELVEDERE_MCP_TOKEN="$TOKEN" \
   --env WORKSPACE_ID=ws-belvedere \
-  -- node /Users/kaede/Projects/ai-agent-hackathon/apps/mcp-server/dist/index.js
+  -- node /path/to/ai-agent-hackathon/apps/mcp-server/dist/index.js   # ← クローンした絶対パスに置換
 ```
 
 開発時 (再ビルド不要、tsx で直接起動):
