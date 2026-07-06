@@ -472,6 +472,8 @@ onMounted(() => {
   border-radius: var(--radius);
   width: 100%; max-width: 480px;
   box-shadow: 0 8px 32px rgba(8, 8, 8, 0.12);
+  /* WC-30: 持ち越しリスト等で内容が増えても画面を超えない。head/foot 固定 + body だけスクロール。 */
+  max-height: 90vh; display: flex; flex-direction: column;
 }
 .dialog-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -480,7 +482,7 @@ onMounted(() => {
 }
 .dialog-title { font-family: var(--display); font-size: 20px; font-weight: 600; margin: 0; }
 .close-btn { background: transparent; border: none; font-size: 24px; cursor: pointer; color: var(--ink-2); }
-.dialog-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.dialog-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; overflow-y: auto; flex: 1; min-height: 0; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
