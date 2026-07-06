@@ -95,22 +95,3 @@ export function computeCarryOverUpdates(
       updatedAt: now,
     }));
 }
-
-/**
- * WC-24: orderIndex を持つ任意エンティティ (Epic 等) をリスト内で密再採番する汎用版。
- * computeReorderUpdates の Ticket 固有処理 (sprintId 付け替え / status 整合) を持たない素の
- * 密再採番だけをジェネリックに提供する (Epic は区画跨ぎが無く並び順=優先度だけなのでこれで足りる)。
- * survivors の新並び順で `(i+1)*ORDER_STEP` を振り、実際に orderIndex が変わる行のみ返す。
- */
-export function computeOrderIndexUpdates<T extends { id: string; orderIndex?: number }>(
-  survivors: T[],
-): Array<T & { orderIndex: number }> {
-  const updates: Array<T & { orderIndex: number }> = [];
-  for (let i = 0; i < survivors.length; i++) {
-    const existing = survivors[i]!;
-    const newOrder = (i + 1) * ORDER_STEP;
-    if (existing.orderIndex === newOrder) continue; // 変化なし — 触らない
-    updates.push({ ...existing, orderIndex: newOrder });
-  }
-  return updates;
-}

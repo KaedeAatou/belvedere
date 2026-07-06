@@ -38,7 +38,12 @@ async function saveGoal(): Promise<void> {
 const { epics, updateEpic } = useEpics();
 const canEditEpics = canEditGoal;
 const editingEpicId = ref<string | null>(null);
-const epicDraft = reactive({ name: '', rationale: '', successMetric: '', strategicTheme: '' });
+const epicDraft = reactive({ name: '', rationale: '', successMetric: '', strategicTheme: '', status: 'planned' as Epic['status'] });
+// WC-24: Epic も終わり(done)がある。状態を表示・変更できるようにする。
+const EPIC_STATUS_LABEL: Record<Epic['status'], string> = {
+  planned: '計画中', active: '進行中', completed: '完了', cancelled: '中止',
+};
+const epicStatusLabel = (s: Epic['status']): string => EPIC_STATUS_LABEL[s];
 const epicSaving = ref(false);
 const epicError = ref<string | null>(null);
 function startEditEpic(e: Epic): void {
@@ -47,6 +52,7 @@ function startEditEpic(e: Epic): void {
   epicDraft.rationale = e.rationale ?? '';
   epicDraft.successMetric = e.successMetric ?? '';
   epicDraft.strategicTheme = e.strategicTheme ?? '';
+  epicDraft.status = e.status;
   epicError.value = null;
 }
 async function saveEpic(id: string): Promise<void> {
@@ -57,6 +63,7 @@ async function saveEpic(id: string): Promise<void> {
     rationale: epicDraft.rationale.trim(),
     successMetric: epicDraft.successMetric.trim(),
     strategicTheme: epicDraft.strategicTheme.trim(),
+    status: epicDraft.status,
   });
   epicSaving.value = false;
   if (ok) editingEpicId.value = null;
@@ -173,6 +180,7 @@ const stalled = computed(() =>
             <div class="epic-head">
               <span class="epic-id">{{ e.id }}</span>
               <span class="epic-name">{{ e.name }}</span>
+              <span class="epic-status" :data-status="e.status" :data-testid="`epic-status-${e.id}`">{{ epicStatusLabel(e.status) }}</span>
               <button v-if="canEditEpics" class="pg-edit" :data-testid="`epic-edit-${e.id}`" @click="startEditEpic(e)">編集</button>
             </div>
             <p v-if="e.rationale" class="epic-field"><b>意図</b>{{ e.rationale }}</p>
@@ -182,6 +190,12 @@ const stalled = computed(() =>
           <template v-else>
             <div class="epic-form">
               <input v-model="epicDraft.name" class="pg-input" :data-testid="`epic-name-input-${e.id}`" placeholder="Epic 名 (必須)" />
+              <select v-model="epicDraft.status" class="pg-input" :data-testid="`epic-status-input-${e.id}`">
+                <option value="planned">計画中</option>
+                <option value="active">進行中</option>
+                <option value="completed">完了 (done)</option>
+                <option value="cancelled">中止</option>
+              </select>
               <textarea v-model="epicDraft.rationale" class="pg-input" rows="2" :data-testid="`epic-rationale-input-${e.id}`" placeholder="戦略意図 / なぜこの Epic か" />
               <input v-model="epicDraft.successMetric" class="pg-input" :data-testid="`epic-metric-input-${e.id}`" placeholder="成功指標 (例: 誤検出率 10% 以下)" />
               <input v-model="epicDraft.strategicTheme" class="pg-input" :data-testid="`epic-theme-input-${e.id}`" placeholder="戦略テーマ (任意)" />
@@ -283,6 +297,12 @@ const stalled = computed(() =>
 .epic-head { display: flex; align-items: baseline; gap: 10px; }
 .epic-id { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.06em; }
 .epic-name { font-size: 14px; color: var(--ink-0); flex: 1; }
+/* WC-24: Epic 状態バッジ (done 等を確認できるように) */
+.epic-status { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.03em; flex-shrink: 0; }
+.epic-status[data-status="planned"] { background: var(--bg-2, #efe7dd); color: var(--ink-3); }
+.epic-status[data-status="active"] { background: #ffe0d0; color: var(--accent); }
+.epic-status[data-status="completed"] { background: #d8f0d8; color: #2e7d32; }
+.epic-status[data-status="cancelled"] { background: var(--bg-2, #efe7dd); color: var(--ink-4); text-decoration: line-through; }
 .epic-field { font-family: var(--sans); font-size: 12px; color: var(--ink-2); margin: 4px 0 0; }
 .epic-field b { color: var(--ink-1); font-weight: 600; font-size: 11px; margin-right: 6px; }
 .epic-form { display: flex; flex-direction: column; gap: 6px; }

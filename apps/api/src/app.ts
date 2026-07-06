@@ -33,7 +33,7 @@ import {
 } from './handlers/ticket-handlers';
 import { can, forbidden } from './permissions';
 import { tryRefinementViaAdk } from './config/refinement-adk';
-import { createEpic, patchEpic, reorderEpics } from './handlers/epic-handlers';
+import { createEpic, patchEpic } from './handlers/epic-handlers';
 import { createSprint, patchSprint, startSprint, ensureSprintCadence } from './handlers/sprint-handlers';
 import { getMe, patchMember, changeMemberRole } from './handlers/member-handlers';
 import { uploadImage, readImage } from './handlers/image-handlers';
@@ -341,11 +341,6 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     return respond(c, await startSprint(repo, buildCtx(c), c.req.param('id'), body));
   });
 
-  // Backlog の Epic d&d 確定 (WC-24)。`/api/epics/:id` は PATCH なので POST reorder と衝突しない。
-  app.post('/api/epics/reorder', async (c) => {
-    const body = await c.req.json<unknown>().catch(() => ({}));
-    return respond(c, await reorderEpics(repo, buildCtx(c), body));
-  });
   app.post('/api/epics', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await createEpic(repo, buildCtx(c), body));

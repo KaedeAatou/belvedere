@@ -10,9 +10,6 @@ const emit = defineEmits<{ select: [id: string] }>();
 const { activeSprint, nextPlanned, sprints, currentLabel, nextLabel } = useSprints();
 const { findingsFor } = useFindings();
 const { members } = useMembers();
-// WC-24: Epic の d&d 並び替え (優先順位付け) は admin/po のみ許可 (backlog.reorder と同権限)。
-const { current: currentWs } = useWorkspaces();
-const canEditEpics = computed(() => ['admin', 'po'].includes(currentWs.value?.role ?? ''));
 
 // 作成ダイアログは SprintSectionedList が保持する。toolbar の New issue から ref で開く。
 const sectionedList = ref<{ openCreate: () => void } | null>(null);
@@ -100,8 +97,6 @@ onMounted(() => {
       <div class="stat" title="Story Point (SP = 相対見積もり) の合計"><div class="label">Σ Points</div><div class="v t-num">{{ totalSP }}</div><div class="delta">SP</div></div>
     </div>
   </div>
-
-  <EpicList :can-edit="canEditEpics" />
 
   <div class="backlog-toolbar">
     <!-- Filter ポップオーバー -->

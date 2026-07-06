@@ -269,8 +269,6 @@ export interface Epic {
   successMetric?: string;
   /** 上位戦略テーマ (任意、SAFe Strategic Theme に相当) */
   strategicTheme?: string;
-  /** Backlog での d&d 並び替え順 (WC-24)。小さいほど上位=高優先。未設定は末尾扱い。 */
-  orderIndex?: number;
   createdAt: string;
 }
 

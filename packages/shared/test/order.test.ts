@@ -6,7 +6,7 @@
 // (i+1)*1000 の密再採番・set/clear・変化行のみ返す挙動を退化入力ごと固定する。
 
 import { describe, it, expect } from 'vitest';
-import { computeReorderUpdates, computeCarryOverUpdates, computeOrderIndexUpdates } from '../src/order';
+import { computeReorderUpdates, computeCarryOverUpdates } from '../src/order';
 import type { Ticket } from '../src/types';
 
 const NOW = '2026-06-18T00:00:00Z';
@@ -193,22 +193,5 @@ describe('computeCarryOverUpdates — スプリント持ち越し (WC-30)', () =
     const existing = [t({ id: 'X', sprintId: 'new' })]; // orderIndex undefined
     const updates = computeCarryOverUpdates(carry, 'new', existing, NOW);
     expect(updates[0]!.orderIndex).toBe(1000);
-  });
-});
-
-describe('computeOrderIndexUpdates — 汎用密再採番 (WC-24 / Epic 並び替え)', () => {
-  it('orderIndex 未設定 3 件 → 1000/2000/3000 に密採番', () => {
-    const updates = computeOrderIndexUpdates([{ id: 'A' }, { id: 'B' }, { id: 'C' }]);
-    expect(updates.map((u) => [u.id, u.orderIndex])).toEqual([['A', 1000], ['B', 2000], ['C', 3000]]);
-  });
-
-  it('既に正位置の行は skip し、変化行のみ返す (write 増幅回避)', () => {
-    const updates = computeOrderIndexUpdates([{ id: 'A', orderIndex: 1000 }, { id: 'B', orderIndex: 5000 }]);
-    expect(updates.map((u) => u.id)).toEqual(['B']); // A は 1000 のまま skip
-    expect(updates[0]!.orderIndex).toBe(2000);
-  });
-
-  it('退化: 空配列 → 空', () => {
-    expect(computeOrderIndexUpdates([])).toEqual([]);
   });
 });

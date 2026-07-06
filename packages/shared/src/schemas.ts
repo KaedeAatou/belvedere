@@ -142,7 +142,6 @@ export const EpicSchema = z.object({
   rationale: z.string().optional(),
   successMetric: z.string().optional(),
   strategicTheme: z.string().optional(),
-  orderIndex: z.number().optional(),
   createdAt: z.string(),
 });
 

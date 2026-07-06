@@ -88,7 +88,7 @@ describe('EventsHomeScreen Epics 編集 (Home Epic インライン編集)', () =
     workspaceId: 'ws', name: over.id, status: 'active', createdAt: '2026-06-01T00:00:00Z', ...over,
   });
 
-  it('admin/po は編集ボタンが出て、編集→保存で updateEpic(trim済/全4項目) を呼ぶ', async () => {
+  it('admin/po は編集ボタンが出て、編集→保存で updateEpic(trim済/status含む全5項目) を呼ぶ', async () => {
     wsCurrent.value = { id: 'ws', name: 'W', role: 'po', productGoal: '' };
     epicsRef.value = [epic({ id: 'EP-1', name: '旧名', rationale: '旧意図' })];
     updateEpicSpy.mockClear();
@@ -99,7 +99,7 @@ describe('EventsHomeScreen Epics 編集 (Home Epic インライン編集)', () =
     await wrapper.find('[data-testid=epic-save-EP-1]').trigger('click');
     await new Promise((r) => setTimeout(r, 0));
     expect(updateEpicSpy).toHaveBeenCalledWith('EP-1', {
-      name: '新Epic名', rationale: '新意図', successMetric: '', strategicTheme: '',
+      name: '新Epic名', rationale: '新意図', successMetric: '', strategicTheme: '', status: 'active',
     });
   });
 

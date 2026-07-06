@@ -52,7 +52,7 @@ export const useEpics = () => {
    */
   async function updateEpic(
     id: string,
-    patch: Partial<Pick<Epic, 'name' | 'rationale' | 'successMetric' | 'strategicTheme'>>,
+    patch: Partial<Pick<Epic, 'name' | 'rationale' | 'successMetric' | 'strategicTheme' | 'status'>>,
   ): Promise<boolean> {
     error.value = null;
     try {
@@ -70,19 +70,5 @@ export const useEpics = () => {
     epics.value.filter((e) => e.status !== 'cancelled' && e.status !== 'completed'),
   );
 
-  /**
-   * WC-24: Backlog の d&d 並び替え確定。新並び順の全 id を送りサーバで orderIndex を密再採番する
-   * (Ticket の reorderTickets と同型)。成功後に再 fetch してローカル epics へ反映。
-   */
-  async function reorderEpics(orderedIds: string[]): Promise<void> {
-    error.value = null;
-    try {
-      await api.post<Epic[]>('/api/epics/reorder', { orderedIds });
-      await fetchEpics();
-    } catch (e) {
-      error.value = apiErrorMessage(e);
-    }
-  }
-
-  return { epics, selectableEpics, isLoading, error, fetchEpics, createEpic, updateEpic, reorderEpics };
+  return { epics, selectableEpics, isLoading, error, fetchEpics, createEpic, updateEpic };
 };
