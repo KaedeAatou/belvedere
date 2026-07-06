@@ -41,7 +41,7 @@ const showEvents = computed(() => props.railTab === 'events');
            @click="emit('update:screen', 'sprint-history')">
         <span class="num"><Icon name="clock" :size="16" /></span>
         <span class="lbl">
-          <span class="l1">スプリント履歴</span>
+          <span class="l1">Sprint History</span>
           <span class="l2">Past sprints</span>
         </span>
       </div>
