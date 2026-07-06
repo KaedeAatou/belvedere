@@ -141,7 +141,7 @@ const ticket = computed(() =>
                            :tickets="tickets" :selected-id="selected"
                            @select="onSelect" />
 
-      <DetailSheet v-if="ticket" :ticket="ticket" @close="onClose" />
+      <DetailSheet v-if="ticket" :ticket="ticket" @close="onClose" @select="onSelect" />
     </div>
 
     <template #ai>

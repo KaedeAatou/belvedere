@@ -27,6 +27,7 @@ const props = defineProps<{
 defineEmits<{
   click: [];
   toggleSelect: [];
+  selectParent: [id: string];
 }>();
 
 // ルールエンジン findings (T5-3 / C 案)。severity 悪い順。行内は最大 2 個 + 超過は +n に丸める。
@@ -70,6 +71,13 @@ const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.messag
       <!-- タイトルは専用 span で省略 (…)。長いタイトルでも下の .trow-flags を押し出さない
            (WC-d019fd94: 長いタイトルで警告ピルが見切れる不具合の修正)。 -->
       <span class="trow-title-text">{{ t.title }}</span>
+      <button
+        v-if="t.parentTicketId"
+        class="trow-parent"
+        :title="`親チケット ${t.parentTicketId} を開く`"
+        :data-testid="`trow-parent-${t.id}`"
+        @click.stop="$emit('selectParent', t.parentTicketId)"
+      >↳ {{ t.parentTicketId }}</button>
       <span v-if="findings.length > 0" class="trow-flags">
         <FindingPill v-for="f in shown" :key="f.ruleId" :finding="f" />
         <span v-if="overflow > 0" class="finding-badge sev-more" :title="overflowTitle">+{{ overflow }}</span>
@@ -88,3 +96,13 @@ const overflowTitle = computed(() => findings.value.slice(2).map((f) => f.messag
     <Avatar :user="t.assigneeId" />
   </div>
 </template>
+
+<style scoped>
+/* WC-28: 分割子チケットの親リンク (クリックで親詳細へ)。親を持たない行には出さない。 */
+.trow-parent {
+  font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+  background: var(--bg-1, #f7efe6); border: none; border-radius: 4px;
+  padding: 1px 5px; margin-left: 6px; cursor: pointer; flex-shrink: 0;
+}
+.trow-parent:hover { color: var(--accent); }
+</style>

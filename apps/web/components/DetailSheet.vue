@@ -3,11 +3,11 @@ import type { Ticket, Priority, ValueImpact, Status } from '@belvedere/shared';
 import type { PatchTicketInput } from '~/composables/useTickets';
 
 const props = defineProps<{ ticket: Ticket }>();
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; select: [id: string] }>();
 
 const { memberName, members } = useMembers();
 const { findingsFor } = useFindings();
-const { patchTicket, deleteTicket, addComment } = useTickets();
+const { tickets, patchTicket, deleteTicket, addComment } = useTickets();
 const { upload: uploadImage } = useImages();
 const imageBusy = ref(false);
 
@@ -61,6 +61,11 @@ const sprintOptions = computed(() => sprintOptionsForEdit(sprints.value, props.t
 
 const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
+// WC-28: 親子関係 (分割で作られた子 → 親 / 親 → 子) を全 tickets から解決 (新 API 不要)。
+const parentTicket = computed(() =>
+  props.ticket.parentTicketId ? tickets.value.find((t) => t.id === props.ticket.parentTicketId) : undefined,
+);
+const childTickets = computed(() => tickets.value.filter((t) => t.parentTicketId === props.ticket.id));
 
 // ===== 編集モード (T10-1) =====
 const editing = ref(false);
@@ -196,6 +201,26 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </template>
       </div>
 
+      <!-- WC-28: 親子リンク (分割元/分割先へ 1 クリックで移動)。親を持たず子も無ければ非表示。 -->
+      <div v-if="parentTicket || childTickets.length > 0" class="sheet-rel" data-testid="sheet-relations">
+        <button
+          v-if="parentTicket"
+          class="sheet-rel-item sheet-rel-parent"
+          data-testid="sheet-parent-link"
+          @click="emit('select', parentTicket.id)"
+        >↳ 親 {{ parentTicket.id }} · {{ parentTicket.title }}</button>
+        <template v-if="childTickets.length > 0">
+          <span class="sheet-rel-label">子チケット ({{ childTickets.length }})</span>
+          <button
+            v-for="c in childTickets"
+            :key="c.id"
+            class="sheet-rel-item"
+            :data-testid="`sheet-child-${c.id}`"
+            @click="emit('select', c.id)"
+          >{{ c.id }} · {{ c.title }}</button>
+        </template>
+      </div>
+
       <!-- 編集フィールド (assignee / priority / valueImpact / status / sprint) -->
       <div v-if="editing" class="edit-fields">
         <div class="edit-field">
@@ -225,7 +250,7 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
           </select>
         </div>
         <div class="edit-field">
-          <label class="l">VALUE IMPACT</label>
+          <label class="l" title="Value Impact = プロダクトゴールへの貢献度 (high/medium/low)。priority とは独立した価値軸">VALUE IMPACT</label>
           <select v-model="editValueImpact" class="edit-input" data-testid="edit-value-impact">
             <option value="">（未設定）</option>
             <option value="low">low</option>
@@ -470,4 +495,16 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
   font-family: var(--sans); font-size: 13px; cursor: pointer;
 }
 .delete-btn.armed { background: var(--err); color: #FBF8F2; }
+
+/* WC-28: 親子リンク (分割元/分割先へのナビゲーション) */
+.sheet-rel { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: -8px 0 20px; }
+.sheet-rel-label { font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+.sheet-rel-item {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+  background: var(--bg-1, #f7efe6); border: 1px solid var(--line, #eadfd5);
+  border-radius: 6px; padding: 3px 8px; cursor: pointer; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sheet-rel-item:hover { color: var(--accent); border-color: var(--accent); }
+.sheet-rel-parent { color: var(--ink-1); }
 </style>

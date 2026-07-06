@@ -607,6 +607,7 @@ async function submitSplit(): Promise<void> {
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"
                    @click="emit('select', t.id)"
+                   @selectParent="emit('select', $event)"
                    @toggle-select="sel.toggle(t.id)">
           <template #extra>
             <button v-if="splitMode && t.type === 'story'" class="split-btn"
@@ -645,6 +646,7 @@ async function submitSplit(): Promise<void> {
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"
                    @click="emit('select', t.id)"
+                   @selectParent="emit('select', $event)"
                    @toggle-select="sel.toggle(t.id)">
           <template #extra>
             <button v-if="splitMode && t.type === 'story'" class="split-btn"
@@ -686,6 +688,7 @@ async function submitSplit(): Promise<void> {
                    :selected="selectedId === t.id" drag-handle reorderable
                    selectable :bulk-selected="sel.isSelected(t.id)"
                    @click="emit('select', t.id)"
+                   @selectParent="emit('select', $event)"
                    @toggle-select="sel.toggle(t.id)">
           <template #extra>
             <button v-if="splitMode && t.type === 'story'" class="split-btn"

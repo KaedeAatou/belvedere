@@ -26,13 +26,20 @@ const mocks = vi.hoisted(() => {
     addComment,
     useMembers: () => ({ memberName: () => 'Kaede', memberInitial: () => 'K', members: [] }),
     useFindings: () => ({ findingsFor: () => [] }),
-    useTickets: () => ({ patchTicket, deleteTicket, addComment }),
   };
 });
 
+// WC-28: DetailSheet が親子解決に使う tickets (useState 全件相当)。テストごとに差し替える。
+const ticketsRef = ref<Ticket[]>([]);
+
 mockNuxtImport('useMembers', () => mocks.useMembers);
 mockNuxtImport('useFindings', () => mocks.useFindings);
-mockNuxtImport('useTickets', () => mocks.useTickets);
+mockNuxtImport('useTickets', () => () => ({
+  tickets: ticketsRef,
+  patchTicket: mocks.patchTicket,
+  deleteTicket: mocks.deleteTicket,
+  addComment: mocks.addComment,
+}));
 // useSprints は ref を返すため factory (遅延実行) 内で ref を使う (vi.hoisted 内は TDZ で不可)。
 mockNuxtImport('useSprints', () => () => ({
   sprints: ref([]),
@@ -191,5 +198,36 @@ describe('sprintOptionsForEdit — 編集セレクトの候補 (WC-35)', () => {
 
   it('退化: 空配列 → 空', () => {
     expect(sprintOptionsForEdit([], 'x')).toEqual([]);
+  });
+});
+
+describe('DetailSheet 親子リンク (WC-28)', () => {
+  beforeEach(() => { ticketsRef.value = []; });
+
+  it('parentTicketId を持つと親リンクを出し、クリックで select を emit する', async () => {
+    ticketsRef.value = [ticket({ id: 'WC-22', title: '親 Story' })];
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-25', parentTicketId: 'WC-22' }) } });
+    const link = wrapper.find('[data-testid="sheet-parent-link"]');
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toContain('WC-22');
+    await link.trigger('click');
+    expect(wrapper.emitted('select')).toEqual([['WC-22']]);
+  });
+
+  it('子チケットを一覧表示し、クリックで select を emit する', async () => {
+    ticketsRef.value = [
+      ticket({ id: 'WC-25', parentTicketId: 'WC-22' }),
+      ticket({ id: 'WC-26', parentTicketId: 'WC-22' }),
+    ];
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-22' }) } });
+    expect(wrapper.find('[data-testid="sheet-child-WC-25"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="sheet-child-WC-26"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="sheet-child-WC-25"]').trigger('click');
+    expect(wrapper.emitted('select')).toEqual([['WC-25']]);
+  });
+
+  it('親も子も無ければ relations セクションは非表示', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    expect(wrapper.find('[data-testid="sheet-relations"]').exists()).toBe(false);
   });
 });

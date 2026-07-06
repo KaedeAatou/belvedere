@@ -69,4 +69,23 @@ describe('TicketRow', () => {
     });
     expect(wrapper.find('[data-testid="trow-check"]').exists()).toBe(true);
   });
+
+  // WC-28: 分割子チケットの親リンク。
+  it('parentTicketId があると親リンクを出し、クリックで selectParent を emit する', async () => {
+    const wrapper = await mountSuspended(TicketRow, {
+      props: { t: ticket({ id: 'WC-25', parentTicketId: 'WC-22' }) },
+    });
+    const link = wrapper.find('[data-testid="trow-parent-WC-25"]');
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toContain('WC-22');
+    await link.trigger('click');
+    expect(wrapper.emitted('selectParent')).toEqual([['WC-22']]);
+    // 親ピルクリックは行クリック (click) を発火しない (@click.stop)。
+    expect(wrapper.emitted('click')).toBeUndefined();
+  });
+
+  it('parentTicketId が無い行には親リンクを出さない', async () => {
+    const wrapper = await mountSuspended(TicketRow, { props: { t: ticket({ id: 'WC-1' }) } });
+    expect(wrapper.find('[data-testid="trow-parent-WC-1"]').exists()).toBe(false);
+  });
 });
