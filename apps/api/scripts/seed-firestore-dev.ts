@@ -20,7 +20,7 @@ import { createRepoContainer } from '@belvedere/repo';
 import { seedTickets, seedSprints, seedMembers, seedEpics, seedRetroTries } from '@belvedere/seed';
 import type { RetroNote } from '@belvedere/shared';
 
-const TARGET_PROJECT = 'belvedere-dev-atrium';
+const PROJECT_PATTERN = /^belvedere-(dev|prod)-atrium$/;
 const WORKSPACE = 'ws-belvedere';
 
 // Retro Try 積み上げ (carry-forward stack) は packages/seed の seedRetroTries を単一ソースとして使う
@@ -50,8 +50,8 @@ function assertGuards(): void {
   if (process.env.REPO_BACKEND !== 'firestore') {
     throw new Error('REPO_BACKEND=firestore を指定してください (memory に書いても意味がありません)');
   }
-  if (process.env.GCP_PROJECT !== TARGET_PROJECT) {
-    throw new Error(`GCP_PROJECT=${TARGET_PROJECT} を明示してください (誤プロジェクト書込み防止)。現在: ${process.env.GCP_PROJECT ?? '(未設定)'}`);
+  if (!PROJECT_PATTERN.test(process.env.GCP_PROJECT ?? '')) {
+    throw new Error(`GCP_PROJECT に belvedere-dev-atrium / belvedere-prod-atrium を明示してください (誤プロジェクト書込み防止)。現在: ${process.env.GCP_PROJECT ?? '(未設定)'}`);
   }
 }
 
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   const clean = process.argv.includes('--clean');
   const repo = await createRepoContainer('firestore');
 
-  console.log(`▶ seeding Firestore (project=${TARGET_PROJECT}, workspace=${WORKSPACE})`);
+  console.log(`▶ seeding Firestore (project=${process.env.GCP_PROJECT}, workspace=${WORKSPACE})`);
 
   // seed の sprint 日付は 2026-04〜05 固定で、今(数週間後)では active スプリントが終了済に
   // 見え Daily の Burndown / 滞留日数が壊れる。active スプリントが「今」を含むよう全 sprint と
