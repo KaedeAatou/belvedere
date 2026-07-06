@@ -41,6 +41,8 @@ async function onDragEnd(): Promise<void> {
       v-model="orderedEpics"
       :disabled="!canEdit"
       handle=".epic-drag"
+      :animation="150"
+      :force-fallback="true"
       class="epic-reorder-list"
       @end="onDragEnd"
     >
