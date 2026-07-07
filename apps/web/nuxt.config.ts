@@ -11,6 +11,17 @@ export default defineNuxtConfig({
     preset: 'node-server',
   },
 
+  // 認証必須ページの SSR を無効化する (2026-07-07)。
+  // Firebase Auth はクライアントでしか動かないため、SSR は認証状態を知らないままこの
+  // 2 画面をそのまま HTML に描画してブラウザへ送ってしまい、未認証ユーザーの直アクセスでも
+  // 「一瞬、中身が見える」状態が生まれていた (middleware/plugin のリダイレクトは JS 実行後
+  // にしか効かないため)。ssr:false でクライアントのみの描画にし、認証チェックが先に走って
+  // から初めて中身が組み立てられるようにする (login はそもそも保護対象外なので対象外)。
+  routeRules: {
+    '/': { ssr: false },
+    '/settings/profile': { ssr: false },
+  },
+
   typescript: {
     strict: true,
     typeCheck: false,

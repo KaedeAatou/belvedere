@@ -3,6 +3,10 @@ import type { Status, Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 import { isScreenId } from '~/composables/useUiMeta';
 
+// SSR 無効化は nuxt.config.ts の routeRules ('/' / '/settings/profile') で一元管理する
+// (definePageMeta({ ssr:false }) は experimental.inlineRouteRules が必要なため不採用)。
+// 詳細はそちらのコメント参照。
+
 // 実 API データ源 (R3: demo data 廃止)。useState 共有なので各画面は composable から直接読む。
 const { tickets, fetchTickets, changeStatus } = useTickets();
 const { fetchMembers } = useMembers();
