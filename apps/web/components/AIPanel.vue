@@ -15,7 +15,7 @@ const checks = computed(() => buildChecks(props.screen, props.tickets));
 const intro = computed(() => screenIntro(props.screen));
 
 // エージェントチャット (D-11)
-const { messages, isSending, sendError, send, retry } = useAgentChat();
+const { messages, isSending, sendError, send, retry, clear } = useAgentChat();
 const inputText = ref('');
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 
@@ -51,6 +51,15 @@ async function onAction(a: AICheckAction): Promise<void> {
     <span class="ai-dot" />
     <span class="ai-title">Integrity AI</span>
     <span class="ai-sub">{{ checks.length }} signals</span>
+    <button
+      v-if="messages.length > 0"
+      class="ai-clear"
+      data-testid="ai-clear"
+      title="会話をクリアして新しい会話を始める"
+      @click="clear"
+    >
+      新しい会話
+    </button>
   </div>
 
   <div class="ai-body">
@@ -266,5 +275,20 @@ async function onAction(a: AICheckAction): Promise<void> {
   background: var(--accent);
   color: #fff;
   cursor: pointer;
+}
+/* 新しい会話 (クリア) ボタン */
+.ai-clear {
+  margin-left: auto;
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: var(--hairline) solid var(--line-1);
+  color: var(--ink-3);
+  background: transparent;
+  cursor: pointer;
+}
+.ai-clear:hover {
+  color: var(--ink-0);
+  border-color: var(--ink-3);
 }
 </style>

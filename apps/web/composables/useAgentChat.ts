@@ -118,6 +118,51 @@ export const useAgentChat = () => {
   const config = useRuntimeConfig();
   const { sprints } = useSprints();
 
+  // 会話 ID (P5 のサーバ保存で使う) と localStorage 永続 (リロードで会話を失わない)。
+  const conversationId = useState<string>('agent-chat-conv-id', () => '');
+  const hydrated = useState<boolean>('agent-chat-hydrated', () => false);
+  const STORAGE_KEY = 'belv:ai-chat:v1';
+  const MAX_PERSIST = 50;
+
+  const newConversationId = (): string =>
+    import.meta.client && typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `conv-${Date.now()}`;
+
+  function persist(): void {
+    if (!import.meta.client) return;
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ conversationId: conversationId.value, messages: messages.value.slice(-MAX_PERSIST) }),
+      );
+    } catch {
+      /* quota 超過等は無視 (会話を壊さない) */
+    }
+  }
+
+  // クライアントで一度だけ localStorage から復元し、以降の messages 変更を保存する。
+  function hydrate(): void {
+    if (!import.meta.client || hydrated.value) return;
+    hydrated.value = true;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { conversationId?: unknown; messages?: unknown };
+        if (Array.isArray(parsed.messages)) messages.value = parsed.messages as ChatMessage[];
+        if (typeof parsed.conversationId === 'string' && parsed.conversationId) {
+          conversationId.value = parsed.conversationId;
+        }
+      }
+    } catch {
+      /* 壊れた JSON は無視 (握り潰して新規会話として続行) */
+    }
+    if (!conversationId.value) conversationId.value = newConversationId();
+    watch(messages, persist, { deep: true });
+  }
+
+  if (import.meta.client) onMounted(hydrate);
+
   // user メッセージが既に messages に積まれている前提で agent へ問い合わせる中核。
   // send() は user メッセージを積んでから呼び、retry() は積まずに再実行する (user 重複追加なし)。
   async function runAgentRequest(
@@ -213,7 +258,9 @@ export const useAgentChat = () => {
     messages.value = [];
     sendError.value = null;
     lastAttempt.value = null;
+    conversationId.value = newConversationId(); // 新しい会話 = 新しい ID
+    persist();
   }
 
-  return { messages, isSending, sendError, send, retry, clear };
+  return { messages, isSending, sendError, conversationId, send, retry, clear };
 };
