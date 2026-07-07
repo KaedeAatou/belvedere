@@ -117,10 +117,29 @@ export async function evaluateSprintSmart(
     ],
     tools: [],
     responseSchema: SMART_RESPONSE_SCHEMA,
+    // F-21 (2026-07-08): 未指定 (Gemini デフォルト高温度) だと同一入力で判定がブレた。
+    // SMART は診断であって創作ではないので 0 に固定して決定化する。
+    temperature: 0,
   };
 
   const res = await llm.generate(req);
-  return { ok: true, status: 200, body: normalizeSmart(res.text, goal) };
+  const verdict = normalizeSmart(res.text, goal);
+
+  // F-30 (2026-07-08): A=Attainable は純粋な算術 (plannedSP vs velocity) なのに LLM 任せだと
+  // 画面の「+N SP OVER」表示と矛盾する ok 判定を返すことがあった。LLM の出力に関わらず
+  // handler が決定的に上書きする (mock composeSmartEval と同じ規則 / velocity 実績なしは判定保留で ok)。
+  const attainable = avgVelocity > 0 ? plannedSP <= avgVelocity : true;
+  const aNote =
+    avgVelocity <= 0
+      ? 'velocity 実績が無いため判定保留 (過去スプリント完了後に精度が上がります)。'
+      : attainable
+        ? `計画 ${plannedSP}SP は velocity ${avgVelocity} 内に収まっています。`
+        : `計画 ${plannedSP}SP が velocity ${avgVelocity} を超過 (過剰計画)。スコープを削るか次スプリントへ回しましょう。`;
+  verdict.criteria = verdict.criteria.map((c) =>
+    c.letter === 'A' ? { ...c, ok: attainable, note: aNote } : c,
+  );
+
+  return { ok: true, status: 200, body: verdict };
 }
 
 /** LLM の生テキスト (JSON 想定) を契約形 (S/M/A/R/T の 5 件必ず揃う) に整形する。 */
