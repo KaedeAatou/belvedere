@@ -7,6 +7,7 @@
 
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
+import { streamSSE } from 'hono/streaming';
 import { runAgent, buildSystemPrompt, buildRegistry } from '@belvedere/agent';
 import {
   buildTools,
@@ -17,7 +18,7 @@ import {
 } from '@belvedere/tools';
 import type { LLMProvider } from '@belvedere/llm';
 import type { RepoContainer, TicketQuery } from '@belvedere/repo';
-import type { AgentName, AgentRun } from '@belvedere/shared';
+import type { AgentName, AgentRun, AgentStep } from '@belvedere/shared';
 import { StatusSchema, RitualSchema, TicketTypeSchema, modelForAgent } from '@belvedere/shared';
 import { authMiddleware, type AuthenticatedUser } from './middleware/auth';
 import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspace';
@@ -462,6 +463,75 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     return respond(c, await deleteRetroNote(repo, buildCtx(c), c.req.param('id')));
   });
 
+  // 非ストリーム / ストリーム両 route が共有する agent 実行の中核。
+  // tools 組み立て (orchestrator は協議統括) → runAgent → conversationId 検証 → AgentRun 永続化。
+  // hooks (onStep / onDelta) を渡すとストリーミング側がイベントを流せる。
+  async function runAgentCore(
+    name: AgentName,
+    prompt: string,
+    body: {
+      context?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      conversationId?: string;
+    },
+    workspaceId: string,
+    hooks: { onStep?: (s: AgentStep) => void; onDelta?: (t: string) => void } = {},
+  ): Promise<AgentRun> {
+    // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
+    // childRuns / costCap は 1 リクエスト境界で持つ (module singleton だと複数 workspace でクロス汚染)。
+    const knowledgeDeps = knowledge ? { knowledge } : undefined;
+    const childRuns: AgentRun[] = [];
+    const tools =
+      name === 'orchestrator'
+        ? buildRegistry(
+            buildOrchestratorTools(repo, workspaceId, {
+              llm,
+              childRuns,
+              costCapUsd: AGENT_INVOKE_COST_CAP_USD,
+              ...(knowledge && { knowledge }),
+            }),
+          )
+        : buildRegistry(buildTools(repo, workspaceId, knowledgeDeps));
+
+    const run = await runAgent(
+      {
+        agentName: name,
+        workspaceId,
+        llm,
+        model: modelForAgent(name),
+        systemPrompt: buildSystemPrompt(name),
+        tools,
+        trigger: 'human',
+        ...(body.context && { contextText: body.context }),
+        ...(body.history && { history: body.history }),
+        ...(hooks.onStep && { onStep: hooks.onStep }),
+        ...(hooks.onDelta && { onDelta: hooks.onDelta }),
+      },
+      prompt,
+    );
+
+    // 会話 ID (クライアント発番) を検証 (≤64 字 [\w-] のみ / 不正は黙って落とす = 保存タグに過ぎない)。
+    const convId =
+      typeof body.conversationId === 'string' && /^[\w-]{1,64}$/.test(body.conversationId)
+        ? body.conversationId
+        : undefined;
+    const fullRun: AgentRun = {
+      ...run,
+      ...(convId && { conversationId: convId }),
+      ...(childRuns.length > 0 && { childRuns }),
+    };
+
+    // サーバ側に会話 (AgentRun) を保存 = 会話の監査・再開の土台。保存失敗で会話体験を壊さないよう握る
+    // (step content は Firestore 1MB 上限対策に trimRunForPersist で切り詰め)。復元 GET は作らない
+    // (復元は web の localStorage が担当)。
+    try {
+      await repo.agentRuns.add(trimRunForPersist(fullRun));
+    } catch (e) {
+      console.error('agentRuns.add に失敗 (会話は継続):', e);
+    }
+    return fullRun;
+  }
+
   // ------- /api/agents/:name (エージェント実行) -------
   app.post('/api/agents/:name', async (c) => {
     const workspaceId = c.get('workspaceId');
@@ -496,62 +566,65 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
       if (adkRun) return c.json(adkRun);
     }
 
-    // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
-    // 他 5 agent は素の buildTools (agent.invoke なし = 子になっても再協議できない / 深さ 1 固定)。
-    // childRuns コレクタと costCap は 1 リクエスト境界 (request-scoped) で持つ
-    // (module singleton にすると複数 workspace 同時実行でクロス汚染する)。
-    const knowledgeDeps = knowledge ? { knowledge } : undefined;
-    const childRuns: AgentRun[] = [];
-    const tools =
-      name === 'orchestrator'
-        ? buildRegistry(
-            buildOrchestratorTools(repo, workspaceId, {
-              llm,
-              childRuns,
-              costCapUsd: AGENT_INVOKE_COST_CAP_USD,
-              ...(knowledge && { knowledge }),
-            }),
-          )
-        : buildRegistry(buildTools(repo, workspaceId, knowledgeDeps));
-
-    const run = await runAgent(
-      {
-        agentName: name,
-        workspaceId,
-        llm,
-        model: modelForAgent(name),
-        systemPrompt: buildSystemPrompt(name),
-        tools,
-        trigger: 'human',
-        ...(body.context && { contextText: body.context }),
-        ...(body.history && { history: body.history }),
-      },
-      prompt,
-    );
-
-    // 会話 ID (クライアント発番) を検証 (≤64 字 [\w-] のみ / 不正は黙って落とす = 保存タグに過ぎない)。
-    const convId =
-      typeof body.conversationId === 'string' && /^[\w-]{1,64}$/.test(body.conversationId)
-        ? body.conversationId
-        : undefined;
-    // 協議で子 run が起きていれば親 run へ後付け (後方互換: 0 件なら conditional spread でキーごと省略)。
-    const fullRun: AgentRun = {
-      ...run,
-      ...(convId && { conversationId: convId }),
-      ...(childRuns.length > 0 && { childRuns }),
-    };
-
-    // サーバ側に会話 (AgentRun) を保存する = 会話の監査・再開の土台。保存失敗で会話体験を壊さない
-    // よう try/catch で握る (step content は Firestore 1MB 上限対策に trimRunForPersist で切り詰め)。
-    // 復元 GET は作らない (復元は web の localStorage が担当)。将来 GET /api/agent-runs?conversationId=
-    // を足す時は repo.agentRuns.list の opts 拡張 + workspaceId+conversationId の composite index が要る。
-    try {
-      await repo.agentRuns.add(trimRunForPersist(fullRun));
-    } catch (e) {
-      console.error('agentRuns.add に失敗 (会話は継続):', e);
-    }
-
+    const fullRun = await runAgentCore(name, prompt, body, workspaceId);
     return c.json(fullRun);
+  });
+
+  // ------- /api/agents/:name/stream (SSE ストリーミング / P6) -------
+  // 既存 /api/agents/:name とは別 route (既存契約は 1 バイトも変えない = MCP/CLI/e2e 無傷)。
+  // 本体は runAgentCore を共有し、step (tool 実行) / delta (text 断片) / run (確定) / done / error を
+  // SSE で流す。ADK 迂回は通さない (常に TS runAgent / flag 既定 OFF なので実害なし / パリティより単純さ優先)。
+  app.post('/api/agents/:name/stream', async (c) => {
+    const workspaceId = c.get('workspaceId');
+    if (!can('agent.invoke', { role: c.get('role') })) {
+      return c.json(forbidden('agent.invoke'), 403);
+    }
+    const name = c.req.param('name') as AgentName;
+    if (!VALID_AGENTS.includes(name)) {
+      return c.json({ error: `unknown agent: ${name}`, valid: VALID_AGENTS }, 400);
+    }
+    const body: {
+      prompt?: string;
+      context?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      conversationId?: string;
+    } = await c.req
+      .json<{
+        prompt?: string;
+        context?: string;
+        history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+        conversationId?: string;
+      }>()
+      .catch(() => ({}));
+    const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
+
+    return streamSSE(c, async (stream) => {
+      // sync な onStep/onDelta から async な writeSSE を、順序を保って呼ぶため promise chain で直列化する。
+      let chain: Promise<unknown> = Promise.resolve();
+      const emit = (event: string, data: unknown): void => {
+        chain = chain.then(() => stream.writeSSE({ event, data: JSON.stringify(data) }));
+      };
+      try {
+        const fullRun = await runAgentCore(name, prompt, body, workspaceId, {
+          onStep: (s) => {
+            if (s.type === 'tool_call') {
+              emit('step', { type: 'tool_call', toolName: s.toolName });
+            } else if (s.type === 'tool_result') {
+              const ok = !(s.content !== null && typeof s.content === 'object' && 'error' in s.content);
+              emit('step', { type: 'tool_result', toolName: s.toolName, durationMs: s.durationMs, ok });
+            }
+          },
+          onDelta: (t) => emit('delta', { text: t }),
+        });
+        // run = 最終確定 (非ストリーム経路と同じ shape)。done で終端。
+        emit('run', fullRun);
+        emit('done', {});
+        await chain;
+      } catch (e) {
+        emit('error', { message: (e as Error).message });
+        await chain;
+      }
+    });
   });
 
   return app;

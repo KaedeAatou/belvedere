@@ -177,4 +177,40 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(ids).toContain('conv-abc_123');
     expect(ids.filter((x) => x === 'bad id!!')).toHaveLength(0); // 空白・記号入りは弾く
   });
+
+  it('⑧ /stream は SSE (text/event-stream) で step/delta/run/done を流す (P6)', async () => {
+    const { app } = makeApp();
+    const res = await app.fetch(
+      req('/api/agents/daily/stream', { token: TOKEN, method: 'POST', body: { prompt: '進捗は?' } }),
+    );
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+    const text = await res.text();
+    expect(text).toContain('event: step'); // daily は tool を呼ぶので tool_call/result の step が出る
+    expect(text).toContain('event: delta'); // 最終応答の text 断片
+    expect(text).toContain('event: run'); // 確定 AgentRun
+    expect(text).toContain('event: done');
+  });
+
+  it('⑨ /stream も unknown agent は 400', async () => {
+    const { app } = makeApp();
+    const res = await app.fetch(
+      req('/api/agents/bogus/stream', { token: TOKEN, method: 'POST', body: { prompt: 'x' } }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('⑩ /stream も AgentRun を保存する (conversationId タグ付き)', async () => {
+    const { app, repo } = makeApp();
+    const res = await app.fetch(
+      req('/api/agents/daily/stream', {
+        token: TOKEN,
+        method: 'POST',
+        body: { prompt: 'x', conversationId: 'conv-stream-1' },
+      }),
+    );
+    await res.text(); // ストリームを最後まで読む (= runAgentCore 完了 → 保存が走る)
+    const ids = (await repo.agentRuns.list({ workspaceId: WS })).map((r) => r.conversationId);
+    expect(ids).toContain('conv-stream-1');
+  });
 });

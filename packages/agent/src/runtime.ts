@@ -22,6 +22,11 @@ export interface AgentRuntimeOpts {
   contextText?: string;
   /** AI パネルの会話継続用 (WC-39/29 拡張)。過去の会話 (user/assistant 交互) を system の後・今回の user の前に積む。 */
   history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  /**
+   * P6 ストリーミング: text 断片を逐次受け取る hook。指定かつ llm.generateStream がある時のみ
+   * ストリーミング経路を使う。無ければ従来の generate (一括) にフォールバック。
+   */
+  onDelta?: (text: string) => void;
 }
 
 /**
@@ -64,7 +69,11 @@ export async function runAgent(
         temperature: 0.2,
       };
 
-      const resp = await opts.llm.generate(req);
+      // P6: onDelta 指定かつ provider が streaming 対応なら generateStream、無ければ generate。
+      const resp =
+        opts.onDelta && opts.llm.generateStream
+          ? await opts.llm.generateStream(req, { onDelta: opts.onDelta })
+          : await opts.llm.generate(req);
       totalInputTokens += resp.usage.inputTokens;
       totalOutputTokens += resp.usage.outputTokens;
       totalCost += resp.usage.costUsd;
