@@ -197,6 +197,7 @@ export const useAgentChat = () => {
         prompt,
         ...(context && { context }),
         ...(history.length > 0 && { history }),
+        ...(conversationId.value && { conversationId: conversationId.value }),
       });
 
       // summary が最優先。無ければ output 型 step の content を文字列化。

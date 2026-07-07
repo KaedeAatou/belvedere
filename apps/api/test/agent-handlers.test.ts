@@ -157,10 +157,24 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(run.childRuns!.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('⑥ 現状 AgentRun は repo に保存されない (P5 で反転予定)', async () => {
+  it('⑥ AgentRun は repo に保存される (P5 でサーバ側会話保存を追加)', async () => {
     const { app, repo } = makeApp();
     await app.fetch(req('/api/agents/planner', { token: TOKEN, method: 'POST', body: { prompt: 'x' } }));
     const saved = await repo.agentRuns.list({ workspaceId: WS });
-    expect(saved).toHaveLength(0);
+    expect(saved.length).toBeGreaterThanOrEqual(1);
+    expect(saved[0]!.agentName).toBe('planner');
+  });
+
+  it('⑦ 正しい conversationId は run に保存 / 不正な id は落とす (保存タグに過ぎない)', async () => {
+    const { app, repo } = makeApp();
+    await app.fetch(
+      req('/api/agents/planner', { token: TOKEN, method: 'POST', body: { prompt: 'x', conversationId: 'conv-abc_123' } }),
+    );
+    await app.fetch(
+      req('/api/agents/planner', { token: TOKEN, method: 'POST', body: { prompt: 'y', conversationId: 'bad id!!' } }),
+    );
+    const ids = (await repo.agentRuns.list({ workspaceId: WS })).map((r) => r.conversationId);
+    expect(ids).toContain('conv-abc_123');
+    expect(ids.filter((x) => x === 'bad id!!')).toHaveLength(0); // 空白・記号入りは弾く
   });
 });
