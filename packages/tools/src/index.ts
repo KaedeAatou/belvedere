@@ -85,7 +85,8 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
   const ticketListTool: AgentTool<{ sprintId?: string; status?: string; assigneeId?: string }, unknown> = {
     spec: {
       name: 'ticket.list',
-      description: 'チケット一覧を取得する。sprintId / status / assigneeId で絞り込み可。',
+      description:
+        'チケット一覧を取得する。sprintId / status / assigneeId で絞り込み可 (sprintId 未指定は全スプリント + backlog 横断)。各行に type / sprintId / parentTicketId / epicId を含むので、スプリント所属や親子・Epic 紐付けの判定はこの値を使う (未設定のフィールドはキーごと省略される)。',
       parameters: {
         type: 'object',
         properties: {
@@ -102,6 +103,9 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
         ...(args.status && { status: args.status as Parameters<typeof repo.tickets.list>[0] extends infer U ? U extends { status?: infer S } ? S : never : never }),
         ...(args.assigneeId && { assigneeId: args.assigneeId }),
       });
+      // 根本 A (2026-07-08): type / sprintId / parentTicketId / epicId を必ず返す。
+      // これらが無いと LLM はスプリント所属・親子紐付けを判別できず、旧スプリントの
+      // チケットで台本を作る / 「紐付けなし」と誤認する (ドッグフード F-33/F-11/F-24/F-34)。
       return ts.map((t) => ({
         id: t.id,
         title: t.title,
@@ -110,7 +114,30 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
         ritual: t.ritual,
         assigneeId: t.assigneeId,
         estimatePt: t.estimatePt,
+        ...(t.type !== undefined && { type: t.type }),
+        ...(t.sprintId !== undefined && { sprintId: t.sprintId }),
+        ...(t.parentTicketId !== undefined && { parentTicketId: t.parentTicketId }),
+        ...(t.epicId !== undefined && { epicId: t.epicId }),
       }));
+    },
+  };
+
+  const ticketGetTool: AgentTool<{ id: string }, unknown> = {
+    spec: {
+      name: 'ticket.get',
+      description:
+        'チケット 1 件を id 指定で取得する (存在確認・詳細参照の正)。ticket.list の絞り込みで見つからなくても、id が分かっているならこのツールで実在を確認してから回答すること。',
+      parameters: {
+        type: 'object',
+        properties: { id: { type: 'string' } },
+        required: ['id'],
+      },
+    },
+    async invoke({ id }) {
+      const t = await repo.tickets.get(id);
+      // IDOR ガード: sprint.get と同型。id 推測で他 workspace のチケットを読ませない。
+      if (!t || t.workspaceId !== workspaceId) return { error: `ticket not found: ${id}` };
+      return t;
     },
   };
 
@@ -336,6 +363,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
 
   const tools: AgentTool[] = [
     ticketListTool,
+    ticketGetTool,
     sprintGetTool,
     sprintCurrentTool,
     projectListTool,
