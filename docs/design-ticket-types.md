@@ -193,7 +193,7 @@ export function runTicketRules(ceremony: Ritual, ctx: RuleContext): TicketFindin
 | SPIKE_DOD_NOT_DECISION | spike | refinement | warn | AC のどの行にも `/(判断|結論|比較|わかる|分かる|明らか|決定|選定)/` が含まれない |
 | BUG_NO_REPRO | bug | refinement | error | `!/(再現|手順|steps)/i.test(t.description ?? '')` |
 | BUG_NO_REGRESSION_DOD | bug | refinement, review | warn | AC のどの行にも `/(回帰|リグレッション|テスト追加|自動テスト)/` が含まれない |
-| INCIDENT_ACTIVE | incident | daily | error | `t.status !== 'done'` |
+| INCIDENT_ACTIVE | incident | daily | error | `t.status === 'in-progress'` (2026-07-08 F-22: 旧 `!== 'done'` は未着手 incident まで「進行中」と誤検出したため他の停滞系ルールと同じ status 条件に統一) |
 | INCIDENT_NO_FOLLOWUP_BUG | incident | refinement | warn | `t.status === 'done' && !ctx.tickets.some(b => b.type === 'bug' && b.relatedIncidentId === t.id)`。`action: { kind: 'create-bug', label: '根本対応 Bug を起票' }` |
 | MISMATCH_SPIKE_TITLE | story, task | refinement | info | `/(調査|検証|比較|スパイク)/.test(t.title) && t.type !== 'spike'` |
 | SPRINT_OVER_VELOCITY | aggregate | planning | error | active sprint について `Σ(sprint 内 ticket の estimatePt) > 完了スプリントの平均 velocity`。velocity 実績が無ければ判定不能 (skip) |

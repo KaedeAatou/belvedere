@@ -140,8 +140,17 @@ describe('BUG rules', () => {
 });
 
 describe('INCIDENT rules', () => {
-  it('未完了で INCIDENT_ACTIVE 発火 (daily)', () => {
+  it('in-progress で INCIDENT_ACTIVE 発火 (daily)', () => {
     expect(fired('daily', ctxOf([ticket({ id: 'A', type: 'incident', status: 'in-progress' })]), 'INCIDENT_ACTIVE', 'A')).toBe(true);
+  });
+  // F-22 再現 (2026-07-08 ドッグフード): status を見ずに「進行中」と誤検出し、記録目的の
+  // 未着手 incident が Daily で毎回「最優先の障害対応」として警告され続けた。
+  it('todo (未着手) では発火しない (F-22)', () => {
+    expect(fired('daily', ctxOf([ticket({ id: 'A', type: 'incident', status: 'todo' })]), 'INCIDENT_ACTIVE', 'A')).toBe(false);
+  });
+  it('backlog / review でも発火しない (F-22)', () => {
+    expect(fired('daily', ctxOf([ticket({ id: 'A', type: 'incident', status: 'backlog' })]), 'INCIDENT_ACTIVE', 'A')).toBe(false);
+    expect(fired('daily', ctxOf([ticket({ id: 'B', type: 'incident', status: 'review' })]), 'INCIDENT_ACTIVE', 'B')).toBe(false);
   });
   it('done で根本対応 Bug 無しなら INCIDENT_NO_FOLLOWUP_BUG 発火', () => {
     const ctx = ctxOf([ticket({ id: 'INC', type: 'incident', status: 'done' })]);
