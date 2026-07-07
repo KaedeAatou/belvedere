@@ -208,8 +208,11 @@ export const ticketRules: TicketRule[] = [
     id: 'INCIDENT_ACTIVE',
     appliesTo: ['incident'],
     ceremonies: ['daily'],
+    // F-22 (2026-07-08): 旧実装は status !== 'done' で発火し、記録目的の未着手 incident
+    // (backlog/todo) まで毎 Daily「進行中の障害」と誤検出していた。「進行中」の文言どおり
+    // in-progress のみ発火させる (他の停滞系ルール TASK_STALL 等と同じ status 条件に整合)。
     check: (t) =>
-      t && t.status !== 'done'
+      t && t.status === 'in-progress'
         ? [{ ruleId: 'INCIDENT_ACTIVE', ticketId: t.id, severity: 'error', message: '進行中のインシデントです。復旧見通しを共有し、優先対応してください。' }]
         : [],
   },
