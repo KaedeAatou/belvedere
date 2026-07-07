@@ -2,6 +2,7 @@
 import type { Ticket } from '@belvedere/shared';
 import type { ScreenId } from '~/composables/useUiMeta';
 import { buildChecks, screenIntro, type AICheckAction } from '~/composables/useChecks';
+import { renderMarkdownSafe } from '~/utils/markdown';
 
 const props = defineProps<{
   screen: ScreenId;
@@ -93,7 +94,9 @@ async function onAction(a: AICheckAction): Promise<void> {
         :data-testid="`ai-message`"
       >
         <span class="who">{{ m.role === 'user' ? 'You' : 'Belvedere' }}</span>
-        <span :class="['body', m.role === 'user' && 'user']">{{ m.text }}</span>
+        <span v-if="m.role === 'user'" class="body user">{{ m.text }}</span>
+        <!-- agent メッセージは markdown 描画 (renderMarkdownSafe が生 HTML をエスケープ済み) -->
+        <span v-else class="body md" v-html="renderMarkdownSafe(m.text)" />
       </div>
     </template>
 
@@ -149,5 +152,60 @@ async function onAction(a: AICheckAction): Promise<void> {
 .send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+/* agent メッセージの markdown 描画 (renderMarkdownSafe 出力) */
+.body.md {
+  display: block;
+}
+.body.md :first-child {
+  margin-top: 0;
+}
+.body.md :last-child {
+  margin-bottom: 0;
+}
+.body.md h1,
+.body.md h2,
+.body.md h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 8px 0 4px;
+  color: var(--ink-0);
+}
+.body.md p {
+  margin: 4px 0;
+}
+.body.md ul,
+.body.md ol {
+  margin: 4px 0;
+  padding-left: 1.2em;
+}
+.body.md li {
+  margin: 2px 0;
+}
+.body.md code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.85em;
+  background: var(--line-1);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+.body.md pre {
+  background: var(--line-1);
+  padding: 8px 10px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 6px 0;
+}
+.body.md pre code {
+  background: none;
+  padding: 0;
+}
+.body.md a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.body.md strong {
+  font-weight: 600;
+  color: var(--ink-0);
 }
 </style>
