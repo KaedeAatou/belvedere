@@ -9,6 +9,7 @@ import { runTicketRules, buildRuleContext } from './ticket-rules';
 import { checkTicketQuality } from './quality';
 import { checkBacklogRefinement } from './refinement';
 import { validateInvocation, CEREMONY_AGENTS } from './agent-invoke';
+import { summarizeSprintContext } from './sprint-context';
 
 // ルールエンジンを外部 (apps/api の finding-handlers 等) からも使えるよう re-export
 export {
@@ -129,6 +130,19 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
       // Sprint を読めないよう tool 側で照合する (薄い CRUD の IDOR 方針と整合 / ticketQualityCheckTool と同型)。
       if (!s || s.workspaceId !== workspaceId) return { error: `sprint not found: ${id}` };
       return s;
+    },
+  };
+
+  const sprintCurrentTool: AgentTool<Record<string, never>, unknown> = {
+    spec: {
+      name: 'sprint.current',
+      description:
+        '現在のスプリント文脈を取得する (id 不要)。active スプリント / 次の planned / velocity 実績 (直近完了の平均) / 直近完了スプリントを返す。ユーザーが sprintId を指定しない時の起点に使う。',
+      parameters: { type: 'object', properties: {} },
+    },
+    async invoke() {
+      const sprints = await repo.sprints.list({ workspaceId });
+      return summarizeSprintContext(sprints);
     },
   };
 
@@ -323,6 +337,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
   const tools: AgentTool[] = [
     ticketListTool,
     sprintGetTool,
+    sprintCurrentTool,
     projectListTool,
     epicListTool,
     ticketQualityCheckTool,
