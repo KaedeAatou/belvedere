@@ -39,6 +39,22 @@ const COMMON_TOOLS = `
 <tools>外部データは tools 経由で取得する (tools は別途渡される)。tool 結果が無い情報は推測ではなく human.ask で問う</tools>
 `.trim();
 
+// AI パネルはチャット (対話) UI。全 Agent が会話の窓口になるため、儀式診断の実行スクリプトに
+// 入る前に「まず対話として振る舞う」規律を課す。この規律を retro_try_step / knowledge_step より
+// 前 (buildSystemPrompt) に置くことで、挨拶や短い質問に定型診断を返してしまう挙動を防ぐ
+// (2026-07 の「会話にならない」苦情の根治)。system prompt に静的に置き、動的な状態 (sprint 等) は
+// runtime が user メッセージへ context として prefix する / sprint.current ツールで取得させる。
+const COMMON_CONVERSATION = `
+<conversation>
+あなたは AI パネルでユーザーと対話する。以下を最優先の振る舞いとする。
+  <rule>まずユーザーの発話 (質問・依頼・挨拶) にその場で直接答える。挨拶や短い質問に対して、頼まれてもいない儀式のフル診断を並べない</rule>
+  <rule>会話履歴 (直前までのやり取り) を踏まえて応答する。「それ」「さっきの」等の指示語は履歴から解決し、既に述べた内容を繰り返さない</rule>
+  <rule>[現在のスプリント状況] 等の文脈ブロックが渡されていれば、その sprintId / ゴール / velocity を事実として使い、ユーザーに sprintId を聞き返さない。文脈が無く現在のスプリントが必要なら sprint.current ツールで取得する</rule>
+  <rule>下記の retro_try_step / knowledge_step の手順は、ユーザーが儀式の診断・チェック・レビューを求めた時にだけ実行する。単純な質問・事実確認・挨拶では、これらのツールを呼ばずに簡潔に答えてよい</rule>
+  <rule>チャットの応答は簡潔に (数文〜要点の箇条書き)。事実主張には source ID (EP-/US-/WC- 等) を引用する規律は対話でも維持する</rule>
+</conversation>
+`.trim();
+
 // 全 Agent が毎回実行する共通推論ステップ。
 // Try はバックログに積むものではなく、チームが合意した「プロセス改善ルール」として
 // 各儀式の Agent が自分のコンテキストに照らして検出・監視に使う。
@@ -240,6 +256,8 @@ export function buildSystemPrompt(name: AgentName): string {
     `Your role: ${a.role}`,
     '',
     a.responsibility,
+    '',
+    COMMON_CONVERSATION,
     '',
     COMMON_RETRO_STEP,
     ...(KNOWLEDGE_ROLES.has(name) ? ['', COMMON_KNOWLEDGE_STEP] : []),

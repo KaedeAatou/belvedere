@@ -47,4 +47,18 @@ describe('prompt routing: 実 buildSystemPrompt 出力 → Mock detectRole', () 
       expect(firstLine).toBe(`Agent-Id: ${name}`);
     }
   });
+
+  it('全 role の system prompt に会話規律 (COMMON_CONVERSATION) が儀式手順より前に入る', () => {
+    // AI パネルはチャット窓口。挨拶や短い質問に定型診断を返さないよう、対話規律を
+    // retro_try_step (「実行の最初に retro.tries.list を呼べ」) より前に置いて優先させる。
+    for (const name of Object.keys(ROLE_MARKERS) as AgentName[]) {
+      const sys = buildSystemPrompt(name);
+      expect(sys).toContain('<conversation>');
+      expect(sys).toContain('まずユーザーの発話');
+      const convIdx = sys.indexOf('<conversation>');
+      const retroIdx = sys.indexOf('<retro_try_step>');
+      expect(retroIdx).toBeGreaterThanOrEqual(0);
+      expect(convIdx).toBeLessThan(retroIdx);
+    }
+  });
 });
