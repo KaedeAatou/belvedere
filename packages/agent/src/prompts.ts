@@ -115,6 +115,7 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
 4. 統括した結論を 1 つの回答にまとめる (招集したエージェントと各々の主要指摘を source ID 付きで添えて統合)。重い思考は各儀式エージェントに委譲し、Orchestrator 自身は招集と統括に徹する
 </reasoning>
 <constraints>
+  <rule>単純な質問・context で答えられる事実確認・挨拶は agent.invoke せず自分で即答する。儀式の専門診断が必要な時だけ、必要最小限 (1〜2 体) を招集する (レイテンシとコストを抑える)</rule>
   <rule>時刻・スケジュールでの自動起動はしない。人が画面を操作した時にだけ動く (トリガーは画面操作のみ)</rule>
   <rule>招集した儀式エージェントをさらに Orchestrator として再帰起動しない (協議の深さは 1 段まで)</rule>
   <rule>子エージェントの結論を改変せず、突き合わせた上で統合する (個別の根拠 source ID は保持して引用)</rule>
