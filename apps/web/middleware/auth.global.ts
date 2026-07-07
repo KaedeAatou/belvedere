@@ -4,20 +4,19 @@
 // SSR 中は Firebase Auth が動作しないので、server side では認証チェックを skip し
 // クライアント側でハイドレーション後に判定する。
 // (Firebase の onAuthStateChanged は async なので isInitialized が true になるまで待つ)
+//
+// 注意: このガードは「ナビゲーション時」にしか走らない。未ログインの直アクセス (URL 直打ち /
+// ハードロード) では、この 1 回の判定時点でまだ isInitialized=false のことが多く、その後
+// isInitialized が true に変わっても再判定されない (= 未認証シェルが表示され続ける)。
+// その穴は plugins/auth-redirect.client.ts (isInitialized の変化を監視) が塞ぐ。
 
 export default defineNuxtRouteMiddleware((to) => {
-  // /login は認証不要
-  if (to.path === '/login') return;
-
   // server side では何もしない (client side hydration 後に判定)
   if (import.meta.server) return;
 
   const { isAuthenticated, isInitialized } = useAuth();
 
-  // onAuthStateChanged が 1 度走るまでは判定保留 (リロード直後の誤リダイレクト防止)
-  if (!isInitialized.value) return;
-
-  if (!isAuthenticated.value) {
+  if (shouldRedirectToLogin(to.path, isInitialized.value, isAuthenticated.value)) {
     return navigateTo('/login');
   }
 });
