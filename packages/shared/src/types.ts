@@ -343,6 +343,11 @@ export interface AgentRun {
   };
   error?: { message: string; stack?: string };
   /**
+   * AI パネルの会話単位 (クライアント発番の UUID)。同一会話に属する run を後から辿るためのタグ。
+   * 通常の単発実行では省略される (後方互換 optional)。
+   */
+  conversationId?: string;
+  /**
    * agent.invoke (Orchestrator 協議) で起動した子 run。深さ 1 固定 (子は agent.invoke を
    * 持たないため孫 run は生まれない)。協議していない通常 run では省略される (後方互換 optional)。
    */

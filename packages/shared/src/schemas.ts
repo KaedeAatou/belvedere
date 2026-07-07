@@ -262,6 +262,7 @@ const AgentRunBaseSchema = z.object({
       stack: z.string().optional(),
     })
     .optional(),
+  conversationId: z.string().optional(),
 });
 
 // base を AgentRun 型へ注釈した上で childRuns (自己参照配列) を z.lazy で足す。
