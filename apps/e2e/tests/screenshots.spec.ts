@@ -11,21 +11,28 @@
 
 import { test, expect } from '../fixtures/auth.fixture';
 
-// rail-backlog は railTab='backlog' (デフォルト) で、儀式は Events タブで表示される。
+// rail-backlog は railTab='backlog' (Backlog タブ切替後) で、儀式は Events タブで表示される。
 const CEREMONIES = ['planning', 'daily', 'refinement', 'review', 'retro'] as const;
 
 test('全画面スクリーンショット巡回', async ({ authedPage }) => {
   const page = authedPage;
 
-  // --- Backlog (初期画面 / railTab=backlog) ---
+  // --- Events home (初期画面 / 2026-07-07〜: ログイン直後は概要ホーム) ---
   await page.goto('/', { waitUntil: 'networkidle' });
+  await expect(page.getByTestId('rail-events')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ fullPage: true, path: 'test-results/screens/events.png' });
+  await expect(page.locator('.shell-main')).toBeVisible();
+
+  // --- Backlog タブに切替 ---
+  await page.getByRole('button', { name: 'Backlog', exact: true }).click();
   await expect(page.getByTestId('rail-backlog')).toBeVisible({ timeout: 15_000 });
   // 実データ (live セクション) の描画を少し待つ
   await page.waitForTimeout(1500);
   await page.screenshot({ fullPage: true, path: 'test-results/screens/backlog.png' });
   await expect(page.locator('.shell-main')).toBeVisible();
 
-  // --- Events タブに切替えて儀式レールを表示 ---
+  // --- Events タブに戻して儀式レールを表示 ---
   await page.getByRole('button', { name: 'Events', exact: true }).click();
 
   for (const id of CEREMONIES) {

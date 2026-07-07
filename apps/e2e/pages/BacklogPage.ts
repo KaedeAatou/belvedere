@@ -31,11 +31,12 @@ export class BacklogPage extends BasePage {
   }
 
   /**
-   * Belvedere の "/" は Backlog 画面 (index.vue 経由)。
-   * 初期 screen は backlog なので、navigation 直後に Live セクションが表示される想定。
+   * Belvedere の "/" は初期表示が Events home (2026-07-07〜: ログイン直後は概要ホームを見せる方針)。
+   * Backlog タブへ明示的に切り替えてから Live セクションの表示を待つ。
    */
   async open(): Promise<void> {
     await this.goto('/');
+    await this.page.getByRole('button', { name: 'Backlog', exact: true }).click();
     await expect(this.liveSection).toBeVisible({ timeout: 15_000 });
   }
 
