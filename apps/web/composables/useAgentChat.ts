@@ -3,7 +3,7 @@
 // 会話履歴に追記する。画面切替時も会話を維持するため useState で共有する。
 
 import type { ScreenId } from '~/composables/useUiMeta';
-import type { Sprint } from '@belvedere/shared';
+import type { Sprint, Ticket } from '@belvedere/shared';
 
 export interface ChatMessage {
   role: 'user' | 'agent';
@@ -30,32 +30,69 @@ export function resolveAgentName(screen: ScreenId, useOrchestratorWindow: boolea
   return useOrchestratorWindow ? 'orchestrator' : SCREEN_TO_AGENT[screen];
 }
 
+/** ScreenId → 人間可読な画面名 (AI に「今どの儀式画面を見ているか」を伝える)。 */
+const SCREEN_LABEL: Record<ScreenId, string> = {
+  backlog: 'Backlog',
+  refinement: 'Backlog Refinement',
+  planning: 'Sprint Planning',
+  daily: 'Daily Scrum',
+  review: 'Sprint Review',
+  retro: 'Retrospective',
+  events: 'ホーム (Events)',
+  'sprint-history': 'スプリント履歴',
+};
+
+export interface AgentContextInput {
+  sprints: Sprint[];
+  screen: ScreenId;
+  /** その画面に表示中のチケット (一覧を context に載せる。上限 20 件)。 */
+  tickets: Ticket[];
+  /** 詳細を開いている (選択中の) チケット ID。無ければ null。 */
+  selectedTicketId: string | null;
+}
+
 /**
- * WC-39/29: AI パネルへ渡す現在スプリント文脈を組む純粋関数 (Nuxt 非依存で直接テスト)。
- * ユーザーが sprintId を明示しなくても agent が active/next スプリント (velocity/ゴール含む) を
- * 把握できるようにする。該当スプリントが無ければ undefined (payload に載せない)。
+ * WC-39/29 + P2: AI パネルへ渡す現在文脈を組む純粋関数 (Nuxt 非依存で直接テスト)。
+ * 画面 / active・next スプリント (velocity/ゴール) / 選択中チケット / 表示中チケット一覧を渡し、
+ * ユーザーが id を書かなくても agent が「今どこで何を見ているか」を把握できるようにする。
+ * 画面名は常に付くので、スプリントが無くても文脈は空にならない。
  */
-export function buildAgentContext(sprints: Sprint[]): string | undefined {
+export function buildAgentContext(input: AgentContextInput): string {
+  const { sprints, screen, tickets, selectedTicketId } = input;
+  const lines: string[] = [`現在の画面: ${SCREEN_LABEL[screen]}`];
+
   const active = sprints.find((s) => s.status === 'active');
   const next = sprints.filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number)[0];
-  // velocity 実績 = 完了スプリントの velocity 平均。画面 PLANNED/VELOCITY の分母 (avgVelocity) と一致させる。
-  // active 自身の velocity は「進行中で未確定」なので、AI に渡すのは実績平均にする (画面と食い違わせない)。
+  // velocity 実績 = 完了スプリントの velocity 平均 (画面 PLANNED/VELOCITY の分母と一致)。
+  // active 自身の velocity は進行中で未確定なので、AI に渡すのは実績平均にする。
   const completed = sprints.filter((s) => s.velocity !== undefined);
   const avgVelocity = completed.length > 0
     ? Math.round(completed.reduce((n, s) => n + (s.velocity ?? 0), 0) / completed.length)
     : null;
-  if (!active && !next) return undefined; // スプリントが無ければ文脈を付けない (payload に載せない)。
-  const lines: string[] = [];
   if (active) {
     const nm = active.name?.trim() || `Sprint ${active.number}`;
-    lines.push(`現在のアクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'}`);
+    lines.push(`アクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'}`);
   }
   lines.push(`velocity 実績 (直近完了スプリントの平均 = 画面 PLANNED/VELOCITY の分母) = ${avgVelocity ?? '(実績なし)'}`);
   if (next) {
     const nm = next.name?.trim() || `Sprint ${next.number}`;
     lines.push(`次の計画中スプリント: id=${next.id} / 名前=${nm}`);
   }
-  return lines.length > 0 ? `[現在のスプリント状況]\n${lines.join('\n')}` : undefined;
+
+  const selected = selectedTicketId ? tickets.find((t) => t.id === selectedTicketId) : undefined;
+  if (selected) {
+    lines.push(
+      `選択中チケット: ${selected.id} 「${selected.title}」 status=${selected.status} SP=${selected.estimatePt ?? '未'}`,
+    );
+  }
+  if (tickets.length > 0) {
+    const shown = tickets
+      .slice(0, 20)
+      .map((t) => `${t.id}: ${t.title} [${t.status}/SP=${t.estimatePt ?? '未'}]`);
+    lines.push(`表示中のチケット (${shown.length}/${tickets.length} 件):\n${shown.join('\n')}`);
+  }
+
+  return `[現在の画面とスプリント状況]\n${lines.join('\n')}`;
 }
 
 export const useAgentChat = () => {
@@ -67,7 +104,11 @@ export const useAgentChat = () => {
   const config = useRuntimeConfig();
   const { sprints } = useSprints();
 
-  async function send(screen: ScreenId, prompt: string): Promise<void> {
+  async function send(
+    screen: ScreenId,
+    prompt: string,
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null } = {},
+  ): Promise<void> {
     const trimmed = prompt.trim();
     if (!trimmed || isSending.value) return;
 
@@ -78,8 +119,13 @@ export const useAgentChat = () => {
     // ④ feature flag (既定 OFF = 回帰ゼロ): ON で Orchestrator (単一窓口=協議統括) に集約、OFF で画面対応 agent。
     const agentName = resolveAgentName(screen, Boolean(config.public.useOrchestratorWindow));
     try {
-      // WC-39/29: 現在のスプリント文脈を自動付与し、ユーザーが sprintId を書かなくても診断できるようにする。
-      const context = buildAgentContext(sprints.value);
+      // P2: 画面 + 現在スプリント + 選択中/表示中チケットを自動付与し、ユーザーが id を書かなくても診断できるようにする。
+      const context = buildAgentContext({
+        sprints: sprints.value,
+        screen,
+        tickets: opts.tickets ?? [],
+        selectedTicketId: opts.selectedTicketId ?? null,
+      });
       // 会話継続: 直近の会話履歴 (今回追加した user を除く最新 8 件) を送り、AI が前の文脈を保持できるようにする。
       const history = messages.value
         .slice(0, -1)

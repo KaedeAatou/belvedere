@@ -6,6 +6,7 @@ import { buildChecks, screenIntro, type AICheckAction } from '~/composables/useC
 const props = defineProps<{
   screen: ScreenId;
   tickets: Ticket[];
+  selectedTicketId?: string | null;
 }>();
 const emit = defineEmits<{ jump: [id: string]; navigate: [screen: ScreenId] }>();
 
@@ -21,7 +22,7 @@ async function handleSend(): Promise<void> {
   const prompt = inputText.value.trim();
   if (!prompt || isSending.value) return;
   inputText.value = '';
-  await send(props.screen, prompt);
+  await send(props.screen, prompt, { tickets: props.tickets, selectedTicketId: props.selectedTicketId ?? null });
 }
 
 function onTextareaKeydown(e: KeyboardEvent): void {
@@ -39,7 +40,7 @@ async function onAction(a: AICheckAction): Promise<void> {
     return;
   }
   if (a.kind === 'prompt' && a.prompt && !isSending.value) {
-    await send(props.screen, a.prompt);
+    await send(props.screen, a.prompt, { tickets: props.tickets, selectedTicketId: props.selectedTicketId ?? null });
   }
 }
 </script>

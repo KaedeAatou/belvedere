@@ -145,7 +145,7 @@ const ticket = computed(() =>
     </div>
 
     <template #ai>
-      <AIPanel :screen="screen" :tickets="tickets" @jump="onJump" @navigate="(s) => (screen = s)" />
+      <AIPanel :screen="screen" :tickets="tickets" :selected-ticket-id="selected" @jump="onJump" @navigate="(s) => (screen = s)" />
     </template>
   </Shell>
 
