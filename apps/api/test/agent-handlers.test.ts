@@ -178,6 +178,33 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(ids.filter((x) => x === 'bad id!!')).toHaveLength(0); // 空白・記号入りは弾く
   });
 
+  it('⑪ orchestrator の agent.invoke 子にも context が伝播する (根本 B / F-33 対策)', async () => {
+    // ドッグフード F-33: Orchestrator 単一窓口 ON だと context (active sprint 等) が親で止まり、
+    // 実際に ticket.list を叩く子 agent が「今のスプリント」を知らないまま全件走査していた。
+    // 子 run の LLM 呼び出し (system が Agent-Id: <ceremony>) の user 先頭に context が乗ることを固定する。
+    const { provider, calls } = spyLLM(createLLMProvider('mock'));
+    const { app } = makeApp(provider);
+    const ctx = '[現在の画面とスプリント状況]\nアクティブスプリント: id=sprint-99';
+    const res = await app.fetch(
+      req('/api/agents/orchestrator', {
+        token: TOKEN,
+        method: 'POST',
+        body: { prompt: 'この候補を診断して', context: ctx },
+      }),
+    );
+    expect(res.status).toBe(200);
+    // mock orchestrator は refinement + planner を招集する → 子呼び出しが記録されているはず。
+    const childCalls = calls.filter((c) => {
+      const sys = c.messages[0];
+      return sys?.role === 'system' && /^Agent-Id: (?!orchestrator)/.test(sys.content);
+    });
+    expect(childCalls.length).toBeGreaterThanOrEqual(1);
+    for (const c of childCalls) {
+      const lastUser = c.messages.filter((m) => m.role === 'user').at(-1)!;
+      expect(lastUser.content.startsWith(ctx)).toBe(true);
+    }
+  });
+
   it('⑧ /stream は SSE (text/event-stream) で step/delta/run/done を流す (P6)', async () => {
     const { app } = makeApp();
     const res = await app.fetch(

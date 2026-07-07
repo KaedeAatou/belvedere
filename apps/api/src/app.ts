@@ -489,6 +489,9 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
               childRuns,
               costCapUsd: AGENT_INVOKE_COST_CAP_USD,
               ...(knowledge && { knowledge }),
+              // 画面文脈を agent.invoke の子にも伝播 (根本 B / F-33): 単一窓口 ON で
+              // 実際にツールを叩く子が「今のスプリント」を見失わないようにする。
+              ...(body.context && { contextText: body.context }),
             }),
           )
         : buildRegistry(buildTools(repo, workspaceId, knowledgeDeps));
