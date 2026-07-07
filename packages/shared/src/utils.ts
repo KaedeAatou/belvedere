@@ -2,7 +2,7 @@
 // repo backend と api handler に重複していた stripUndefined、
 // および 3 箇所に散っていた ID 採番ロジックをここに集約する。
 
-import type { Priority, Status, Ticket } from './types';
+import type { Priority, Sprint, Status, Ticket } from './types';
 
 /** priority 降順用の重み (urgent が最も先頭)。フォールバックソートで使う。 */
 const PRIORITY_RANK: Record<Priority, number> = { urgent: 3, high: 2, medium: 1, low: 0 };
@@ -132,4 +132,25 @@ export function nextTicketNumber(existingIds: string[], prefix = 'WC'): number {
     }
   }
   return max + 1;
+}
+
+/**
+ * velocity 実績の分母 = 「完了 (status==='completed') し velocity が数値で確定したスプリント」(2026-07-08)。
+ *
+ * ドッグフード F-30 で判明した不一致の根治: この定義が sprint-context (AI ツール) /
+ * smart-eval (SMART 評価) / buildAgentContext (AI パネル context) / SPRINT_OVER_VELOCITY
+ * (ルールエンジン) / useSprints.velocityHistory (画面 PLANNED/VELOCITY) で微妙に異なり、
+ * SMART が画面の「+N SP OVER」表示と矛盾する判定を出す一因になっていた。
+ * 全 consumer がこの 2 関数を使い、分母の定義ずれを構造的に無くす。
+ */
+export function completedVelocities(sprints: Sprint[]): number[] {
+  return sprints
+    .filter((s) => s.status === 'completed' && typeof s.velocity === 'number')
+    .map((s) => s.velocity as number);
+}
+
+/** 完了スプリント velocity の平均 (四捨五入)。実績が 1 件も無ければ null。 */
+export function averageVelocity(sprints: Sprint[]): number | null {
+  const vs = completedVelocities(sprints);
+  return vs.length > 0 ? Math.round(vs.reduce((n, v) => n + v, 0) / vs.length) : null;
 }

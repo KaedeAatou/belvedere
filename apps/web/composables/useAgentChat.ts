@@ -4,6 +4,7 @@
 
 import type { ScreenId } from '~/composables/useUiMeta';
 import type { Sprint, Ticket } from '@belvedere/shared';
+import { averageVelocity } from '@belvedere/shared';
 
 export interface ChatStep {
   toolName: string;
@@ -80,12 +81,8 @@ export function buildAgentContext(input: AgentContextInput): string {
 
   const active = sprints.find((s) => s.status === 'active');
   const next = sprints.filter((s) => s.status === 'planned').sort((a, b) => a.number - b.number)[0];
-  // velocity 実績 = 完了スプリントの velocity 平均 (画面 PLANNED/VELOCITY の分母と一致)。
-  // active 自身の velocity は進行中で未確定なので、AI に渡すのは実績平均にする。
-  const completed = sprints.filter((s) => s.velocity !== undefined);
-  const avgVelocity = completed.length > 0
-    ? Math.round(completed.reduce((n, s) => n + (s.velocity ?? 0), 0) / completed.length)
-    : null;
+  // velocity 実績 = 完了スプリントの velocity 平均 (正準ヘルパ / 画面・SMART 評価と同一定義 / F-30 根治)。
+  const avgVelocity = averageVelocity(sprints);
   if (active) {
     const nm = active.name?.trim() || `Sprint ${active.number}`;
     lines.push(`アクティブスプリント: id=${active.id} / 名前=${nm} / ゴール=${active.goal?.trim() || '(未設定)'}`);

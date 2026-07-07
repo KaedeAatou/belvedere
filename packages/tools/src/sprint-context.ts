@@ -1,4 +1,5 @@
 import type { Sprint } from '@belvedere/shared';
+import { averageVelocity } from '@belvedere/shared';
 
 // AI パネル向けの「現在スプリント文脈」を組む純粋関数 (sprint.current tool の本体 / 直接 unit テスト対象)。
 // ユーザーが sprintId を書かなくても Agent が active/next スプリントと velocity 実績を掴めるようにする。
@@ -45,15 +46,11 @@ export function summarizeSprintContext(sprints: Sprint[]): SprintContext {
       .filter((s) => s.status === 'planned')
       .sort((a, b) => a.number - b.number)[0] ?? null;
 
-  // velocity 記録のあるスプリント = 実績が確定したもの (undefined は進行中/未確定なので除外)。
-  const withVelocity = sprints.filter((s) => s.velocity !== undefined);
-  const avgVelocity =
-    withVelocity.length > 0
-      ? Math.round(withVelocity.reduce((n, s) => n + (s.velocity ?? 0), 0) / withVelocity.length)
-      : null;
+  // velocity 実績の分母は正準ヘルパ averageVelocity に統一 (completed + velocity 数値 / F-30 根治)。
+  const avgVelocity = averageVelocity(sprints);
 
-  const recentCompleted = withVelocity
-    .slice()
+  const recentCompleted = sprints
+    .filter((s) => s.status === 'completed' && typeof s.velocity === 'number')
     .sort((a, b) => b.number - a.number)
     .slice(0, 3)
     .map((s) => ({ id: s.id, number: s.number, velocity: s.velocity as number }));
