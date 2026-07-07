@@ -5,9 +5,17 @@
 import type { ScreenId } from '~/composables/useUiMeta';
 import type { Sprint, Ticket } from '@belvedere/shared';
 
+export interface ChatStep {
+  toolName: string;
+  ok: boolean;
+  durationMs?: number;
+}
+
 export interface ChatMessage {
   role: 'user' | 'agent';
   text: string;
+  /** agent メッセージが実行したツールの要約 (チップ表示用)。 */
+  steps?: ChatStep[];
 }
 
 /** ScreenId → API agent name のマッピング。 */
@@ -99,20 +107,24 @@ export const useAgentChat = () => {
   const messages = useState<ChatMessage[]>('agent-chat-messages', () => []);
   const isSending = useState<boolean>('agent-chat-sending', () => false);
   const sendError = useState<string | null>('agent-chat-error', () => null);
+  // 直近の失敗した送信 (リトライ用)。成功で null に戻す。
+  const lastAttempt = useState<{
+    screen: ScreenId;
+    prompt: string;
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null };
+  } | null>('agent-chat-last-attempt', () => null);
 
   const api = useApiClient();
   const config = useRuntimeConfig();
   const { sprints } = useSprints();
 
-  async function send(
+  // user メッセージが既に messages に積まれている前提で agent へ問い合わせる中核。
+  // send() は user メッセージを積んでから呼び、retry() は積まずに再実行する (user 重複追加なし)。
+  async function runAgentRequest(
     screen: ScreenId,
     prompt: string,
-    opts: { tickets?: Ticket[]; selectedTicketId?: string | null } = {},
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null },
   ): Promise<void> {
-    const trimmed = prompt.trim();
-    if (!trimmed || isSending.value) return;
-
-    messages.value = [...messages.value, { role: 'user', text: trimmed }];
     isSending.value = true;
     sendError.value = null;
 
@@ -126,7 +138,7 @@ export const useAgentChat = () => {
         tickets: opts.tickets ?? [],
         selectedTicketId: opts.selectedTicketId ?? null,
       });
-      // 会話継続: 直近の会話履歴 (今回追加した user を除く最新 8 件) を送り、AI が前の文脈を保持できるようにする。
+      // 会話継続: 直近履歴 (末尾の user を除く最新 8 件)。retry 時も末尾は失敗した user なので同じ式で成立。
       const history = messages.value
         .slice(0, -1)
         .slice(-8)
@@ -134,10 +146,10 @@ export const useAgentChat = () => {
       const run = await api.post<{
         status: string;
         outputArtifacts?: { summary?: string };
-        steps?: Array<{ type: string; content: unknown }>;
+        steps?: Array<{ type: string; content: unknown; toolName?: string; durationMs?: number }>;
         error?: { message: string };
       }>(`/api/agents/${agentName}`, {
-        prompt: trimmed,
+        prompt,
         ...(context && { context }),
         ...(history.length > 0 && { history }),
       });
@@ -153,24 +165,55 @@ export const useAgentChat = () => {
         }
       }
       if (!responseText) {
-        responseText = run.error?.message
-          ? `エラー: ${run.error.message}`
-          : `ステータス: ${run.status}`;
+        responseText = run.error?.message ? `エラー: ${run.error.message}` : `ステータス: ${run.status}`;
       }
-      messages.value = [...messages.value, { role: 'agent', text: responseText }];
+
+      // ツール実行トレース (tool_result step) をチップ用に要約する。
+      const steps = (run.steps ?? [])
+        .filter((s) => s.type === 'tool_result' && s.toolName)
+        .map((s) => ({
+          toolName: s.toolName as string,
+          ok: !(typeof s.content === 'object' && s.content !== null && 'error' in s.content),
+          ...(s.durationMs !== undefined && { durationMs: s.durationMs }),
+        }));
+
+      messages.value = [
+        ...messages.value,
+        { role: 'agent', text: responseText, ...(steps.length > 0 && { steps }) },
+      ];
+      lastAttempt.value = null; // 成功 → リトライ不要
     } catch (e) {
-      const errText = apiErrorMessage(e);
-      sendError.value = errText;
-      messages.value = [...messages.value, { role: 'agent', text: `エラー: ${errText}` }];
+      // エラーは会話に偽の agent メッセージとして混ぜず、バナー + リトライに委ねる (会話を汚さない)。
+      sendError.value = apiErrorMessage(e);
+      lastAttempt.value = { screen, prompt, opts };
     } finally {
       isSending.value = false;
     }
   }
 
+  async function send(
+    screen: ScreenId,
+    prompt: string,
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null } = {},
+  ): Promise<void> {
+    const trimmed = prompt.trim();
+    if (!trimmed || isSending.value) return;
+    messages.value = [...messages.value, { role: 'user', text: trimmed }];
+    await runAgentRequest(screen, trimmed, opts);
+  }
+
+  // 直近の失敗を、user メッセージを重複追加せずに再送する。
+  async function retry(): Promise<void> {
+    const a = lastAttempt.value;
+    if (!a || isSending.value) return;
+    await runAgentRequest(a.screen, a.prompt, a.opts);
+  }
+
   function clear(): void {
     messages.value = [];
     sendError.value = null;
+    lastAttempt.value = null;
   }
 
-  return { messages, isSending, sendError, send, clear };
+  return { messages, isSending, sendError, send, retry, clear };
 };

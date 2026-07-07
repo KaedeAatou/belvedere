@@ -15,7 +15,7 @@ const checks = computed(() => buildChecks(props.screen, props.tickets));
 const intro = computed(() => screenIntro(props.screen));
 
 // エージェントチャット (D-11)
-const { messages, isSending, send } = useAgentChat();
+const { messages, isSending, sendError, send, retry } = useAgentChat();
 const inputText = ref('');
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 
@@ -97,6 +97,16 @@ async function onAction(a: AICheckAction): Promise<void> {
         <span v-if="m.role === 'user'" class="body user">{{ m.text }}</span>
         <!-- agent メッセージは markdown 描画 (renderMarkdownSafe が生 HTML をエスケープ済み) -->
         <span v-else class="body md" v-html="renderMarkdownSafe(m.text)" />
+        <!-- ツール実行トレースをチップ表示 (何を根拠に答えたかの可視化) -->
+        <div v-if="m.role === 'agent' && m.steps?.length" class="ai-steps">
+          <span
+            v-for="(st, k) in m.steps"
+            :key="k"
+            class="ai-step"
+            :class="{ 'step-fail': !st.ok }"
+            data-testid="ai-step"
+          >{{ st.toolName }}<template v-if="st.durationMs != null"> · {{ st.durationMs }}ms</template></span>
+        </div>
       </div>
     </template>
 
@@ -104,6 +114,12 @@ async function onAction(a: AICheckAction): Promise<void> {
     <div v-if="isSending" class="ai-msg chat-msg">
       <span class="who">Belvedere</span>
       <span class="body sending">実行中…</span>
+    </div>
+
+    <!-- エラーバナー + リトライ (会話に偽メッセージを混ぜず、ここで扱う) -->
+    <div v-if="sendError && !isSending" class="ai-error" data-testid="ai-error">
+      <span class="err-body">送信に失敗しました: {{ sendError }}</span>
+      <button data-testid="ai-retry" @click="retry">再試行</button>
     </div>
   </div>
 
@@ -207,5 +223,48 @@ async function onAction(a: AICheckAction): Promise<void> {
 .body.md strong {
   font-weight: 600;
   color: var(--ink-0);
+}
+/* ツール実行トレースのチップ */
+.ai-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.ai-step {
+  font-size: 0.7rem;
+  font-family: ui-monospace, monospace;
+  color: var(--ink-3);
+  background: var(--line-1);
+  padding: 1px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ai-step.step-fail {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+/* エラーバナー + リトライ */
+.ai-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.ai-error .err-body {
+  flex: 1;
+  font-size: 0.8rem;
+  color: var(--ink-0);
+}
+.ai-error button {
+  font-size: 0.75rem;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
 }
 </style>

@@ -3,24 +3,32 @@
 //   - 純粋関数 unit: buildChecks が各画面のアクションに kind/target/prompt を正しく載せる。
 //   - component unit: navigate はボタンクリックで @navigate emit、prompt は useAgentChat.send を呼ぶ。
 import { describe, it, expect, vi } from 'vitest';
-import { ref } from 'vue';
+import { ref, nextTick, type Ref } from 'vue';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { buildChecks } from '~/composables/useChecks';
 import AIPanel from '~/components/AIPanel.vue';
 
 const mocks = vi.hoisted(() => ({
   send: vi.fn((_screen: string, _prompt: string) => Promise.resolve()),
+  retry: vi.fn(() => Promise.resolve()),
 }));
+
+// sendError はテストから制御できるよう共有 ref にする (エラーバナー + リトライの配線検証用)。
+let sendErrorRef: Ref<string | null> | undefined;
 
 // isSending は実 ref にする (plain object だとテンプレートで unwrap されず truthy 扱いになり
 // prompt ボタンが常に disabled になってクリックが no-op になる)。
-mockNuxtImport('useAgentChat', () => () => ({
-  messages: ref([]),
-  isSending: ref(false),
-  sendError: ref(null),
-  send: mocks.send,
-  clear: vi.fn(),
-}));
+mockNuxtImport('useAgentChat', () => () => {
+  sendErrorRef ??= ref<string | null>(null);
+  return {
+    messages: ref([]),
+    isSending: ref(false),
+    sendError: sendErrorRef,
+    send: mocks.send,
+    retry: mocks.retry,
+    clear: vi.fn(),
+  };
+});
 
 describe('buildChecks アクション配線 (WC-f17989df)', () => {
   it('backlog の「Refinement へ」は refinement へ navigate', () => {
@@ -65,5 +73,17 @@ describe('AIPanel ボタンクリック配線 (WC-f17989df)', () => {
     expect(mocks.send).toHaveBeenCalledTimes(1);
     expect(mocks.send.mock.calls[0]?.[0]).toBe('daily');
     expect(String(mocks.send.mock.calls[0]?.[1])).toMatch(/滞留/);
+  });
+
+  it('sendError があるとエラーバナー + 再試行ボタンを出し、クリックで retry を呼ぶ', async () => {
+    mocks.retry.mockClear();
+    const wrapper = await mountSuspended(AIPanel, { props: { screen: 'daily', tickets: [] } });
+    expect(wrapper.find('[data-testid=ai-error]').exists()).toBe(false); // 初期はエラーなし
+    sendErrorRef!.value = 'network down';
+    await nextTick();
+    expect(wrapper.find('[data-testid=ai-error]').exists()).toBe(true);
+    await wrapper.find('[data-testid=ai-retry]').trigger('click');
+    expect(mocks.retry).toHaveBeenCalledTimes(1);
+    sendErrorRef!.value = null; // 共有 ref を後片付け (他テストに漏らさない)
   });
 });
