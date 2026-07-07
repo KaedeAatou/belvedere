@@ -17,7 +17,7 @@ import type {
   Ritual,
   EstimationSession,
 } from '@belvedere/shared';
-import { FIBONACCI_POINTS } from '@belvedere/shared';
+import { FIBONACCI_POINTS, averageVelocity } from '@belvedere/shared';
 
 export interface TicketFinding {
   ruleId: string;
@@ -246,9 +246,9 @@ export const ticketRules: TicketRule[] = [
       if (!active) return [];
       // 相対見積もり (SP) の積み上げを過去スプリントの velocity 実績と比較する。
       // 時間稼働ベースの capacity は使わない。velocity 実績がなければ判定不能 (skip)。
-      const completed = ctx.sprints.filter((s) => s.status === 'completed' && s.velocity !== undefined);
-      if (completed.length === 0) return [];
-      const avgVelocity = Math.round(completed.reduce((acc, s) => acc + (s.velocity ?? 0), 0) / completed.length);
+      // 分母は正準ヘルパ averageVelocity (completed + velocity 数値) に統一 (F-30 根治)。
+      const avgVelocity = averageVelocity(ctx.sprints);
+      if (avgVelocity === null) return [];
       const sum = ctx.tickets
         .filter((t) => t.sprintId === active.id)
         .reduce((acc, t) => acc + (t.estimatePt ?? 0), 0);

@@ -15,7 +15,7 @@
 
 import type { LLMProvider, LLMRequest } from '@belvedere/llm';
 import type { RepoContainer } from '@belvedere/repo';
-import { modelForAgent } from '@belvedere/shared';
+import { modelForAgent, averageVelocity } from '@belvedere/shared';
 import type { HandlerContext, HandlerResult } from './ticket-handlers';
 
 export type SmartLetter = 'S' | 'M' | 'A' | 'R' | 'T';
@@ -95,12 +95,10 @@ export async function evaluateSprintSmart(
   const productGoal = ws?.productGoal?.trim() ?? '';
 
   // A=Attainable の判定材料: 現スプリントの計画 SP と 過去 velocity 平均。
+  // 分母は正準ヘルパ averageVelocity (画面 PLANNED/VELOCITY と同一定義 / F-30 根治)。
   const tickets = active ? await repo.tickets.list({ workspaceId: ctx.workspaceId, sprintId: active.id }) : [];
   const plannedSP = tickets.reduce((n, t) => n + (t.estimatePt ?? 0), 0);
-  const velocities = sprints
-    .filter((s) => s.status === 'completed' && typeof s.velocity === 'number')
-    .map((s) => s.velocity as number);
-  const avgVelocity = velocities.length > 0 ? Math.round(velocities.reduce((n, v) => n + v, 0) / velocities.length) : 0;
+  const avgVelocity = averageVelocity(sprints) ?? 0;
 
   const req: LLMRequest = {
     model: modelForAgent('planner'),

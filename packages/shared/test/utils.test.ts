@@ -1,8 +1,8 @@
 // utils.ts の単体テスト (2026-06-10 / R2 で api/repo から移設・集約)。
 
 import { describe, it, expect } from 'vitest';
-import { stripUndefined, stripUndefinedPartial, generateId, nextTicketNumber, applyStatusTransition, compareTicketOrder } from '../src/utils';
-import type { Ticket } from '../src/types';
+import { stripUndefined, stripUndefinedPartial, generateId, nextTicketNumber, applyStatusTransition, compareTicketOrder, completedVelocities, averageVelocity } from '../src/utils';
+import type { Sprint, Ticket } from '../src/types';
 
 const baseTicket = (over: Partial<Ticket> = {}): Ticket => ({
   id: 'WC-T',
@@ -168,5 +168,45 @@ describe('applyStatusTransition', () => {
     const r = applyStatusTransition(baseTicket({ status: 'backlog' }), 'todo', NOW);
     expect(r.startedAt).toBeUndefined();
     expect(r.completedAt).toBeUndefined();
+  });
+});
+
+// velocity 分母の正準定義 (F-30 の 3 箇所不一致の根治 / 2026-07-08)。
+// 「completed かつ velocity が数値」だけが実績。cancelled / active / velocity 未確定は除外する。
+describe('completedVelocities / averageVelocity', () => {
+  const sprint = (over: Partial<Sprint> & { id: string }): Sprint => ({
+    workspaceId: 'ws-belvedere',
+    number: 1,
+    startsAt: '2026-06-01T00:00:00Z',
+    endsAt: '2026-06-14T00:00:00Z',
+    goal: 'g',
+    capacity: 0,
+    status: 'completed',
+    ...over,
+  });
+
+  it('completed + velocity 数値のみ拾う (active/cancelled/未確定は除外)', () => {
+    const ss = [
+      sprint({ id: 'S1', velocity: 5 }),
+      sprint({ id: 'S2', status: 'active', velocity: 99 }), // active に velocity が残っていても分母にしない
+      sprint({ id: 'S3', status: 'cancelled', velocity: 7 }),
+      sprint({ id: 'S4' }), // completed だが velocity 未確定
+    ];
+    expect(completedVelocities(ss)).toEqual([5]);
+  });
+
+  it('平均は四捨五入 (5,3,4 → 4 / 5,3,4,15 → 7)', () => {
+    const ss = [sprint({ id: 'S1', velocity: 5 }), sprint({ id: 'S2', velocity: 3 }), sprint({ id: 'S3', velocity: 4 })];
+    expect(averageVelocity(ss)).toBe(4);
+    expect(averageVelocity([...ss, sprint({ id: 'S4', velocity: 15 })])).toBe(7); // 6.75 → 7
+  });
+
+  it('退化入力: 空配列 / 実績ゼロは null', () => {
+    expect(averageVelocity([])).toBeNull();
+    expect(averageVelocity([sprint({ id: 'S1', status: 'active' })])).toBeNull();
+  });
+
+  it('velocity=0 の完了スプリントも実績として数える (0 は「未確定」ではない)', () => {
+    expect(averageVelocity([sprint({ id: 'S1', velocity: 0 })])).toBe(0);
   });
 });

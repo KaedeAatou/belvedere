@@ -27,10 +27,11 @@ export const useSprints = () => {
   /** 進行中スプリント (status==='active')。無ければ null。 */
   const activeSprint = computed<Sprint | null>(() => sprints.value.find((s) => s.status === 'active') ?? null);
 
-  /** 完了済スプリントのベロシティ実績 (Planning のベロシティチャート用、number 昇順)。 */
+  /** 完了済スプリントのベロシティ実績 (Planning のベロシティチャート用、number 昇順)。
+   *  分母定義は正準 (completed + velocity 数値 / averageVelocity と同一 / F-30 根治)。 */
   const velocityHistory = computed(() =>
     sprints.value
-      .filter((s) => s.velocity !== undefined)
+      .filter((s) => s.status === 'completed' && typeof s.velocity === 'number')
       .sort((a, b) => a.number - b.number)
       .map((s) => ({ number: s.number, velocity: s.velocity as number })),
   );
