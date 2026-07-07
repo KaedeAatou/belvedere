@@ -423,6 +423,13 @@ export interface OrchestratorToolsDeps extends BuildToolsDeps {
    * (子 run は agent.invoke を持たないので孫 run はここに積まれない)。
    */
   childRuns: AgentRun[];
+  /**
+   * 親 Orchestrator が受け取った画面文脈 (active sprint / 表示中チケット等)。指定時は
+   * agent.invoke で起動する子 runAgent にもそのまま伝播する (根本 B / 2026-07-08)。
+   * これが無いと単一窓口 ON 時に「今のスプリント」を知らない子が全件走査し、旧スプリントの
+   * チケットで回答を組み立てる (ドッグフード F-33/F-34)。
+   */
+  contextText?: string;
 }
 
 /**
@@ -494,6 +501,8 @@ export function buildOrchestratorTools(
           tools: buildRegistry(childTools),
           trigger: 'event',
           maxIterations: CHILD_MAX_ITERATIONS,
+          // 親の画面文脈を子へ伝播 (根本 B)。子も「今どのスプリントか」を知った上でツールを絞れる。
+          ...(deps.contextText && { contextText: deps.contextText }),
         },
         v.prompt,
       );
