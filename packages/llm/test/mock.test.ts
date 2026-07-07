@@ -329,3 +329,90 @@ describe('MockLLMProvider callCount LRU cap (memory leak prevention)', () => {
     expect(provider._callCountSize()).toBeLessThanOrEqual(200);
   });
 });
+
+describe('MockLLMProvider 会話対応 (P3)', () => {
+  const plannerSys = {
+    role: 'system' as const,
+    content: 'Your role: Planner Agent\nYour responsibility: ...',
+  };
+  const plannerTools = [
+    { name: 'sprint.current', description: '', parameters: {} },
+    { name: 'ticket.list', description: '', parameters: {} },
+    { name: 'sprint.get', description: '', parameters: {} },
+  ];
+
+  it('context の アクティブスプリント id を tool 引数に使う (固定 sprint-13 を上書き)', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      tools: plannerTools,
+      messages: [
+        plannerSys,
+        {
+          role: 'user',
+          content: '[現在の画面とスプリント状況]\nアクティブスプリント: id=sprint-99\n\n---\n\n今の計画を見て',
+        },
+      ],
+    });
+    expect(res.stop.type).toBe('tool_calls');
+    const calls = res.stop.type === 'tool_calls' ? res.stop.calls : [];
+    const args = calls.map((c) => JSON.stringify(c.arguments));
+    expect(args.some((a) => a.includes('sprint-99'))).toBe(true);
+    expect(args.some((a) => a.includes('sprint-13'))).toBe(false);
+  });
+
+  it('context が無ければ従来の固定 sprintId (sprint-13) にフォールバックする', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      tools: plannerTools,
+      messages: [plannerSys, { role: 'user', content: 'execute the ceremony' }],
+    });
+    const calls = res.stop.type === 'tool_calls' ? res.stop.calls : [];
+    expect(calls.map((c) => JSON.stringify(c.arguments)).some((a) => a.includes('sprint-13'))).toBe(true);
+  });
+
+  it('sprint.current tool があれば呼ぶ', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      tools: plannerTools,
+      messages: [plannerSys, { role: 'user', content: 'execute the ceremony' }],
+    });
+    const calls = res.stop.type === 'tool_calls' ? res.stop.calls : [];
+    expect(calls.some((c) => c.name === 'sprint.current')).toBe(true);
+  });
+
+  it('最終応答に user の発話を引用する (context prefix は引用しない / 既存テンプレは温存)', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model', // tools 無し → 即 final
+      messages: [
+        plannerSys,
+        { role: 'user', content: '[状況]\nアクティブスプリント: id=s1\n\n---\n\nゴールは何？' },
+      ],
+    });
+    expect(res.text).toContain('ご質問「ゴールは何？」');
+    expect(res.text).not.toContain('アクティブスプリント'); // context 部分は引用しない
+    expect(res.text).toContain('【プランニング補助 (Planner / Mock)】'); // 既存テンプレを壊さない
+  });
+
+  it('履歴があるターンは「(会話の続き)」を付ける', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      messages: [
+        plannerSys,
+        { role: 'user', content: '前の質問' },
+        { role: 'assistant', content: '前の回答' },
+        { role: 'user', content: '続けて教えて' },
+      ],
+    });
+    expect(res.text).toContain('(会話の続き)');
+    expect(res.text).toContain('ご質問「続けて教えて」');
+  });
+
+  it('発話が空なら前置きを付けない (退化入力)', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      messages: [plannerSys, { role: 'user', content: '   ' }],
+    });
+    expect(res.text).not.toContain('ご質問「');
+    expect(res.text).toContain('【プランニング補助 (Planner / Mock)】');
+  });
+});

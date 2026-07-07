@@ -52,9 +52,10 @@ export class MockLLMProvider implements LLMProvider {
 
     const role = detectRole(req.messages);
     const toolNames = (req.tools ?? []).map((t) => t.name);
+    const sprintHints = parseSprintHints(req.messages);
 
     if (!justGotToolResult && toolNames.length > 0) {
-      const calls = this.planToolCalls(role, toolNames, sessionKey);
+      const calls = this.planToolCalls(role, toolNames, sessionKey, sprintHints);
       if (calls.length > 0) {
         return {
           text: '',
@@ -74,7 +75,12 @@ export class MockLLMProvider implements LLMProvider {
 
   // ========== Tool 呼び出し計画 (儀式別) ==========
 
-  private planToolCalls(role: AgentRole, toolNames: string[], sessionKey: string): LLMToolCall[] {
+  private planToolCalls(
+    role: AgentRole,
+    toolNames: string[],
+    sessionKey: string,
+    hints: SprintHints,
+  ): LLMToolCall[] {
     const calls: LLMToolCall[] = [];
     const tryCall = (name: string, args: Record<string, unknown>): void => {
       if (toolNames.includes(name) && !this.alreadyCalled(sessionKey, name)) {
@@ -86,8 +92,9 @@ export class MockLLMProvider implements LLMProvider {
     switch (role) {
       case 'planner':
         // Sprint Planning 補助: 現スプリントのチケット品質と Epic 紐付けをチェック
-        tryCall('ticket.list', { sprintId: 'sprint-13' });
-        tryCall('sprint.get', { id: 'sprint-13' });
+        tryCall('sprint.current', {});
+        tryCall('ticket.list', { sprintId: hints.active ?? 'sprint-13' });
+        tryCall('sprint.get', { id: hints.active ?? 'sprint-13' });
         tryCall('epic.list', {});
         tryCall('ticket.quality.check', { ticketId: 'WC-105' });
         // RAG: searcher 注入時のみ (toolNames ガード)。Sprint Goal / velocity 計画の標準を引く
@@ -97,19 +104,20 @@ export class MockLLMProvider implements LLMProvider {
         // Backlog Refinement 補助: 次スプリント候補と全体構造を診断
         tryCall('project.list', {});
         tryCall('epic.list', {});
-        tryCall('ticket.list', { sprintId: 'sprint-14' });
-        tryCall('backlog.refinement.check', { sprintId: 'sprint-14' });
+        tryCall('ticket.list', { sprintId: hints.next ?? 'sprint-14' });
+        tryCall('backlog.refinement.check', { sprintId: hints.next ?? 'sprint-14' });
         // RAG: searcher 注入時のみ (toolNames ガード)。Story 分割 / DoD の標準を引く
         tryCall('knowledge.search', { query: 'Story の分割と Definition of Done の良い書き方' });
         break;
       case 'daily':
         // Daily Scrum 補助: 進行中チケット確認 + 品質チェック (DoD/SP/US)
-        tryCall('ticket.list', { sprintId: 'sprint-13', status: 'in-progress' });
+        tryCall('sprint.current', {});
+        tryCall('ticket.list', { sprintId: hints.active ?? 'sprint-13', status: 'in-progress' });
         tryCall('ticket.quality.check', { ticketId: 'WC-106' });
         break;
       case 'reviewer':
         // レビュー会前: デモシナリオ準備 (review/done チケット + メンバ一覧)
-        tryCall('ticket.list', { sprintId: 'sprint-13', status: 'review' });
+        tryCall('ticket.list', { sprintId: hints.active ?? 'sprint-13', status: 'review' });
         tryCall('member.list', {});
         break;
       case 'retrospective':
@@ -131,7 +139,8 @@ export class MockLLMProvider implements LLMProvider {
         break;
       case 'unknown':
         // フォールバック: 全部
-        tryCall('ticket.list', { sprintId: 'sprint-13' });
+        tryCall('sprint.current', {});
+        tryCall('ticket.list', { sprintId: hints.active ?? 'sprint-13' });
         tryCall('epic.list', {});
         break;
     }
@@ -145,7 +154,10 @@ export class MockLLMProvider implements LLMProvider {
     if (req.responseSchema) {
       return JSON.stringify(getStructuredOutput(role), null, 2);
     }
-    return getNaturalOutput(role);
+    // P3: user 発話を短く引用する前置きを付ける (Mock でも「会話に見える」ように)。
+    const preamble = conversationPreamble(req);
+    const body = getNaturalOutput(role);
+    return preamble ? `${preamble}\n\n${body}` : body;
   }
 
   // ========== ヘルパー ==========
@@ -222,6 +234,45 @@ function detectRole(messages: LLMMessage[]): AgentRole {
   if (/Your role: Retrospective Agent/i.test(sys)) return 'retrospective';
   if (/Your role: Orchestrator/i.test(sys)) return 'orchestrator';
   return 'unknown';
+}
+
+// ========== 会話対応 (P3): Mock を「渡された文脈と user 発話」に反応させる ==========
+// Mock は本来 role 固定テンプレを返すだけで、AI パネルでは「2 ターン目も同じ定型」が返り会話に見えない。
+// 以下は実 Gemini の代替ではなく、ローカル/CI で会話の体験を最小限成立させるためのラッパ。
+
+interface SprintHints {
+  active?: string;
+  next?: string;
+}
+
+/**
+ * user メッセージ (context prefix) から active/next スプリント id を拾う。
+ * 無ければ空 → 呼び手が従来の固定 id (sprint-13/14) にフォールバックする (既存デモ・テストは context を渡さず無傷)。
+ */
+function parseSprintHints(messages: LLMMessage[]): SprintHints {
+  const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+  const text = lastUser?.content ?? '';
+  const active = text.match(/アクティブスプリント: id=([\w-]+)/)?.[1];
+  const next = text.match(/次の計画中スプリント: id=([\w-]+)/)?.[1];
+  return { ...(active && { active }), ...(next && { next }) };
+}
+
+/**
+ * user の実際の発話を短く引用する前置き。runtime が付けた context prefix を除き、
+ * 履歴があれば会話の継続であることを示す。発話が空/取れなければ '' (前置きなし)。
+ */
+function conversationPreamble(req: LLMRequest): string {
+  const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
+  if (!lastUser) return '';
+  // runtime は context を `<context>\n\n---\n\n<発話>` の形で user メッセージ先頭に prefix する。
+  const parts = lastUser.content.split('\n\n---\n\n');
+  const raw = (parts.length > 1 ? parts[parts.length - 1] : lastUser.content) ?? '';
+  const q = raw.trim().replace(/\s+/g, ' ');
+  if (!q) return '';
+  const quoted = q.length > 40 ? `${q.slice(0, 40)}…` : q;
+  // 前ターンの user 発話があれば継続扱い (user ロールの数で判定 / tool・assistant は数えない)。
+  const hasHistory = req.messages.filter((m) => m.role === 'user').length > 1;
+  return `${hasHistory ? '(会話の続き) ' : ''}ご質問「${quoted}」を受け取りました。`;
 }
 
 // ========== 儀式別の応答テンプレ ==========
