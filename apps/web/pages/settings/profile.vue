@@ -2,6 +2,7 @@
 // /settings/profile — アカウント詳細 (Phase 1-C / 2026-06-11)。
 // 表示名のみ編集可。役割 / メール / Workspace / Firebase UID は read-only。
 // 末尾に debug セクション (Whoami 確認、Phase 1-B 動作検証用、後でフラグで隠す)。
+// SSR 無効化は nuxt.config.ts の routeRules で一元管理 (index.vue のコメント参照)。
 
 const { me, isLoading, error, fetchMe, updateDisplayName } = useMe();
 const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, setCurrent, syncCurrentFromStorage } = useWorkspaces();
