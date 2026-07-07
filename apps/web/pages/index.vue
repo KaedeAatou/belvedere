@@ -10,9 +10,9 @@ const { fetchSprints } = useSprints();
 const { fetchEpics } = useEpics();
 const { fetchFindings } = useFindings();
 
-const screen = ref<ScreenId>('backlog');
+const screen = ref<ScreenId>('events');
 const aiOpen = ref(true);
-const railTab = ref<'backlog' | 'events'>('backlog');
+const railTab = ref<'backlog' | 'events'>('events');
 const selected = ref<string | null>(null);
 // Refinement の「ポーカー開始」→ DetailSheet を開き、見積もりパネル (T7) が auto-start する合図
 const pokerAutostart = useState<string | null>('poker-autostart', () => null);
