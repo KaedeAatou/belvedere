@@ -10,7 +10,7 @@
 
 set -u
 
-REPO="${CLAUDE_PROJECT_DIR:-/Users/kaede/Projects/ai-agent-hackathon}"
+REPO="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 LOG="$REPO/.claude/.usage.log"
 THRESHOLD_DAYS=14
 

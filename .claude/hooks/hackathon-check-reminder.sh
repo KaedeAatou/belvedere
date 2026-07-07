@@ -9,7 +9,7 @@
 #
 # 最終チェック日付は /hackathon-check Skill の内部で touch して更新する
 
-REPO="/Users/kaede/Projects/ai-agent-hackathon"
+REPO="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 STAMP="$REPO/.claude/.last-hackathon-check"
 LOG="$REPO/.claude/.hooks.log"
 THRESHOLD_DAYS=7

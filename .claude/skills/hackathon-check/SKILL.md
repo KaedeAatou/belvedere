@@ -23,7 +23,7 @@ color: red
    - 推奨アクション (あれば)
 3. 必要に応じて `HACKATHON_COMPLIANCE.md` のステータス・履歴を更新
 4. Notion 側に変更があれば、`memory/hackathon_url.md` の取得手順自体に問題がないかも確認
-5. **最終チェック日付を更新**: `touch /Users/kaede/Projects/ai-agent-hackathon/.claude/.last-hackathon-check` を実行する。
+5. **最終チェック日付を更新**: `touch .claude/.last-hackathon-check` を実行する。
    これにより SessionStart hook (`.claude/hooks/hackathon-check-reminder.sh`) が次回からの経過日数計算で使う。
 
 ## 実行頻度の目安

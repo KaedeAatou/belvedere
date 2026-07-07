@@ -44,7 +44,7 @@ if ! is_ts_or_tsx "$FILE_PATH"; then exit 0; fi
 if ! is_in_pkg_or_apps "$FILE_PATH"; then exit 0; fi
 if is_test_file "$FILE_PATH"; then exit 0; fi
 
-REPO_ROOT="/Users/kaede/Projects/ai-agent-hackathon"
+REPO_ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 TYPECHECK_OUT=/tmp/kaza-typecheck.log
 
 printf '\033[34m🔍 [ts-typecheck]\033[0m running for %s ...\n' "${FILE_PATH##*/}" >&2

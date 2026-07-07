@@ -8,7 +8,7 @@ set -u
 # stdin (UserPromptSubmit JSON) は捨てる
 cat > /dev/null
 
-REPO="${CLAUDE_PROJECT_DIR:-/Users/kaede/Projects/ai-agent-hackathon}"
+REPO="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 RATE_LIMIT="$REPO/.claude/.last-hackathon-reminder"
 THRESHOLD=14400  # 4h in seconds (1日 6 回上限)
 

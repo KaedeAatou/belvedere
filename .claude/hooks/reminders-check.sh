@@ -12,7 +12,7 @@
 #   due  = ISO 日付 (YYYY-MM-DD) または when:<条件文>
 #   owner= claude (Claude が実行) / user (Claude は手順を促す)
 
-REPO="/Users/kaede/Projects/ai-agent-hackathon"
+REPO="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 REG="$REPO/.claude/reminders.tsv"
 LOG="$REPO/.claude/.hooks.log"
 LEAD_DAYS=3   # 期日の何日前から surface するか
