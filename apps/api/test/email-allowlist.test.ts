@@ -31,10 +31,11 @@ describe('buildMemberFromAllowlist - 純粋関数', () => {
     // ハッカソンは個人参加要件があるので、会社ドメインは絶対入れない。
     // 実在の会社メアドを公開 repo に書くこと自体が個人↔会社の紐付け露出になるため、
     // 「許可ドメイン以外が入っていない」を検証する。
-    // 許可: 個人 Gmail / e2e robot + onboarding (@belvedere.test) / MCP (@belvedere.svc) /
+    // 許可: 本人プレースホルダ (@example.com = IANA 予約ドメイン / 2026-07-07 スクラブで実メアドを置換) /
+    // e2e robot + onboarding (@belvedere.test) / MCP (@belvedere.svc) /
     // ハッカソン審査員デモ (@belvedere.demo)。いずれも会社ドメインではない (擬似ドメイン)。
     expect(emailAllowlist['someone@company.example']).toBeUndefined();
-    const allowedDomains = ['@gmail.com', '@belvedere.test', '@belvedere.svc', '@belvedere.demo'];
+    const allowedDomains = ['@example.com', '@belvedere.test', '@belvedere.svc', '@belvedere.demo'];
     const cleanDomains = Object.keys(emailAllowlist).every((e) =>
       allowedDomains.some((d) => e.endsWith(d)),
     );
