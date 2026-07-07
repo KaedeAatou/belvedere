@@ -6,6 +6,7 @@
   "scripts": {
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
+    "test:local": "playwright test --config playwright.local.config.ts",
     "typecheck": "tsc --noEmit",
     "install-browsers": "playwright install --with-deps chromium"
   },
