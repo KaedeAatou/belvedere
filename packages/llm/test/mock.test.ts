@@ -415,4 +415,18 @@ describe('MockLLMProvider 会話対応 (P3)', () => {
     expect(res.text).not.toContain('ご質問「');
     expect(res.text).toContain('【プランニング補助 (Planner / Mock)】');
   });
+
+  it('generateStream は最終テキストを分割で onDelta し、generate と同じ確定を返す (P6)', async () => {
+    const provider = new MockLLMProvider();
+    const req = {
+      model: 'mock-model',
+      messages: [plannerSys, { role: 'user' as const, content: '計画を見て' }],
+    };
+    const deltas: string[] = [];
+    const streamed = await provider.generateStream(req, { onDelta: (t) => deltas.push(t) });
+    expect(deltas.length).toBeGreaterThan(0);
+    expect(deltas.join('')).toBe(streamed.text); // 断片の連結 = 確定テキスト
+    expect(streamed.stop.type).toBe('stop');
+    expect(streamed.text).toContain('【プランニング補助 (Planner / Mock)】');
+  });
 });

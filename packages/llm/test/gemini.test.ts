@@ -47,6 +47,30 @@ const textResponse = {
   usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 30 },
 };
 
+/** SSE ストリーム応答の fake fetch。body を ReadableStream にして sseChunks を順に enqueue する。 */
+function sseFetch(sseChunks: string[]) {
+  const captured: { url?: string } = {};
+  const encoder = new TextEncoder();
+  const impl = (async (url: string, _init: RequestInit) => {
+    captured.url = url;
+    let i = 0;
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (i < sseChunks.length) {
+          controller.enqueue(encoder.encode(sseChunks[i]!));
+          i++;
+        } else {
+          controller.close();
+        }
+      },
+    });
+    return { ok: true, status: 200, statusText: 'OK', body } as unknown as Response;
+  }) as unknown as typeof fetch;
+  return { impl, captured };
+}
+
+const sse = (obj: unknown): string => `data: ${JSON.stringify(obj)}\n\n`;
+
 describe('GeminiLLMProvider', () => {
   it('テキスト応答を text + stop:stop + usage に解析する', async () => {
     const { impl } = fakeFetch(textResponse);
@@ -204,5 +228,59 @@ describe('toGeminiContents', () => {
     expect(contents[2]!.parts[0]!.functionResponse!.name).toBe('ticket.list');
     expect(contents[2]!.parts[1]!.functionResponse!.name).toBe('ticket.count');
     expect(contents[3]!.parts[0]!.text).toBe('完了しました');
+  });
+});
+
+describe('GeminiLLMProvider.generateStream (P6 SSE)', () => {
+  it('SSE の text 断片を onDelta で流し、確定応答に集約する', async () => {
+    const { impl, captured } = sseFetch([
+      sse({ candidates: [{ content: { parts: [{ text: 'Sprint ' }] } }] }),
+      sse({ candidates: [{ content: { parts: [{ text: 'Goal' }] } }] }),
+      sse({
+        candidates: [{ content: { parts: [{ text: ' 決済' }] }, finishReason: 'STOP' }],
+        usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 5 },
+      }),
+    ]);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl });
+    const deltas: string[] = [];
+    const resp = await provider.generateStream(
+      { model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'x' }] },
+      { onDelta: (t) => deltas.push(t) },
+    );
+    expect(deltas).toEqual(['Sprint ', 'Goal', ' 決済']);
+    expect(resp.text).toBe('Sprint Goal 決済');
+    expect(resp.stop).toEqual({ type: 'stop' });
+    expect(resp.usage.inputTokens).toBe(10);
+    expect(resp.usage.outputTokens).toBe(5);
+    expect(captured.url).toContain(':streamGenerateContent?alt=sse');
+  });
+
+  it('functionCall チャンクは tool_calls stop / delta 無し', async () => {
+    const { impl } = sseFetch([
+      sse({ candidates: [{ content: { parts: [{ functionCall: { name: 'ticket.list', args: { sprintId: 's1' } } }] } }] }),
+    ]);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl });
+    const deltas: string[] = [];
+    const resp = await provider.generateStream(
+      { model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'x' }] },
+      { onDelta: (t) => deltas.push(t) },
+    );
+    expect(deltas).toEqual([]);
+    expect(resp.stop.type).toBe('tool_calls');
+    expect(resp.stop).toMatchObject({ calls: [{ name: 'ticket.list', arguments: { sprintId: 's1' } }] });
+  });
+
+  it('チャンク境界が data 行の途中でも正しく解析する (buffer 持ち越し)', async () => {
+    const full = sse({ candidates: [{ content: { parts: [{ text: 'hello' }] }, finishReason: 'STOP' }] });
+    const mid = Math.floor(full.length / 2);
+    const { impl } = sseFetch([full.slice(0, mid), full.slice(mid)]);
+    const provider = new GeminiLLMProvider({ apiKey: 'k', fetchImpl: impl });
+    const deltas: string[] = [];
+    const resp = await provider.generateStream(
+      { model: 'gemini-2.5-flash', messages: [{ role: 'user', content: 'x' }] },
+      { onDelta: (t) => deltas.push(t) },
+    );
+    expect(resp.text).toBe('hello');
+    expect(deltas).toEqual(['hello']);
   });
 });

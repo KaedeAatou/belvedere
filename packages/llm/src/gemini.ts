@@ -17,6 +17,7 @@ import type {
   LLMRequest,
   LLMResponse,
   LLMStop,
+  LLMStreamHandlers,
   LLMToolCall,
 } from './provider';
 
@@ -190,9 +191,9 @@ export class GeminiLLMProvider implements LLMProvider {
     this.retryBaseMs = cfg.retryBaseMs ?? 500;
   }
 
-  async generate(req: LLMRequest): Promise<LLMResponse> {
+  // generate / generateStream 共通のリクエスト body を組む (systemInstruction / tools / genConfig)。
+  private buildBody(req: LLMRequest): Record<string, unknown> {
     const { systemInstruction, contents } = toGeminiContents(req.messages);
-
     const body: Record<string, unknown> = { contents };
     if (systemInstruction) body.systemInstruction = { parts: [{ text: systemInstruction }] };
     if (req.tools && req.tools.length > 0) {
@@ -214,7 +215,22 @@ export class GeminiLLMProvider implements LLMProvider {
       genConfig.responseSchema = req.responseSchema;
     }
     if (Object.keys(genConfig).length > 0) body.generationConfig = genConfig;
+    return body;
+  }
 
+  // 429 (rate) / 5xx (過負荷) は一時障害。指数バックオフでリトライする (最初のレスポンス到達まで)。
+  // Gemini 無料枠 flash は混雑時 503 を返しやすく、リトライなしだと agent run が落ちるため。
+  private async fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+    let res = await this.fetchImpl(url, init);
+    for (let attempt = 0; !res.ok && RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries; attempt++) {
+      await sleep(this.retryBaseMs * 2 ** attempt);
+      res = await this.fetchImpl(url, init);
+    }
+    return res;
+  }
+
+  async generate(req: LLMRequest): Promise<LLMResponse> {
+    const body = this.buildBody(req);
     // API キーはヘッダ (x-goog-api-key) に置き URL に載せない (ログ漏洩回避)。
     const url = `${this.baseUrl}/models/${encodeURIComponent(req.model)}:generateContent`;
     const init: RequestInit = {
@@ -223,21 +239,98 @@ export class GeminiLLMProvider implements LLMProvider {
       body: JSON.stringify(body),
     };
 
-    // 429 (rate) / 5xx (過負荷) は一時障害。指数バックオフでリトライする。
-    // Gemini 無料枠 flash は混雑時 503 を返しやすく、リトライなしだと agent run が落ちるため。
-    let res = await this.fetchImpl(url, init);
-    for (let attempt = 0; !res.ok && RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries; attempt++) {
-      await sleep(this.retryBaseMs * 2 ** attempt);
-      res = await this.fetchImpl(url, init);
-    }
-
+    const res = await this.fetchWithRetry(url, init);
     if (!res.ok) {
       const errText = await res.text().catch(() => '');
       throw new Error(`[llm:gemini] ${res.status} ${res.statusText}: ${errText.slice(0, 500)}`);
     }
-
     const data = (await res.json()) as GeminiGenerateResponse;
     return parseGeminiResponse(data, req.model);
+  }
+
+  // ストリーミング生成 (P6)。:streamGenerateContent?alt=sse を叩き、SSE の各 data: チャンク
+  // (部分 GeminiGenerateResponse) から text 断片を onDelta で流しつつ、functionCall / usage を蓄積して
+  // 最後に generate と同じ shape の確定 LLMResponse を返す。リトライは最初のレスポンス到達まで
+  // (ストリーム途中の切断は throw して呼び手の error 経路に委ねる)。
+  async generateStream(req: LLMRequest, handlers: LLMStreamHandlers): Promise<LLMResponse> {
+    const body = this.buildBody(req);
+    const url = `${this.baseUrl}/models/${encodeURIComponent(req.model)}:streamGenerateContent?alt=sse`;
+    const init: RequestInit = {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': this.apiKey },
+      body: JSON.stringify(body),
+    };
+
+    const res = await this.fetchWithRetry(url, init);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`[llm:gemini] stream ${res.status} ${res.statusText}: ${errText.slice(0, 500)}`);
+    }
+    // ストリーム非対応の fetch 実装 (body 無し) は通常 generate にフォールバック。
+    if (!res.body) return this.generate(req);
+
+    const textChunks: string[] = [];
+    const calls: LLMToolCall[] = [];
+    let inputTokens = 0;
+    let outputTokens = 0;
+    let finishReason: string | undefined;
+
+    const handleChunk = (json: GeminiGenerateResponse): void => {
+      const parts = json.candidates?.[0]?.content?.parts ?? [];
+      for (const p of parts) {
+        if (p.functionCall) {
+          calls.push({
+            id: `gem_${p.functionCall.name}_${calls.length + 1}`,
+            name: p.functionCall.name,
+            arguments: p.functionCall.args ?? {},
+          });
+        } else if (typeof p.text === 'string' && p.text.length > 0) {
+          textChunks.push(p.text);
+          handlers.onDelta(p.text);
+        }
+      }
+      const fr = json.candidates?.[0]?.finishReason;
+      if (fr) finishReason = fr;
+      if (json.usageMetadata?.promptTokenCount != null) inputTokens = json.usageMetadata.promptTokenCount;
+      if (json.usageMetadata?.candidatesTokenCount != null) outputTokens = json.usageMetadata.candidatesTokenCount;
+    };
+
+    // SSE: 各イベントは "data: {json}\n\n"。Gemini は 1 チャンクの JSON を 1 data 行に載せる。
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const drainLine = (line: string): void => {
+      const t = line.trimEnd();
+      if (!t.startsWith('data:')) return;
+      const payload = t.slice(5).trim();
+      if (!payload || payload === '[DONE]') return;
+      try {
+        handleChunk(JSON.parse(payload) as GeminiGenerateResponse);
+      } catch {
+        /* 不完全 JSON は無視 (次チャンクで補完される) */
+      }
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? ''; // 最後の不完全行は次読み込みへ持ち越す
+      for (const line of lines) drainLine(line);
+    }
+    if (buffer.trim()) drainLine(buffer);
+
+    const stop: LLMStop =
+      calls.length > 0
+        ? { type: 'tool_calls', calls }
+        : finishReason === 'MAX_TOKENS'
+          ? { type: 'length' }
+          : { type: 'stop' };
+    return {
+      text: textChunks.join(''),
+      stop,
+      usage: { inputTokens, outputTokens, costUsd: estimateCostUsd(req.model, inputTokens, outputTokens) },
+    };
   }
 
   /**

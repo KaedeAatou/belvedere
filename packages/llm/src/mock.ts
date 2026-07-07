@@ -1,4 +1,11 @@
-import type { LLMMessage, LLMProvider, LLMRequest, LLMResponse, LLMToolCall } from './provider';
+import type {
+  LLMMessage,
+  LLMProvider,
+  LLMRequest,
+  LLMResponse,
+  LLMStreamHandlers,
+  LLMToolCall,
+} from './provider';
 
 /**
  * Mock LLM Provider
@@ -71,6 +78,20 @@ export class MockLLMProvider implements LLMProvider {
       stop: { type: 'stop' },
       usage: this.fakeUsage(req, finalText.length),
     };
+  }
+
+  // ストリーミング (P6): generate を呼び、最終テキストを 3 分割で onDelta してから同じ結果を返す。
+  // 決定的なので CI/ローカルで streaming 経路を実 LLM 無しに検証できる。tool_calls ターン (text 空) は
+  // delta を出さない (通常応答のみ分割)。
+  async generateStream(req: LLMRequest, handlers: LLMStreamHandlers): Promise<LLMResponse> {
+    const res = await this.generate(req);
+    if (res.stop.type === 'stop' && res.text.length > 0) {
+      const size = Math.ceil(res.text.length / 3);
+      for (let i = 0; i < res.text.length; i += size) {
+        handlers.onDelta(res.text.slice(i, i + size));
+      }
+    }
+    return res;
   }
 
   // ========== Tool 呼び出し計画 (儀式別) ==========

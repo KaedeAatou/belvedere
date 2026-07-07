@@ -52,7 +52,18 @@ export interface LLMResponse {
   raw?: unknown;
 }
 
+/** ストリーミング生成のコールバック。text 断片が来るたびに onDelta が呼ばれる。 */
+export interface LLMStreamHandlers {
+  onDelta: (text: string) => void;
+}
+
 export interface LLMProvider {
   readonly name: string;
   generate(req: LLMRequest): Promise<LLMResponse>;
+  /**
+   * ストリーミング生成 (P6 / optional)。実装は text 断片を onDelta で逐次通知しつつ、
+   * 最後に generate と同じ shape の LLMResponse (確定) を返す。未実装のプロバイダ (vertex 等) は
+   * 持たなくてよい (呼び手が generate にフォールバックする)。
+   */
+  generateStream?(req: LLMRequest, handlers: LLMStreamHandlers): Promise<LLMResponse>;
 }
