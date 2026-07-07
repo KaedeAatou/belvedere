@@ -38,6 +38,15 @@ export function resolveAgentName(screen: ScreenId, useOrchestratorWindow: boolea
   return useOrchestratorWindow ? 'orchestrator' : SCREEN_TO_AGENT[screen];
 }
 
+/**
+ * runtimeConfig の flag 値 (boolean か、env 上書き由来の文字列) を厳密に boolean 化する。
+ * env `NUXT_PUBLIC_USE_ORCHESTRATOR_WINDOW=false` は文字列 "false" で来ることがあり、
+ * `Boolean("false")===true` で誤って有効化される事故を防ぐ (true / "true" のみ有効)。
+ */
+export function isFlagEnabled(v: unknown): boolean {
+  return v === true || v === 'true';
+}
+
 /** ScreenId → 人間可読な画面名 (AI に「今どの儀式画面を見ているか」を伝える)。 */
 const SCREEN_LABEL: Record<ScreenId, string> = {
   backlog: 'Backlog',
@@ -174,7 +183,7 @@ export const useAgentChat = () => {
     sendError.value = null;
 
     // ④ feature flag (既定 OFF = 回帰ゼロ): ON で Orchestrator (単一窓口=協議統括) に集約、OFF で画面対応 agent。
-    const agentName = resolveAgentName(screen, Boolean(config.public.useOrchestratorWindow));
+    const agentName = resolveAgentName(screen, isFlagEnabled(config.public.useOrchestratorWindow));
     try {
       // P2: 画面 + 現在スプリント + 選択中/表示中チケットを自動付与し、ユーザーが id を書かなくても診断できるようにする。
       const context = buildAgentContext({

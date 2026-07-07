@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ScreenId } from '~/composables/useUiMeta';
 import type { Sprint, Ticket } from '@belvedere/shared';
-import { resolveAgentName, buildAgentContext, type AgentContextInput } from '~/composables/useAgentChat';
+import { resolveAgentName, buildAgentContext, isFlagEnabled, type AgentContextInput } from '~/composables/useAgentChat';
 
 const ALL_SCREENS: ScreenId[] = ['backlog', 'refinement', 'planning', 'daily', 'review', 'retro'];
 
@@ -26,6 +26,16 @@ describe('resolveAgentName (④ orchestrator window flag)', () => {
     for (const s of ALL_SCREENS) {
       expect(resolveAgentName(s, true)).toBe('orchestrator');
     }
+  });
+});
+
+describe('isFlagEnabled (env flag の厳密 boolean 化)', () => {
+  it('true / "true" のみ有効。false / "false" / undefined は無効', () => {
+    expect(isFlagEnabled(true)).toBe(true);
+    expect(isFlagEnabled('true')).toBe(true);
+    expect(isFlagEnabled(false)).toBe(false);
+    expect(isFlagEnabled('false')).toBe(false); // Boolean("false")===true の事故を防ぐ
+    expect(isFlagEnabled(undefined)).toBe(false);
   });
 });
 
