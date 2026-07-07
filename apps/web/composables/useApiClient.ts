@@ -7,6 +7,7 @@
 //   const me = await api.get<{ userId: string; email: string; workspaceId: string; role: string }>('/api/whoami');
 
 import type { NitroFetchOptions } from 'nitropack';
+import { parseSSEEvents, type SSEEvent } from '~/utils/sse';
 
 export interface ApiClient {
   get<T>(path: string, opts?: NitroFetchOptions<string>): Promise<T>;
@@ -14,6 +15,8 @@ export interface ApiClient {
   put<T>(path: string, body?: Record<string, unknown>, opts?: NitroFetchOptions<string>): Promise<T>;
   patch<T>(path: string, body?: Record<string, unknown>, opts?: NitroFetchOptions<string>): Promise<T>;
   delete<T>(path: string, opts?: NitroFetchOptions<string>): Promise<T>;
+  /** SSE ストリーミング POST (P6)。認証は post 等と同じ。イベントごとに onEvent を呼ぶ。 */
+  stream(path: string, body: Record<string, unknown>, onEvent: (ev: SSEEvent) => void): Promise<void>;
 }
 
 export const useApiClient = (): ApiClient => {
@@ -67,7 +70,43 @@ export const useApiClient = (): ApiClient => {
     }
   }
 
+  // SSE ストリーミング。$fetch は ReadableStream を返さないので生 fetch を使う。認証ヘッダは call と同一。
+  async function stream(
+    path: string,
+    body: Record<string, unknown>,
+    onEvent: (ev: SSEEvent) => void,
+  ): Promise<void> {
+    await waitAuthReady();
+    const token = await idToken();
+    const headers: Record<string, string> = { 'content-type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (import.meta.client) {
+      const wsId = window.localStorage.getItem('belvedere.workspaceId');
+      if (wsId) headers['X-Workspace-Id'] = wsId;
+    }
+    const res = await fetch(`${baseUrl}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok || !res.body) throw new Error(`stream failed: ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const { events, rest } = parseSSEEvents(buffer);
+      buffer = rest;
+      for (const ev of events) onEvent(ev);
+    }
+    // 区切り無しで終端した末尾フレームを処理
+    if (buffer.trim()) {
+      const { events } = parseSSEEvents(`${buffer}\n\n`);
+      for (const ev of events) onEvent(ev);
+    }
+  }
+
   return {
+    stream,
     get: <T>(path: string, opts: NitroFetchOptions<string> = {}) =>
       call<T>(path, { ...opts, method: 'GET' }),
     post: <T>(path: string, body?: Record<string, unknown>, opts: NitroFetchOptions<string> = {}) =>

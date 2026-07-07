@@ -122,6 +122,11 @@ export const useAgentChat = () => {
     prompt: string;
     opts: { tickets?: Ticket[]; selectedTicketId?: string | null };
   } | null>('agent-chat-last-attempt', () => null);
+  // P6: ストリーミング中の下書き (delta で伸びる text + 実行済みツールチップ)。非 null = 生成中。
+  const streamingDraft = useState<{ text: string; steps: ChatStep[] } | null>(
+    'agent-chat-stream-draft',
+    () => null,
+  );
 
   const api = useApiClient();
   const config = useRuntimeConfig();
@@ -246,6 +251,128 @@ export const useAgentChat = () => {
     }
   }
 
+  // P6: ストリーミング送信。delta で下書きを伸ばし step でチップを足し、run で確定して message に push。
+  // 戻り値 = このリクエストを処理したか。false = 最初のイベント前に失敗 → 呼び手が非ストリームで再試行。
+  async function runAgentStream(
+    screen: ScreenId,
+    prompt: string,
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null },
+  ): Promise<boolean> {
+    isSending.value = true;
+    sendError.value = null;
+    streamingDraft.value = { text: '', steps: [] };
+
+    const agentName = resolveAgentName(screen, isFlagEnabled(config.public.useOrchestratorWindow));
+    const context = buildAgentContext({
+      sprints: sprints.value,
+      screen,
+      tickets: opts.tickets ?? [],
+      selectedTicketId: opts.selectedTicketId ?? null,
+    });
+    const history = messages.value
+      .slice(0, -1)
+      .slice(-8)
+      .map((m) => ({ role: m.role === 'agent' ? ('assistant' as const) : ('user' as const), content: m.text }));
+
+    type StreamRun = { outputArtifacts?: { summary?: string }; status?: string; error?: { message?: string } };
+    let sawEvent = false;
+    let finalRun: StreamRun | null = null;
+    let streamError: Error | null = null;
+    try {
+      await api.stream(
+        `/api/agents/${agentName}/stream`,
+        {
+          prompt,
+          ...(context && { context }),
+          ...(history.length > 0 && { history }),
+          ...(conversationId.value && { conversationId: conversationId.value }),
+        },
+        (ev) => {
+          sawEvent = true;
+          if (ev.event === 'delta') {
+            try {
+              const d = JSON.parse(ev.data) as { text?: string };
+              if (d.text && streamingDraft.value) {
+                streamingDraft.value = { ...streamingDraft.value, text: streamingDraft.value.text + d.text };
+              }
+            } catch {
+              /* 壊れた delta は無視 */
+            }
+          } else if (ev.event === 'step') {
+            try {
+              const s = JSON.parse(ev.data) as { type?: string; toolName?: string; durationMs?: number; ok?: boolean };
+              if (s.type === 'tool_result' && s.toolName && streamingDraft.value) {
+                streamingDraft.value = {
+                  ...streamingDraft.value,
+                  steps: [
+                    ...streamingDraft.value.steps,
+                    {
+                      toolName: s.toolName,
+                      ok: s.ok !== false,
+                      ...(s.durationMs !== undefined && { durationMs: s.durationMs }),
+                    },
+                  ],
+                };
+              }
+            } catch {
+              /* 壊れた step は無視 */
+            }
+          } else if (ev.event === 'run') {
+            try {
+              finalRun = JSON.parse(ev.data) as typeof finalRun;
+            } catch {
+              /* 無視 (下書き text で確定する) */
+            }
+          } else if (ev.event === 'error') {
+            try {
+              const e = JSON.parse(ev.data) as { message?: string };
+              streamError = new Error(e.message ?? 'stream error');
+            } catch {
+              streamError = new Error('stream error');
+            }
+            throw streamError;
+          }
+        },
+      );
+
+      // 確定: run の summary を最優先、無ければ下書き text。
+      // finalRun は callback 内代入なので TS flow narrowing を cast で解除する。
+      const run = finalRun as StreamRun | null;
+      const responseText =
+        run?.outputArtifacts?.summary ||
+        streamingDraft.value?.text ||
+        (run?.error?.message ? `エラー: ${run.error.message}` : `ステータス: ${run?.status ?? 'unknown'}`);
+      const steps = streamingDraft.value?.steps ?? [];
+      messages.value = [
+        ...messages.value,
+        { role: 'agent', text: responseText, ...(steps.length > 0 && { steps }) },
+      ];
+      lastAttempt.value = null;
+      return true;
+    } catch (e) {
+      if (!sawEvent) return false; // 最初のイベント前に失敗 → 呼び手が非ストリームで再試行 (fallback)
+      sendError.value = apiErrorMessage(streamError ?? e);
+      lastAttempt.value = { screen, prompt, opts };
+      return true;
+    } finally {
+      streamingDraft.value = null;
+      isSending.value = false;
+    }
+  }
+
+  // 送信の入口: streaming flag ON かつ client なら stream、最初のイベント前に落ちたら非ストリームへ fallback。
+  async function dispatch(
+    screen: ScreenId,
+    prompt: string,
+    opts: { tickets?: Ticket[]; selectedTicketId?: string | null },
+  ): Promise<void> {
+    if (import.meta.client && isFlagEnabled(config.public.useStreamingChat)) {
+      const handled = await runAgentStream(screen, prompt, opts);
+      if (handled) return;
+    }
+    await runAgentRequest(screen, prompt, opts);
+  }
+
   async function send(
     screen: ScreenId,
     prompt: string,
@@ -254,14 +381,14 @@ export const useAgentChat = () => {
     const trimmed = prompt.trim();
     if (!trimmed || isSending.value) return;
     messages.value = [...messages.value, { role: 'user', text: trimmed }];
-    await runAgentRequest(screen, trimmed, opts);
+    await dispatch(screen, trimmed, opts);
   }
 
   // 直近の失敗を、user メッセージを重複追加せずに再送する。
   async function retry(): Promise<void> {
     const a = lastAttempt.value;
     if (!a || isSending.value) return;
-    await runAgentRequest(a.screen, a.prompt, a.opts);
+    await dispatch(a.screen, a.prompt, a.opts);
   }
 
   function clear(): void {
@@ -272,5 +399,5 @@ export const useAgentChat = () => {
     persist();
   }
 
-  return { messages, isSending, sendError, conversationId, send, retry, clear };
+  return { messages, isSending, sendError, streamingDraft, conversationId, send, retry, clear };
 };

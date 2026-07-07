@@ -15,7 +15,7 @@ const checks = computed(() => buildChecks(props.screen, props.tickets));
 const intro = computed(() => screenIntro(props.screen));
 
 // エージェントチャット (D-11)
-const { messages, isSending, sendError, send, retry, clear } = useAgentChat();
+const { messages, isSending, sendError, streamingDraft, send, retry, clear } = useAgentChat();
 const inputText = ref('');
 const textareaEl = ref<HTMLTextAreaElement | null>(null);
 
@@ -119,8 +119,22 @@ async function onAction(a: AICheckAction): Promise<void> {
       </div>
     </template>
 
-    <!-- 実行中スピナー -->
-    <div v-if="isSending" class="ai-msg chat-msg">
+    <!-- ストリーミング中の下書き (P6): delta で伸びる text + 実行済みツールチップ -->
+    <div v-if="streamingDraft" class="ai-msg chat-msg" data-testid="ai-streaming">
+      <span class="who">Belvedere</span>
+      <span class="body md streaming" v-html="renderMarkdownSafe(streamingDraft.text || '…')" />
+      <div v-if="streamingDraft.steps.length" class="ai-steps">
+        <span
+          v-for="(st, k) in streamingDraft.steps"
+          :key="k"
+          class="ai-step"
+          :class="{ 'step-fail': !st.ok }"
+          data-testid="ai-step"
+        >{{ st.toolName }}<template v-if="st.durationMs != null"> · {{ st.durationMs }}ms</template></span>
+      </div>
+    </div>
+    <!-- 実行中スピナー (非ストリーム時のみ) -->
+    <div v-else-if="isSending" class="ai-msg chat-msg">
       <span class="who">Belvedere</span>
       <span class="body sending">実行中…</span>
     </div>
@@ -232,6 +246,18 @@ async function onAction(a: AICheckAction): Promise<void> {
 .body.md strong {
   font-weight: 600;
   color: var(--ink-0);
+}
+/* ストリーミング中の点滅カーソル (P6) */
+.body.md.streaming::after {
+  content: '▋';
+  margin-left: 1px;
+  color: var(--accent);
+  animation: ai-blink 1s step-start infinite;
+}
+@keyframes ai-blink {
+  50% {
+    opacity: 0;
+  }
 }
 /* ツール実行トレースのチップ */
 .ai-steps {

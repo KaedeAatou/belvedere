@@ -46,6 +46,10 @@ export default defineNuxtConfig({
       // マルチエージェント協議をデモの既定挙動にする (P7 / 2026-07-07)。
       // kill-switch: env NUXT_PUBLIC_USE_ORCHESTRATOR_WINDOW=false でリビルド不要に無効化できる。
       useOrchestratorWindow: true,
+      // P6 ストリーミング (SSE)。既定 ON。Cloud Run がバッファリングしても run イベントは最後に届くので
+      // 「一括表示」に degrade するだけ (壊れない)。最初のイベント前に失敗したら非ストリームへ自動 fallback。
+      // kill-switch: env NUXT_PUBLIC_USE_STREAMING_CHAT=false でリビルド不要に無効化できる。
+      useStreamingChat: true,
     },
   },
 

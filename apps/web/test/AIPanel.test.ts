@@ -24,6 +24,7 @@ mockNuxtImport('useAgentChat', () => () => {
     messages: ref([]),
     isSending: ref(false),
     sendError: sendErrorRef,
+    streamingDraft: ref(null),
     send: mocks.send,
     retry: mocks.retry,
     clear: vi.fn(),
