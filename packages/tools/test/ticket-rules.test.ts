@@ -2,7 +2,7 @@
 // ルール 1 個につき最低「発火する / しない」の 2 ケースを担保する。
 
 import { describe, it, expect } from 'vitest';
-import type { Ticket, Sprint, EstimationSession } from '@belvedere/shared';
+import type { Ticket, Sprint, EstimationSession, Epic } from '@belvedere/shared';
 import { runTicketRules, buildRuleContext } from '../src/ticket-rules';
 
 const NOW = '2026-06-11T09:00:00Z';
@@ -20,8 +20,8 @@ function ticket(over: Partial<Ticket> & { id: string }): Ticket {
   };
 }
 
-function ctxOf(tickets: Ticket[], sprints: Sprint[] = [], sessions: EstimationSession[] = []) {
-  return buildRuleContext(NOW, tickets, sprints, sessions);
+function ctxOf(tickets: Ticket[], sprints: Sprint[] = [], sessions: EstimationSession[] = [], epics: Epic[] = []) {
+  return buildRuleContext(NOW, tickets, sprints, sessions, epics);
 }
 
 /** ある儀式で特定 ruleId が ticketId に対して発火したか */
@@ -247,5 +247,61 @@ describe('エッジ: 空リスト / 複数ルール同時発火', () => {
     expect(ruleIds).toContain('STORY_SP_MISSING');
     // type は設定済 (story) なので TYPE_MISSING は混ざらない = 同時発火が「全部入り」ではないことも担保。
     expect(ruleIds).not.toContain('TYPE_MISSING');
+  });
+});
+
+// F-27 (2026-07-08): SP>8 の分割候補診断が 6 観点 (detectOversizeStory) にしか無く、
+// UI 品質ピルが読む本ルール表に未配線で「SP13 の story にどのピルも出ない」が再現した。
+describe('STORY_OVERSIZE (F-27)', () => {
+  it('SP>8 の story で発火 (refinement)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', estimatePt: 13 })]), 'STORY_OVERSIZE', 'A')).toBe(true);
+  });
+  it('SP=8 (境界) では発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', estimatePt: 8 })]), 'STORY_OVERSIZE', 'A')).toBe(false);
+  });
+  it('SP 未設定では発火しない (それは STORY_SP_MISSING の領分)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story' })]), 'STORY_OVERSIZE', 'A')).toBe(false);
+  });
+});
+
+// F-20 (2026-07-08): 設計書では bug は見積もり対象 (estimatePt) なのに、SP 未定ピルと
+// ポーカー導線が story 限定だった。実装を設計に合わせる。
+describe('BUG_SP_MISSING (F-20)', () => {
+  it('SP 未設定の bug で発火 (refinement)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', reproSteps: '手順', regressionNote: 'ok' })]), 'BUG_SP_MISSING', 'A')).toBe(true);
+  });
+  it('SP 設定済の bug では発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', estimatePt: 2, reproSteps: '手順', regressionNote: 'ok' })]), 'BUG_SP_MISSING', 'A')).toBe(false);
+  });
+  it('incident には発火しない (incident は見積もり対象外の設計)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'incident' })]), 'BUG_SP_MISSING', 'A')).toBe(false);
+  });
+});
+
+// F-25/F-26 (2026-07-08): Epic.rationale 欠落が UI ピルで一切可視化されず、AI チャットの
+// 広範囲質問でしか気付けなかった。配下チケットの行ピルとして出す。
+describe('EPIC_RATIONALE_MISSING (F-25/F-26)', () => {
+  const epic = (over: Partial<Epic> & { id: string }): Epic => ({
+    workspaceId: 'ws-belvedere',
+    name: 'カテゴリ・タグ',
+    status: 'active',
+    ...over,
+  });
+  it('rationale 空の Epic 配下チケットで発火 (refinement)', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', epicId: 'EP-x' })], [], [], [epic({ id: 'EP-x' })]);
+    expect(fired('refinement', ctx, 'EPIC_RATIONALE_MISSING', 'A')).toBe(true);
+  });
+  it('rationale 空白のみでも発火', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', epicId: 'EP-x' })], [], [], [epic({ id: 'EP-x', rationale: '   ' })]);
+    expect(fired('refinement', ctx, 'EPIC_RATIONALE_MISSING', 'A')).toBe(true);
+  });
+  it('rationale 設定済の Epic 配下では発火しない', () => {
+    const ctx = ctxOf([ticket({ id: 'A', type: 'story', epicId: 'EP-x' })], [], [], [epic({ id: 'EP-x', rationale: '分析の土台' })]);
+    expect(fired('refinement', ctx, 'EPIC_RATIONALE_MISSING', 'A')).toBe(false);
+  });
+  it('epicId 無し / Epic 不在 (退化入力) では発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story' })]), 'EPIC_RATIONALE_MISSING', 'A')).toBe(false);
+    const ctx = ctxOf([ticket({ id: 'B', type: 'story', epicId: 'EP-ghost' })], [], [], []);
+    expect(fired('refinement', ctx, 'EPIC_RATIONALE_MISSING', 'B')).toBe(false);
   });
 });

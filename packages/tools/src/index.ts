@@ -350,12 +350,13 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
       },
     },
     async invoke({ ceremony }) {
-      const [allTickets, sprints, estimations] = await Promise.all([
+      const [allTickets, sprints, estimations, epics] = await Promise.all([
         repo.tickets.list({ workspaceId }),
         repo.sprints.list({ workspaceId }),
         repo.estimations.list({ workspaceId }),
+        repo.epics.list({ workspaceId }),
       ]);
-      const ruleCtx = buildRuleContext(new Date().toISOString(), allTickets, sprints, estimations);
+      const ruleCtx = buildRuleContext(new Date().toISOString(), allTickets, sprints, estimations, epics);
       const findings = runTicketRules(ceremony as Ritual, ruleCtx);
       return { ceremony, findingCount: findings.length, findings };
     },

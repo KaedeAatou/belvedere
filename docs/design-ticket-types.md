@@ -187,6 +187,9 @@ export function runTicketRules(ceremony: Ritual, ctx: RuleContext): TicketFindin
 | STORY_DOD_MISSING | story | planning, refinement | error | `!t.acceptanceCriteria \|\| t.acceptanceCriteria.length === 0` |
 | STORY_DOD_PROCEDURAL | story | refinement | warn | AC が 1 行以上あり、**全行**が `/(実装|設計|対応|作成|修正|追加|変更|テスト|リリース)(する|します)?$/` にマッチ (= 手段しか書かれていない) |
 | STORY_SP_MISSING | story | refinement | warn | `t.estimatePt == null`。`action: { kind: 'open-estimation', label: '見積もりセッションを開始' }` |
+| STORY_OVERSIZE | story | refinement | warn | `t.estimatePt != null && t.estimatePt > 8` (粒度過大→分割候補 / F-27 2026-07-08 で 6 観点からルール表へ配線) |
+| BUG_SP_MISSING | bug | refinement | warn | `t.estimatePt == null` (bug は見積もり対象の設計に実装を追従 / F-20 2026-07-08。incident は対象外のまま) |
+| EPIC_RATIONALE_MISSING | all (epicId あり) | refinement | warn | 親 Epic の `rationale` が空 (戦略意図の欠落を配下チケット行に可視化 / F-25 2026-07-08) |
 | STORY_STALL | story | daily | warn | `status==='in-progress' && daysSince(startedAt ?? updatedAt) >= 3` |
 | SPIKE_NO_TIMEBOX | spike | planning, refinement | warn | `t.timeboxHours == null` |
 | SPIKE_TIMEBOX_OVER | spike | daily | error | `status==='in-progress' && timeboxHours != null && hoursSince(startedAt ?? updatedAt) > timeboxHours` |
