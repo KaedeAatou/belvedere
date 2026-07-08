@@ -5,6 +5,17 @@
 import type { ScreenId } from '~/composables/useUiMeta';
 import type { Sprint, Ticket } from '@belvedere/shared';
 import { averageVelocity } from '@belvedere/shared';
+import { WORKSPACE_ID_KEY } from '~/composables/useWorkspaces';
+
+/**
+ * 会話履歴の localStorage キーを決める純粋関数 (F-02 / 直接 unit テスト)。
+ * 旧実装はキーが 'belv:ai-chat:v1' 固定 (workspace 非スコープ) で、Workspace 切替
+ * (location.reload) 後も前 WS の会話が残留した。workspace 単位のキーに分離する。
+ * workspaceId 不明 (WS 未選択 / SSR) はどの WS にも帰属させられないため旧来の共通キーに落ちる。
+ */
+export function chatStorageKey(workspaceId: string | null | undefined): string {
+  return workspaceId ? `belv:ai-chat:v1:${workspaceId}` : 'belv:ai-chat:v1';
+}
 
 export interface ChatStep {
   toolName: string;
@@ -139,7 +150,11 @@ export const useAgentChat = () => {
   // 会話 ID (P5 のサーバ保存で使う) と localStorage 永続 (リロードで会話を失わない)。
   const conversationId = useState<string>('agent-chat-conv-id', () => '');
   const hydrated = useState<boolean>('agent-chat-hydrated', () => false);
-  const STORAGE_KEY = 'belv:ai-chat:v1';
+  // F-02: キーは workspace 単位 (chatStorageKey)。current WS は localStorage
+  // (useWorkspaces が WORKSPACE_ID_KEY で永続化) を直接読む — useApiClient と同じ手法。
+  // WS 切替は location.reload() を伴うため、ページ生存中にキーが動的に変わることはない。
+  const storageKey = (): string =>
+    chatStorageKey(import.meta.client ? window.localStorage.getItem(WORKSPACE_ID_KEY) : null);
   const MAX_PERSIST = 50;
 
   const newConversationId = (): string =>
@@ -151,7 +166,7 @@ export const useAgentChat = () => {
     if (!import.meta.client) return;
     try {
       localStorage.setItem(
-        STORAGE_KEY,
+        storageKey(),
         JSON.stringify({ conversationId: conversationId.value, messages: messages.value.slice(-MAX_PERSIST) }),
       );
     } catch {
@@ -164,7 +179,7 @@ export const useAgentChat = () => {
     if (!import.meta.client || hydrated.value) return;
     hydrated.value = true;
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(storageKey());
       if (raw) {
         const parsed = JSON.parse(raw) as { conversationId?: unknown; messages?: unknown };
         if (Array.isArray(parsed.messages)) messages.value = parsed.messages as ChatMessage[];
