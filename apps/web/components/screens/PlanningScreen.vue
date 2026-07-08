@@ -243,8 +243,10 @@ onMounted(() => {
           <button v-if="nextPlanned" class="h-btn" data-testid="plan-next-sprint" @click="openSprintDialog('next')">
             <Icon name="edit" /> 次スプリントを計画
           </button>
+          <!-- F-06 (2026-07-08): 旧ラベル「スプリントを開始」は現行スプリントの完了を伴うことが
+               読み取れず、誤操作リスクがあった。何が起きるかをラベルで明示する。 -->
           <button v-if="nextPlanned" class="h-btn h-btn--primary" data-testid="sprint-start-cta" @click="openSprintDialog('next')">
-            スプリントを開始 →
+            次スプリントを開始 →
           </button>
         </div>
       </div>
@@ -443,6 +445,9 @@ onMounted(() => {
             </label>
           </div>
         </div>
+        <p v-if="dialogTarget === 'next'" class="carryover-hint">
+          「開始」を押すと現在のスプリントは完了になり velocity が確定します。未完了チケットは上の選択に従って持ち越されます。
+        </p>
         <p v-if="sprintError" class="msg-error" data-testid="sprint-error">{{ sprintError }}</p>
       </div>
       <div class="dialog-foot">
@@ -457,7 +462,7 @@ onMounted(() => {
             保存 (開始せず)
           </button>
           <button class="btn-primary" :disabled="sprintBusy" data-testid="sprint-start" @click="startNextSprint">
-            スプリントを開始 →
+            現スプリントを完了して次を開始 →
           </button>
         </template>
       </div>

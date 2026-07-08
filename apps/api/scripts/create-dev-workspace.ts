@@ -101,16 +101,17 @@ async function main(): Promise<void> {
   await repo.workspaces.upsert(ws);
   console.log(`  ✓ workspace: ${ws.id} (${ws.name})`);
 
-  // 3. owner Member (新 ws に owner として bind)
+  // 3. 作成者 Member (新 ws の admin として bind / 旧 'owner' ロールは 2026-06-23 の
+  //    権限再設計で廃止済み — 残骸だった 'owner' を正準 'admin' に修正 / F-01 2026-07-08)
   const member: Member = {
     userId: owner.userId,
     workspaceId: NEW_WS,
     displayName: owner.displayName,
     email: owner.email,
-    role: 'owner',
+    role: 'admin',
   };
   await repo.members.upsert(member);
-  console.log(`  ✓ member: ${member.displayName} (owner)`);
+  console.log(`  ✓ member: ${member.displayName} (admin)`);
 
   // 4. 親 Epic (story は親 Epic 必須 / 案A)
   const epic: Epic = {
