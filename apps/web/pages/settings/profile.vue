@@ -5,6 +5,10 @@
 // SSR 無効化は nuxt.config.ts の routeRules で一元管理 (index.vue のコメント参照)。
 
 const { me, isLoading, error, fetchMe, updateDisplayName } = useMe();
+// F-01: 「メール」はログインアカウント (Firebase) の値を正とする。me.email は Workspace ごとの
+// member レコード由来で、WS を切り替えると別の値 (PII スクラブ済の owner@example.com 等) が
+// 出て「同一ユーザーなのにメールが食い違う」ため、user.email を優先し me.email はフォールバック。
+const { user } = useAuth();
 const { workspaces, currentId, fetch: fetchWorkspaces, create: createWorkspace, setCurrent, syncCurrentFromStorage } = useWorkspaces();
 const { members, fetchMembers, isPendingInvite, invite, cancelInvite, updateRole } = useMembers();
 
@@ -181,7 +185,7 @@ async function save(): Promise<void> {
       <div v-else-if="me" class="fields">
         <div class="field">
           <label class="label">メール</label>
-          <div class="value readonly">{{ me.email }}</div>
+          <div class="value readonly">{{ user?.email ?? me.email }}</div>
         </div>
 
         <div class="field">
