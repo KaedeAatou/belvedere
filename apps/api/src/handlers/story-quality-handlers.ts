@@ -83,7 +83,9 @@ export async function checkStoryQuality(
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
   const { asA, iWant, soThat } = parsed.data;
-  const title = parsed.data.title ?? '';
+  // title は body として受けるが LLM には渡さない (F-13): 起票フォームに直接編集できる
+  // 「タイトル欄」が無いのに LLM が「タイトルも入力すると…」と存在しない欄への助言を
+  // 出していたため、診断入力から title を外す。診断は asA / iWant / soThat の 3 欄のみ。
 
   // active スプリントのゴールを取得 (status==='active' かつ workspace 一致)。
   const sprints = await repo.sprints.list({ workspaceId: ctx.workspaceId });
@@ -101,7 +103,6 @@ export async function checkStoryQuality(
           `asA: ${asA}`,
           `iWant: ${iWant}`,
           `soThat: ${soThat}`,
-          `title: ${title}`,
           `sprintGoal: ${sprintGoal ?? ''}`,
         ].join('\n'),
       },
