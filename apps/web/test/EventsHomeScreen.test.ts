@@ -125,4 +125,29 @@ describe('EventsHomeScreen Epics 編集 (Home Epic インライン編集)', () =
     const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
     expect(wrapper.find('[data-testid=epics-empty]').exists()).toBe(true);
   });
+
+  it('完了 (completed) / 中止 (cancelled) の Epic は一覧から除外する (2026-07-08 要望)', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [
+      epic({ id: 'EP-active', status: 'active' }),
+      epic({ id: 'EP-planned', status: 'planned' }),
+      epic({ id: 'EP-done', status: 'completed' }),
+      epic({ id: 'EP-cancelled', status: 'cancelled' }),
+    ];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    expect(wrapper.find('[data-testid=epic-row-EP-active]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=epic-row-EP-planned]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=epic-row-EP-done]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid=epic-row-EP-cancelled]').exists()).toBe(false);
+    // ヘッダ件数も可視分だけ (4 件中 2 件)。
+    expect(wrapper.find('[data-testid=ehome-epics] .ehome-sp').text()).toContain('2 epics');
+  });
+
+  it('全 Epic が完了/中止で可視 0 件ならプレースホルダを出す', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-done', status: 'completed' }), epic({ id: 'EP-cancelled', status: 'cancelled' })];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets: [], selectedId: null } });
+    expect(wrapper.find('[data-testid=epics-empty]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid=epic-row-EP-done]').exists()).toBe(false);
+  });
 });
