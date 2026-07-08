@@ -121,9 +121,8 @@ const targetPath = computed(() => `M${xc(0)},${yc(targetTop.value)} L${xc(td.val
 const actualPath = computed(() => `M${xc(0)},${yc(totalSP.value)} L${xc(ed.value)},${yc(remaining.value)}`);
 
 // 停滞チケット (in-progress が 3 日以上動いていない / Daily の停滞シグナル流用)。
-function ageInDays(started?: string): number {
-  return started ? Math.max(0, Math.round((Date.now() - Date.parse(started)) / 86_400_000)) : 0;
-}
+// 経過日数は共通純粋関数 (utils/ticketAge / F-23。Daily と実装が食い違っていた二重実装を解消)。
+const ageInDays = (started?: string): number => ticketAgeDays(started, Date.now());
 const stalled = computed(() =>
   sprintTickets.value
     .filter((t) => t.status === 'in-progress' && ageInDays(t.startedAt) >= 3)
@@ -253,7 +252,7 @@ const stalled = computed(() =>
                   @click="emit('select', t.id)">
             <span class="stall-id">{{ t.id }}</span>
             <span class="stall-title">{{ t.title }}</span>
-            <span class="stall-age"><Icon name="clock" /> {{ ageInDays(t.startedAt) }}d</span>
+            <span class="stall-age"><Icon name="clock" /> {{ ticketAgeLabel(t.startedAt, Date.now()) }}</span>
           </button>
         </div>
       </section>
