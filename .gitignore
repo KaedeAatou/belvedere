@@ -54,3 +54,7 @@ venv/
 /.claude/.usage.log
 /.claude/settings.local.json
 /.claude/.ci-ack
+
+# PII スクラブ config の実ファイル (実名/個人メアド等を含む / 既定はリポジトリ外だがローカル配置時の誤コミット防止)
+scrub-pii.config.json
+!scrub-pii.config.example.json

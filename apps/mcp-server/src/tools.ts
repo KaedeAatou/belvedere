@@ -25,8 +25,8 @@ export const MCP_TOOLS: Tool[] = [
         },
         type: {
           type: 'string',
-          enum: ['story', 'task', 'spike', 'bug', 'incident'],
-          description: 'チケット種別。"bug" 指定で current sprint の bug 抽出に使う。',
+          enum: ['story', 'task', 'bug', 'incident'],
+          description: 'チケット種別。"bug" 指定で current sprint の bug 抽出に使う (spike は UI から作れない死蔵種別のため除外)。',
         },
       },
     },
@@ -59,7 +59,7 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'belvedere_quality_check',
     description:
-      '指定チケットの DoD / Story Point / User Story 紐付け / valueImpact の充足状況を診断する。',
+      '指定チケットの DoD (acceptanceCriteria) / Story Point / 親紐付け (story→親 Epic / task・bug 等→親 Story) の充足状況を診断する。',
     inputSchema: {
       type: 'object',
       properties: { ticketId: { type: 'string' } },
@@ -69,7 +69,7 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'belvedere_refinement_check',
     description:
-      'バックログを 6 観点 (粒度 / 依存 / valueImpact / priority×valueImpact / SP分散 / 戦略整合性) で診断する。',
+      'バックログを 6 観点 (粒度 / 親紐付け / valueImpact / priority×valueImpact / SP分散 / 戦略整合性) で診断する。',
     inputSchema: {
       type: 'object',
       properties: {
@@ -137,8 +137,8 @@ export const MCP_TOOLS: Tool[] = [
         description: { type: 'string' },
         type: {
           type: 'string',
-          enum: ['story', 'task', 'spike', 'bug', 'incident'],
-          description: 'チケット種別。bug を起票する時は "bug" を指定する (bugfix ループの起点)。',
+          enum: ['story', 'task', 'bug', 'incident'],
+          description: 'チケット種別。bug を起票する時は "bug" を指定する (bugfix ループの起点)。spike は UI から作れない死蔵種別のため除外。',
         },
         priority: { type: 'string', enum: ['low', 'medium', 'high', 'urgent'] },
         valueImpact: { type: 'string', enum: ['low', 'medium', 'high'] },
@@ -154,15 +154,23 @@ export const MCP_TOOLS: Tool[] = [
         assigneeId: { type: 'string' },
         estimatePt: { type: 'number' },
         acceptanceCriteria: { type: 'array', items: { type: 'string' } },
-        parentTicketId: { type: 'string' },
+        parentTicketId: {
+          type: 'string',
+          description:
+            '親 Story の ID。type === "task" を新規起票する時は必須 (同一 workspace に実在する story を指定 / 省略や非 story は API が 400 parent_required・parent_not_found)。task は story の分割子として親に紐付く。',
+        },
         epicId: {
           type: 'string',
           description:
             '親 Epic の ID (例: "EP-1")。type === "story" を新規起票する時は必須。同一 workspace に実在する Epic を指定する (実在しない id は API が 400)。',
         },
+        relatedIncidentId: {
+          type: 'string',
+          description:
+            'type === "bug" のとき、その bug がどの incident の再発防止 (根本対応) かを指すリンク。done incident の INCIDENT_NO_FOLLOWUP_BUG 指摘は、この id で紐付く bug の有無で消灯する。',
+        },
         projectId: { type: 'string' },
         labels: { type: 'array', items: { type: 'string' } },
-        blockedBy: { type: 'array', items: { type: 'string' } },
       },
       required: ['title'],
     },
@@ -170,7 +178,7 @@ export const MCP_TOOLS: Tool[] = [
   {
     name: 'belvedere_ticket_update',
     description:
-      'チケットの編集 (title / description / priority / valueImpact / DoD / SP / assignee / blockedBy 等)。patch オブジェクトで部分更新。',
+      'チケットの編集 (title / description / priority / valueImpact / DoD / SP / assignee / 親紐付け / bug の再現手順・回帰テスト・relatedIncidentId 等)。patch オブジェクトで部分更新。',
     inputSchema: {
       type: 'object',
       properties: {

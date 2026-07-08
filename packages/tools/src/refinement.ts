@@ -61,21 +61,23 @@ export function detectOversizeStory(t: Ticket): RefinementSignal[] {
   return [];
 }
 
-/** 観点2: 依存未整理 (blockedBy も 親紐付けも無い孤立チケット)。
- *  親紐付けの基準は種別で異なる (F-11 category confusion 修正 / 2026-07-08):
- *    - story は epicId (親 Epic) に紐付くのが正しく、別 story (parentTicketId) には紐付かない。
- *      旧実装は story にも US- 紐付けを求め「Story を User Story に紐付けよ」という誤指摘を出していた。
- *    - task / spike / bug は parentTicketId (親 Story = US- 形式 or WC-story) に紐付く。
- *      旧実装は US- 前方一致のみ親と認め、WC-story を親に持つ task も誤警告していた。 */
+/** 観点2: 親未紐付け (親 Epic / 親 Story が無い孤立チケット)。
+ *  親を持つべき種別だけを対象にする (2026-07-09):
+ *    - story は epicId (親 Epic) に紐付く。旧実装は story にも US- 紐付けを求め「Story を
+ *      User Story に紐付けよ」という誤指摘を出していた (F-11 category confusion 修正 / 2026-07-08)。
+ *    - task は parentTicketId (親 Story) に紐付く (分割で必ず親が付く / API も必須化済)。
+ *    - bug / incident / spike は top-level の PBI で親 Story を持たないため対象外。以前は
+ *      これらにも parentTicketId を要求して誤発火していた (bug/incident は親不要)。
+ *  blockedBy も判定・示唆から外した (2026-07-09): blockedBy を編集する UI が無く「依存を整理せよ」と
+ *  言われても操作できないため。UI で辿れる/直せる親紐付けのみを残す。 */
 export function detectUnstructuredDependency(t: Ticket): RefinementSignal[] {
-  const hasBlockedBy = (t.blockedBy?.length ?? 0) > 0;
-  const hasParentLink =
-    t.type === 'story' ? !!t.epicId : (t.parentTicketId ?? '').length > 0;
-  if (!hasBlockedBy && !hasParentLink) {
+  if (t.type !== 'story' && t.type !== 'task') return [];
+  const hasParentLink = t.type === 'story' ? !!t.epicId : (t.parentTicketId ?? '').length > 0;
+  if (!hasParentLink) {
     const detail =
       t.type === 'story'
-        ? 'blockedBy も 親 Epic (epicId) も未設定。親 Epic への紐付けと依存関係を整理してください。'
-        : 'blockedBy / 親 Story (parentTicketId) のいずれも未設定。依存関係を整理してください。';
+        ? '親 Epic (epicId) が未設定。どの Epic の価値に連なるか、親 Epic に紐付けてください。'
+        : '親 Story (parentTicketId) が未設定。何の価値のための作業か、親 Story に紐付けてください。';
     return [{ ticketId: t.id, signal: 'unstructured_dependency', detail }];
   }
   return [];

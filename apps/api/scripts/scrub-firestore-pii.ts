@@ -9,26 +9,52 @@
 //   GCP_PROJECT=belvedere-dev-atrium pnpm --filter @belvedere/api exec tsx scripts/scrub-firestore-pii.ts --apply  # 書込
 //
 // 設計:
-//   - 置換は git スクラブと同一セット (旧 userId → kaede / 実名 → Kaede / 個人メアド → owner@example.com)。
+//   - 置換セット (置換元 = 実 PII) は tracked ファイルに載せないためリポジトリ外 config から読む
+//     (2026-07-08 / 下記 loadReplacements)。git スクラブと同一セットを config 側で維持する。
+//     既定パス ~/.claude/belvedere-scrub-pii.config.json / テンプレート scripts/scrub-pii.config.example.json。
 //   - 各 doc を JSON 文字列化 → 置換 → 変化があれば parse して set (このリポジトリの repo 層は
 //     ISO 文字列日付のみで Timestamp を保存しないため JSON round-trip 安全)。
 //   - members コレクションだけ doc id が `${workspaceId}:${userId}` 複合のため、userId が変わる doc は
 //     新 id で set + 旧 doc delete (それ以外のコレクションは in-place set)。
 //   - 置換後 id が既存 doc と衝突する場合 (seed 再投入済みの kaede member 等) は旧 doc の削除のみ行う。
 
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { initializeApp, applicationDefault } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 const PROJECT_PATTERN = /^belvedere-(dev|prod)-atrium$/;
 
-// git スクラブ (filter-repo) と同一の置換セット。順序: メアド完全形 → 裸ユーザー名 → 実名。
-const REPLACEMENTS: Array<[string | RegExp, string]> = [
-  ['mygolanglearn@gmail.com', 'owner@example.com'],
-  ['mygolanglearn', 'owner'],
-  ['kagayayuuki', 'kaede'],
-  ['加賀谷', 'Kaede'],
-  ['Kagaya', 'Kaede'],
-];
+type Replacement = [string, string];
+
+// 置換セット (置換元 = 実 PII) はリポジトリ外 config から読む。tracked ファイルに PII を載せないため。
+// config フォーマット: { "replacements": [["<from>", "<to>"], ...] }。from は配列の先頭ほど先に適用
+// (メアド完全形 → 裸ユーザー名 → 実名 の順で部分一致の取りこぼしを防ぐ)。
+// 既定パス ~/.claude/belvedere-scrub-pii.config.json / SCRUB_PII_CONFIG で上書き可 / テンプレート scrub-pii.config.example.json。
+function loadReplacements(): Replacement[] {
+  const path = process.env.SCRUB_PII_CONFIG ?? join(homedir(), '.claude', 'belvedere-scrub-pii.config.json');
+  let raw: string;
+  try {
+    raw = readFileSync(path, 'utf8');
+  } catch {
+    throw new Error(
+      `PII 置換 config が見つかりません: ${path}\n` +
+        `scripts/scrub-pii.config.example.json を複製し、実際の置換元/置換先を記入してリポジトリ外に置いてください ` +
+        `(SCRUB_PII_CONFIG で別パス指定可)。実 config はコミットしないこと。`,
+    );
+  }
+  const parsed = JSON.parse(raw) as { replacements?: unknown };
+  if (!Array.isArray(parsed.replacements) || parsed.replacements.length === 0) {
+    throw new Error(`config の replacements が空、または配列ではありません: ${path}`);
+  }
+  return parsed.replacements.map((r, i) => {
+    if (!Array.isArray(r) || r.length !== 2 || typeof r[0] !== 'string' || typeof r[1] !== 'string') {
+      throw new Error(`replacements[${i}] は ["from", "to"] の文字列ペアである必要があります: ${JSON.stringify(r)}`);
+    }
+    return [r[0], r[1]] as Replacement;
+  });
+}
 
 const COLLECTIONS = [
   'workspaces', 'tickets', 'sprints', 'projects', 'epics', 'stories', 'members',
@@ -36,10 +62,10 @@ const COLLECTIONS = [
   'retroTries', 'retroNotes',
 ];
 
-function applyReplacements(s: string): string {
+function applyReplacements(s: string, replacements: Replacement[]): string {
   let out = s;
-  for (const [from, to] of REPLACEMENTS) {
-    out = out.split(from as string).join(to);
+  for (const [from, to] of replacements) {
+    out = out.split(from).join(to);
   }
   return out;
 }
@@ -50,6 +76,7 @@ async function main(): Promise<void> {
     throw new Error(`GCP_PROJECT に belvedere-dev-atrium / belvedere-prod-atrium を明示してください。現在: ${project || '(未設定)'}`);
   }
   const apply = process.argv.includes('--apply');
+  const replacements = loadReplacements(); // Firestore に触れる前に config を検証 (fail fast)。
   initializeApp({ credential: applicationDefault(), projectId: project });
   const db = getFirestore();
 
@@ -61,8 +88,8 @@ async function main(): Promise<void> {
     let changed = 0;
     for (const doc of snap.docs) {
       const before = JSON.stringify(doc.data());
-      const after = applyReplacements(before);
-      const idAfter = applyReplacements(doc.id);
+      const after = applyReplacements(before, replacements);
+      const idAfter = applyReplacements(doc.id, replacements);
       if (before === after && idAfter === doc.id) continue;
       changed++;
       const summary = `${col}/${doc.id}${idAfter !== doc.id ? ` → ${idAfter}` : ''}`;

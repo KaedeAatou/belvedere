@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
+import type { Status } from '@belvedere/shared';
 import {
   createTicket,
   patchTicket,
@@ -188,15 +189,91 @@ describe('createTicket', () => {
     });
 
     it('正常系: story 以外 (task/bug) は epicId 無しでも 201 (非必須)', async () => {
-      const task = await createTicket(repo, CTX, { title: 'a task', type: 'task' });
+      // task は親 Story 必須 (2026-07-09) なので、まず親 story を用意して紐付ける。
+      // ここで確認したいのは「epicId が無くても 201」= epicId 非必須の方。
+      const epic = await createEpic(repo, CTX, { name: 'Parent for task test' });
+      if (!epic.ok) throw new Error('setup failed');
+      const parentStory = await createTicket(repo, CTX, { title: 'parent story', type: 'story', epicId: epic.body.id });
+      if (!parentStory.ok) throw new Error('setup failed');
+      const task = await createTicket(repo, CTX, { title: 'a task', type: 'task', parentTicketId: parentStory.body.id });
       expect(task.ok).toBe(true);
       if (!task.ok) return;
       expect(task.status).toBe(201);
+      expect(task.body.epicId).toBeUndefined(); // epicId は付けていない (非必須の確認)
 
       const bug = await createTicket(repo, CTX, { title: 'a bug', type: 'bug' });
       expect(bug.ok).toBe(true);
       if (!bug.ok) return;
       expect(bug.status).toBe(201);
+    });
+
+    it('異常系: type=task で parentTicketId 無し → 400 parent_required', async () => {
+      const res = await createTicket(repo, CTX, { title: 'orphan task', type: 'task' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('parent_required');
+    });
+
+    it('異常系: type=task で実在しない parentTicketId → 400 parent_not_found', async () => {
+      const res = await createTicket(repo, CTX, { title: 'fake parent', type: 'task', parentTicketId: 'WC-NOEXIST' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('parent_not_found');
+    });
+
+    it('異常系: type=task で親が story でない (task を親に) → 400 parent_not_found', async () => {
+      // 親 story を用意 → その下に task を作る → その task を「親」に別 task を作ろうとすると弾かれる。
+      const epic = await createEpic(repo, CTX, { name: 'E' });
+      if (!epic.ok) throw new Error('setup failed');
+      const story = await createTicket(repo, CTX, { title: 's', type: 'story', epicId: epic.body.id });
+      if (!story.ok) throw new Error('setup failed');
+      const task = await createTicket(repo, CTX, { title: 't1', type: 'task', parentTicketId: story.body.id });
+      if (!task.ok) throw new Error('setup failed');
+      const res = await createTicket(repo, CTX, { title: 't2', type: 'task', parentTicketId: task.body.id });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('parent_not_found');
+    });
+
+    it('異常系: type=task で別 workspace の story を親に → 400 parent_not_found (workspace 越え弾き)', async () => {
+      const otherEpic = await createEpic(repo, OTHER_CTX, { name: 'Other WS Epic' });
+      if (!otherEpic.ok) throw new Error('setup failed');
+      const otherStory = await createTicket(repo, OTHER_CTX, { title: 'other story', type: 'story', epicId: otherEpic.body.id });
+      if (!otherStory.ok) throw new Error('setup failed');
+      const res = await createTicket(repo, CTX, { title: 'cross ws task', type: 'task', parentTicketId: otherStory.body.id });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('parent_not_found');
+    });
+  });
+
+  describe('createTicket / patchTicket relatedIncidentId (INCIDENT_NO_FOLLOWUP_BUG 消灯用 / 2026-07-09)', () => {
+    let repo: RepoContainer;
+    beforeEach(() => { repo = createMemoryRepoContainer(); });
+
+    it('作成時に bug へ relatedIncidentId を渡すと保存される', async () => {
+      const res = await createTicket(repo, CTX, { title: 'root-cause bug', type: 'bug', relatedIncidentId: 'WC-INC-1' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.body.relatedIncidentId).toBe('WC-INC-1');
+      const got = await repo.tickets.get(res.body.id);
+      expect(got?.relatedIncidentId).toBe('WC-INC-1');
+    });
+
+    it('PATCH で既存 bug に relatedIncidentId を後付けできる', async () => {
+      const bug = await createTicket(repo, CTX, { title: 'a bug', type: 'bug' });
+      if (!bug.ok) throw new Error('setup failed');
+      expect(bug.body.relatedIncidentId).toBeUndefined();
+      const res = await patchTicket(repo, CTX, bug.body.id, { relatedIncidentId: 'WC-INC-9' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.body.relatedIncidentId).toBe('WC-INC-9');
+      const got = await repo.tickets.get(bug.body.id);
+      expect(got?.relatedIncidentId).toBe('WC-INC-9');
     });
   });
 });
@@ -681,6 +758,57 @@ describe('createEpic / patchEpic', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(400);
+  });
+
+  describe('Epic 完了/中止ガード (未完了の子チケットが残ると閉じられない / 2026-07-09)', () => {
+    async function epicWithChild(childStatus: Status) {
+      const epic = await createEpic(repo, CTX, { name: 'E', });
+      if (!epic.ok) throw new Error('setup failed');
+      const story = await createTicket(repo, CTX, { title: 'child', type: 'story', epicId: epic.body.id });
+      if (!story.ok) throw new Error('setup failed');
+      if (childStatus !== story.body.status) {
+        await patchTicket(repo, CTX, story.body.id, { status: childStatus });
+      }
+      return epic.body.id;
+    }
+
+    it('未完了 (todo) の子が残る Epic は completed にできない → 409 epic_has_open_tickets', async () => {
+      const epicId = await epicWithChild('todo');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'completed' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('epic_has_open_tickets');
+    });
+
+    it('未完了の子が残る Epic は cancelled にもできない → 409', async () => {
+      const epicId = await epicWithChild('in-progress');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'cancelled' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(409);
+    });
+
+    it('子が全て done なら completed にできる → 200', async () => {
+      const epicId = await epicWithChild('done');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'completed' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.body.status).toBe('completed');
+    });
+
+    it('子チケットが無い Epic は completed にできる → 200', async () => {
+      const epic = await createEpic(repo, CTX, { name: 'empty epic' });
+      if (!epic.ok) throw new Error('setup failed');
+      const res = await patchEpic(repo, CTX, epic.body.id, { status: 'completed' });
+      expect(res.ok).toBe(true);
+    });
+
+    it('status を変えない patch (rationale のみ) は子が未完了でも通る', async () => {
+      const epicId = await epicWithChild('todo');
+      const res = await patchEpic(repo, CTX, epicId, { rationale: '意図' });
+      expect(res.ok).toBe(true);
+    });
   });
 });
 

@@ -31,6 +31,8 @@ export interface CreateTicketInput {
   /** Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。作成フォームから渡せる (WC-4b06be05)。 */
   reproSteps?: string;
   regressionNote?: string;
+  /** Bug がどの incident の再発防止かを指すリンク (2026-07-09)。done incident の Bug未起票ピルを消灯する。 */
+  relatedIncidentId?: string;
 }
 
 /** 部分更新 (PATCH /api/tickets/:id) の入力。全フィールド任意。 */
@@ -56,6 +58,8 @@ export interface PatchTicketInput {
   /** Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。 */
   reproSteps?: string;
   regressionNote?: string;
+  /** Bug の再発防止対象 incident (2026-07-09 / DetailSheet 編集で付け替え可)。 */
+  relatedIncidentId?: string;
 }
 
 export const useTickets = () => {
@@ -110,6 +114,7 @@ export const useTickets = () => {
       if (input.reviewNotes !== undefined) body.reviewNotes = input.reviewNotes;
       if (input.reproSteps !== undefined) body.reproSteps = input.reproSteps;
       if (input.regressionNote !== undefined) body.regressionNote = input.regressionNote;
+      if (input.relatedIncidentId !== undefined) body.relatedIncidentId = input.relatedIncidentId;
 
       const created = await api.post<Ticket>('/api/tickets', body);
       // ローカルの tickets に追記 (再 fetch を避けて高速 UI 反映)

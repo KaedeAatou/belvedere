@@ -70,6 +70,10 @@ export const TicketCreateBodySchema = z.object({
   // Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。PATCH (.partial() 派生) で詳細パネルから保存する。
   reproSteps: z.string().optional(),
   regressionNote: z.string().optional(),
+  // Bug がどの incident の再発防止 (根本対応) かを指すリンク (2026-07-09)。INCIDENT_NO_FOLLOWUP_BUG
+  // ピルは done incident をこの id で指す bug の有無で消灯する。UI (bug 作成/編集) から設定できるよう
+  // create/patch 双方で受ける (PATCH は .partial() 派生で自動的に optional)。
+  relatedIncidentId: z.string().optional(),
   // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
   orderIndex: z.number().optional(),
 });
@@ -131,6 +135,23 @@ export async function createTicket(
       return { ok: false, status: 400, body: { error: 'epic_not_found' } };
     }
   }
+  // task 限定の親 Story 必須化 (2026-07-09)。task は story の分割子として生まれる設計で、UI は
+  // 分割経路でしか task を作れず parentTicketId が必ず付く (詳細/一覧に親リンクが出て辿れる)。
+  // しかし API/MCP 経由では parent 無し task を作れてしまい、TASK_NO_PARENT (error) ピルが
+  // 「親リンクも出ず・直す UI も無い」宙吊り状態になっていた。作成時点で親 Story を必須化し、
+  // UI と同じ不変条件をサーバでも保証する (story→epic 必須化と対称)。親と認める条件は
+  // TASK_NO_PARENT ルールと同一 (同一 workspace の実在 story) にして、作成を通れば二度と
+  // ルールが発火しないようにする。
+  if (parsed.data.type === 'task') {
+    const parentId = parsed.data.parentTicketId;
+    if (parentId === undefined || parentId === '') {
+      return { ok: false, status: 400, body: { error: 'parent_required' } };
+    }
+    const parent = await repo.tickets.get(parentId);
+    if (!parent || parent.workspaceId !== ctx.workspaceId || parent.type !== 'story') {
+      return { ok: false, status: 400, body: { error: 'parent_not_found' } };
+    }
+  }
   const now = new Date().toISOString();
   // スプリント所属 ⟹ 最低 todo (backlog 状態 ⟺ 未所属 / WC-676a53e1)。sprintId 付きで status が
   // 未指定 or backlog のとき todo に引き上げる (client は既に todo を送るが API でも保証 = 矛盾状態防止)。
@@ -165,6 +186,7 @@ export async function createTicket(
     ...(parsed.data.reviewNotes !== undefined && { reviewNotes: parsed.data.reviewNotes }),
     ...(parsed.data.reproSteps !== undefined && { reproSteps: parsed.data.reproSteps }),
     ...(parsed.data.regressionNote !== undefined && { regressionNote: parsed.data.regressionNote }),
+    ...(parsed.data.relatedIncidentId !== undefined && { relatedIncidentId: parsed.data.relatedIncidentId }),
     ...(parsed.data.orderIndex !== undefined && { orderIndex: parsed.data.orderIndex }),
     createdAt: now,
     updatedAt: now,

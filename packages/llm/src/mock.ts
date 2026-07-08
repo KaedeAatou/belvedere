@@ -323,11 +323,10 @@ function getStructuredOutput(role: AgentRole): unknown {
           { ticketId: 'WC-106', signal: 'oversize_story', detail: 'SP=13 (>8)。3つに分割推奨: ①Eval set拡充 ②few-shot rubric ③コスト計測' },
           { ticketId: 'WC-112', signal: 'oversize_story', detail: 'SP=13 (>8)。①ダッシュボード基盤 ②トレンド線 ③Retro Agent連携 に分割推奨' },
           { ticketId: 'WC-110', signal: 'priority_value_mismatch_soft', detail: 'priority=medium だが valueImpact=high。OWASP リリースゲートはプロダクトゴール (信頼化) に直結、priority 引き上げ推奨' },
-          { ticketId: 'WC-108', signal: 'unstructured_dependency', detail: 'CD分離は CB側完了が前提だが blockedBy 未設定' },
           { ticketId: 'EP-3', signal: 'strategic_intent_missing', detail: 'Epic EP-3 (デリバリーパイプラインの信頼化) に rationale (戦略意図) が未設定。配下のチケットが「何のために?」を見失う形骸化サイン。PO に確認推奨。' },
         ],
         productGoalAlignment: '価値貢献度 high のチケット: WC-103/WC-104/WC-105/WC-109/WC-110/WC-112。urgent はWC-105のみで整合。',
-        summary: 'Refinement (6観点): 12 ticket / 4 epic をスキャン、5件の修正候補。粒度2件 / 優先度ミスマッチ1件 / 依存未整理1件 / 戦略意図欠落1件。',
+        summary: 'Refinement (6観点): 12 ticket / 4 epic をスキャン、4件の修正候補。粒度2件 / 優先度ミスマッチ1件 / 戦略意図欠落1件。',
       };
     case 'daily':
       return {
@@ -395,7 +394,7 @@ function getNaturalOutput(role: AgentRole): string {
         '【バックログリファインメント診断 (Refinement / Mock)】',
         '次スプリント候補 (sprint-14) ticket 12件 + Epic 4件 をスキャン。',
         '',
-        '◆ 形骸化シグナル: 5件 (6観点診断)',
+        '◆ 形骸化シグナル: 4件 (6観点診断)',
         '  ① 粒度過大 (SP > 8): 2件',
         '     - WC-106 [SP=13]: PRレビューLLM誤検出5%チューニング',
         '         → 分割候補: ①Eval set 拡充 ②few-shot rubric改善 ③コスト計測',
@@ -406,9 +405,6 @@ function getNaturalOutput(role: AgentRole): string {
         '     - WC-110 [priority=medium / valueImpact=high]',
         '         OWASP リリースゲートはプロダクトゴール (信頼化) 直結。priority を high に引き上げ推奨',
         '',
-        '  ③ 依存関係未整理: 1件',
-        '     - WC-108: CD分離は CB側完了が前提だが blockedBy 未設定',
-        '',
         '  ⑥ 戦略意図 (Epic.rationale) 欠落: 1件 ⭐NEW',
         '     - EP-3 (デリバリーパイプラインの信頼化) に rationale 未設定',
         '       → 配下のチケットが「何のために?」を見失う形骸化サイン',
@@ -418,7 +414,7 @@ function getNaturalOutput(role: AgentRole): string {
         '  価値貢献度 high なチケット 6件 (WC-103/104/105/109/110/112)。',
         '  urgent はWC-105 のみ → priority と valueImpact の整合性は概ね良好。',
         '',
-        '◆ 提案: 上記 5件を Refinement 会で議論 (15min)。すべて L2 で人間承認後に反映。',
+        '◆ 提案: 上記 4件を Refinement 会で議論 (15min)。すべて L2 で人間承認後に反映。',
       ].join('\n');
 
     case 'daily':
