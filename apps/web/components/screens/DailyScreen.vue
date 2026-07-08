@@ -66,10 +66,10 @@ const sprintDays = computed(() => {
   return { elapsed, total };
 });
 
-function ageInDays(started?: string): number {
-  if (!started) return 0;
-  return Math.max(1, Math.round((Date.now() - Date.parse(started)) / 86_400_000));
-}
+// 経過日数は共通純粋関数 (utils/ticketAge / F-23)。旧実装の Math.max(1,…) は着手数分後でも
+// 「1d」と表示していた。満日数 (floor) + 1 日未満は <1d 表示に統一。
+const ageDays = (started?: string): number => ticketAgeDays(started, Date.now());
+const ageLabel = (started?: string): string => ticketAgeLabel(started, Date.now());
 
 // d&d は vue-draggable-plus (SortableJS)。4 列を同一 group にし、列間ドラッグで status を変更する。
 // 確定は SortableJS の end (= drop 成否に関わらず必ず発火) で行う。旧 native DnD は drop でしか
@@ -137,8 +137,8 @@ const dayTicks = computed(() => {
               <FindingPill v-for="f in findingsFor(t.id).slice(0, 2)" :key="f.ruleId" :finding="f" />
               <span class="spacer" />
               <span v-if="col === 'in-progress' && t.startedAt"
-                    :class="['age', ageInDays(t.startedAt) > 2 && 'warn']">
-                <Icon name="clock" /> {{ ageInDays(t.startedAt) }}d
+                    :class="['age', ageDays(t.startedAt) > 2 && 'warn']">
+                <Icon name="clock" /> {{ ageLabel(t.startedAt) }}
               </span>
               <Avatar :user="t.assigneeId" />
             </div>
