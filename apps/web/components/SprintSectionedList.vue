@@ -244,6 +244,12 @@ const newAC = ref(''); // 改行区切り
 const newValueImpact = ref<ValueImpact | ''>('');
 const newReproSteps = ref('');     // bug 専用 (WC-2dba4170 の欄を作成時にも)
 const newRegressionNote = ref(''); // bug 専用
+// bug がどの incident の再発防止かを紐付ける (任意 / 2026-07-09)。設定すると done incident の
+// INCIDENT_NO_FOLLOWUP_BUG ピルが消灯する。候補は全区画の incident チケット。
+const newRelatedIncidentId = ref('');
+const incidentOptions = computed(() =>
+  [...props.current, ...props.next, ...props.backlog].filter((t) => t.type === 'incident'),
+);
 // 起票時の添付画像 (WC-a8f0be16)。![](/api/images/id) の配列。submitCreate で説明末尾に追記する。
 const newImages = ref<string[]>([]);
 const newImageBusy = ref(false);
@@ -385,6 +391,7 @@ function openCreate(): void {
   newValueImpact.value = '';
   newReproSteps.value = '';
   newRegressionNote.value = '';
+  newRelatedIncidentId.value = '';
   newImages.value = [];
   newImageBusy.value = false;
   // story 作成時の親 Epic セレクタ用に Epic 一覧を確実に読み込む (単体マウント経路でも空にしない)。
@@ -435,6 +442,7 @@ async function submitCreate(): Promise<void> {
     estimatePt?: number; timeboxHours?: number; description?: string;
     sprintId?: string; status?: 'backlog' | 'todo'; epicId?: string;
     valueImpact?: ValueImpact; acceptanceCriteria?: string[]; reproSteps?: string; regressionNote?: string;
+    relatedIncidentId?: string;
   } = {
     title: effectiveTitle,
     priority: newPriority.value,
@@ -450,6 +458,7 @@ async function submitCreate(): Promise<void> {
     if (newType.value === 'bug') {
       if (newReproSteps.value.trim()) input.reproSteps = newReproSteps.value.trim();
       if (newRegressionNote.value.trim()) input.regressionNote = newRegressionNote.value.trim();
+      if (newRelatedIncidentId.value) input.relatedIncidentId = newRelatedIncidentId.value;
     }
     if (newType.value === 'spike' && newTimebox.value !== null) input.timeboxHours = newTimebox.value;
   }
@@ -882,6 +891,14 @@ async function submitSplit(): Promise<void> {
             <label class="label" for="ssl-new-regression">回帰テスト</label>
             <textarea id="ssl-new-regression" v-model="newRegressionNote" data-testid="new-ticket-regression"
                       class="text-input" rows="2" maxlength="1000" placeholder="再発防止の自動テスト方針" />
+          </div>
+          <!-- 再発防止対象の incident (任意 / 2026-07-09)。選ぶと done incident の「Bug未起票」ピルが消灯する。 -->
+          <div v-if="incidentOptions.length > 0" class="field">
+            <label class="label" for="ssl-new-related-incident">再発防止対象の incident (任意)</label>
+            <select id="ssl-new-related-incident" v-model="newRelatedIncidentId" data-testid="new-ticket-related-incident" class="select-input">
+              <option value="">（紐付けなし）</option>
+              <option v-for="inc in incidentOptions" :key="inc.id" :value="inc.id">{{ inc.id }} · {{ inc.title }}</option>
+            </select>
           </div>
         </template>
         <div class="field-row">

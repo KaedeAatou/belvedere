@@ -99,8 +99,15 @@ const editSprintId = ref(''); // 空文字 = 未割当/変更なし
 const editEpicId = ref('');   // 親 Epic (F-03)。空文字 = 未設定のまま (解除は非対応)
 const editReproSteps = ref('');     // Bug の再現手順 (WC-2dba4170)
 const editRegressionNote = ref(''); // Bug の回帰テスト方針 (WC-2dba4170)
-// Bug 種別のみ再現手順 / 回帰テスト欄を出す (ルールエンジンの BUG_NO_REPRO / BUG_NO_REGRESSION_DOD 対応)
+const editRelatedIncidentId = ref(''); // Bug の再発防止対象 incident (2026-07-09)
+// Bug 種別のみ再現手順 / 回帰テスト / 再発防止対象 incident 欄を出す
+// (ルールエンジンの BUG_NO_REPRO / BUG_NO_REGRESSION_DOD / INCIDENT_NO_FOLLOWUP_BUG 対応)
 const isBug = computed(() => props.ticket.type === 'bug');
+// 再発防止対象に選べる incident と、現在の紐付け先 (表示用)。
+const incidentOptions = computed(() => tickets.value.filter((t) => t.type === 'incident'));
+const relatedIncident = computed(() =>
+  props.ticket.relatedIncidentId ? tickets.value.find((t) => t.id === props.ticket.relatedIncidentId) : undefined,
+);
 
 function startEdit(): void {
   editTitle.value = props.ticket.title;
@@ -114,6 +121,7 @@ function startEdit(): void {
   editEpicId.value = props.ticket.epicId ?? '';
   editReproSteps.value = props.ticket.reproSteps ?? '';
   editRegressionNote.value = props.ticket.regressionNote ?? '';
+  editRelatedIncidentId.value = props.ticket.relatedIncidentId ?? '';
   editError.value = null;
   editing.value = true;
 }
@@ -144,6 +152,8 @@ async function saveEdit(): Promise<void> {
   if (isBug.value) {
     patch.reproSteps = editReproSteps.value.trim();
     patch.regressionNote = editRegressionNote.value.trim();
+    // 再発防止対象 incident (2026-07-09)。空文字 = 紐付けなし (done incident の Bug未起票ピルは消えない)。
+    patch.relatedIncidentId = editRelatedIncidentId.value;
   }
   // sprint (F-19): 変更時のみ送る。'' = 「未割当 (Backlog へ戻す)」で sprintId: null を送り解除する
   // (API は TicketPatchBodySchema で null 解除に対応済。status との整合はサーバの
@@ -384,6 +394,22 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
             <div v-else
                  style="font-size: 12.5px; color: var(--ink-2); font-style: italic; border: 1px dashed var(--accent-dim); padding: 10px 12px; background: var(--accent-bg)">
               回帰テストが未記入です。編集して記入してください。
+            </div>
+          </template>
+        </div>
+        <!-- 再発防止対象の incident (2026-07-09)。この bug がどの incident の根本対応かを紐付ける。
+             設定すると done incident の INCIDENT_NO_FOLLOWUP_BUG ピルが消灯する。 -->
+        <div class="field">
+          <div class="l">再発防止対象の incident</div>
+          <select v-if="editing" v-model="editRelatedIncidentId" class="edit-input" data-testid="sheet-edit-related-incident">
+            <option value="">（紐付けなし）</option>
+            <option v-for="inc in incidentOptions" :key="inc.id" :value="inc.id">{{ inc.id }} · {{ inc.title }}</option>
+          </select>
+          <template v-else>
+            <button v-if="relatedIncident" class="sheet-rel-item" data-testid="sheet-related-incident-link"
+                    @click="emit('select', relatedIncident.id)">↳ 再発防止対象 {{ relatedIncident.id }} · {{ relatedIncident.title }}</button>
+            <div v-else style="font-size: 12.5px; color: var(--ink-2); font-style: italic">
+              どの incident の再発防止でもありません (任意)。
             </div>
           </template>
         </div>
