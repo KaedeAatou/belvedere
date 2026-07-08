@@ -14,6 +14,12 @@
 
 ロジックは純粋関数 unit に追い出して退化入力で固め、配線は薄い component unit、物理 (d&d) は実機で見る。**「緑 = ユーザーに対して動く」** にするには、編集した層に対応するテストを必ず書く (機械判定できる範囲は `pure-fn-test-guard` hook が nudge、できない「赤→緑を踏んだか」は skill 運用)。
 
+## ルールエンジン変更時は agent-evals golden ゲートも回す (必須)
+
+`packages/tools/src/{ticket-rules,refinement,quality}.ts` (ルール追加/削除/observation 変更) を編集したら、per-package の `@belvedere/tools` テストだけで満足せず、**`packages/agent-evals` (CI「まわす」品質ゲート / `rules.eval.test.ts`) を必ずローカルで実行する** (`pnpm --filter @belvedere/agent-evals test`)。golden (`packages/agent-evals/src/golden.ts`) は期待 finding の `ruleId` を列挙しているため、**ルールの追加/削除は golden 期待値の更新を伴う**。per-package テストは緑でも golden が古い ruleId を期待し続けて CI だけ赤になる。
+
+> 由来: spike 死蔵ルール撤去 (2026-07-09) で `SPIKE_NO_TIMEBOX` を消したが golden の期待値が残り、tools 単体は緑なのに PR CI が 3 件 fail した (ローカルで agent-evals を回さず見落とし)。**rule 系を触ったら `pnpm test` 全体 or 最低でも tools + agent-evals をローカルで踏む**。
+
 ## 1. 共有の純粋関数は直接の単体テストを持つ (必須)
 
 memory / firestore / web など **複数層で共有される純粋関数**(比較・並び順・算術: `compareTicketOrder` / `orderBetween` / `applyStatusTransition` 等)は、その関数自体を import した直接テストを必ず持つ。ハンドラ経由の間接テストだけで満足しない。
