@@ -61,16 +61,22 @@ export function detectOversizeStory(t: Ticket): RefinementSignal[] {
   return [];
 }
 
-/** 観点2: 依存未整理 (blockedBy / US- 親紐付け のいずれも無い)。 */
+/** 観点2: 依存未整理 (blockedBy も 親紐付けも無い孤立チケット)。
+ *  親紐付けの基準は種別で異なる (F-11 category confusion 修正 / 2026-07-08):
+ *    - story は epicId (親 Epic) に紐付くのが正しく、別 story (parentTicketId) には紐付かない。
+ *      旧実装は story にも US- 紐付けを求め「Story を User Story に紐付けよ」という誤指摘を出していた。
+ *    - task / spike / bug は parentTicketId (親 Story = US- 形式 or WC-story) に紐付く。
+ *      旧実装は US- 前方一致のみ親と認め、WC-story を親に持つ task も誤警告していた。 */
 export function detectUnstructuredDependency(t: Ticket): RefinementSignal[] {
   const hasBlockedBy = (t.blockedBy?.length ?? 0) > 0;
-  const hasStoryLink = (t.parentTicketId ?? '').startsWith('US-');
-  if (!hasBlockedBy && !hasStoryLink) {
-    return [{
-      ticketId: t.id,
-      signal: 'unstructured_dependency',
-      detail: 'blockedBy / parentTicketId (US-紐付け) のいずれも未設定。依存関係を整理してください。',
-    }];
+  const hasParentLink =
+    t.type === 'story' ? !!t.epicId : (t.parentTicketId ?? '').length > 0;
+  if (!hasBlockedBy && !hasParentLink) {
+    const detail =
+      t.type === 'story'
+        ? 'blockedBy も 親 Epic (epicId) も未設定。親 Epic への紐付けと依存関係を整理してください。'
+        : 'blockedBy / 親 Story (parentTicketId) のいずれも未設定。依存関係を整理してください。';
+    return [{ ticketId: t.id, signal: 'unstructured_dependency', detail }];
   }
   return [];
 }
