@@ -59,6 +59,23 @@ const { sprints, sprintLabel } = useSprints();
 // WC-38/35: 名前表示 (sprintLabel) + active/planned のみに絞る (現値が completed の場合だけ残す)。
 const sprintOptions = computed(() => sprintOptionsForEdit(sprints.value, props.ticket.sprintId));
 
+// ===== 親 Epic の表示 + 変更 (F-03) =====
+// 閲覧モードで Epic 名を表示し、編集モードでセレクタから付け替えられるようにする。
+// 解除 (epicId 削除) は API 非対応なので提供しない (story は案A で Epic 必須のため意図一致)。
+const { epics, selectableEpics, fetchEpics } = useEpics();
+// Epic 名の解決に epics が要る。未ロード (他画面から直接開いた等) の時だけ取得する。
+onMounted(() => { if (epics.value.length === 0) void fetchEpics(); });
+const parentEpic = computed(() =>
+  props.ticket.epicId ? epics.value.find((e) => e.id === props.ticket.epicId) : undefined,
+);
+// セレクタ候補: active な Epic (selectableEpics)。現値が completed/cancelled で候補から
+// 外れている場合は先頭に残す (sprintOptionsForEdit と同じ「現値の空表示を防ぐ」意図)。
+const epicOptions = computed(() => {
+  const cur = parentEpic.value;
+  if (cur && !selectableEpics.value.some((e) => e.id === cur.id)) return [cur, ...selectableEpics.value];
+  return selectableEpics.value;
+});
+
 const findings = computed(() => findingsFor(props.ticket.id));
 const ownerName = computed(() => memberName(props.ticket.assigneeId));
 // WC-28: 親子関係 (分割で作られた子 → 親 / 親 → 子) を全 tickets から解決 (新 API 不要)。
@@ -79,6 +96,7 @@ const editValueImpact = ref<ValueImpact | ''>('');
 const editStatus = ref<Status>('backlog');
 const editAC = ref('');       // 改行区切りの AC テキスト
 const editSprintId = ref(''); // 空文字 = 未割当/変更なし
+const editEpicId = ref('');   // 親 Epic (F-03)。空文字 = 未設定のまま (解除は非対応)
 const editReproSteps = ref('');     // Bug の再現手順 (WC-2dba4170)
 const editRegressionNote = ref(''); // Bug の回帰テスト方針 (WC-2dba4170)
 // Bug 種別のみ再現手順 / 回帰テスト欄を出す (ルールエンジンの BUG_NO_REPRO / BUG_NO_REGRESSION_DOD 対応)
@@ -93,6 +111,7 @@ function startEdit(): void {
   editStatus.value = props.ticket.status;
   editAC.value = (props.ticket.acceptanceCriteria ?? []).join('\n');
   editSprintId.value = props.ticket.sprintId ?? '';
+  editEpicId.value = props.ticket.epicId ?? '';
   editReproSteps.value = props.ticket.reproSteps ?? '';
   editRegressionNote.value = props.ticket.regressionNote ?? '';
   editError.value = null;
@@ -117,6 +136,10 @@ async function saveEdit(): Promise<void> {
   };
   if (editAssignee.value) patch.assigneeId = editAssignee.value;
   if (editValueImpact.value) patch.valueImpact = editValueImpact.value;
+  // 親 Epic (F-03): 変更時のみ送る。空文字 (未設定のまま) は「変更なし」(解除 API は無い)。
+  if (editEpicId.value && editEpicId.value !== (props.ticket.epicId ?? '')) {
+    patch.epicId = editEpicId.value;
+  }
   // Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。bug のみ送信 (空文字でクリアも可)。
   if (isBug.value) {
     patch.reproSteps = editReproSteps.value.trim();
@@ -199,6 +222,11 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
           <span style="color: var(--ink-4)">·</span>
           <span>{{ ticket.sprintId }}</span>
         </template>
+        <!-- 親 Epic (F-03): epicId を持つチケットは Epic 名 (未ロード時は id) を表示 -->
+        <template v-if="ticket.epicId">
+          <span style="color: var(--ink-4)">·</span>
+          <span data-testid="sheet-epic">Epic: {{ parentEpic?.name ?? ticket.epicId }}</span>
+        </template>
       </div>
 
       <!-- WC-28: 親子リンク (分割元/分割先へ 1 クリックで移動)。親を持たず子も無ければ非表示。 -->
@@ -256,6 +284,14 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
             <option value="low">low</option>
             <option value="medium">medium</option>
             <option value="high">high</option>
+          </select>
+        </div>
+        <div class="edit-field">
+          <label class="l">EPIC</label>
+          <!-- 親 Epic の付け替え (F-03)。解除は API 非対応なので「未設定」は現値が無い時のみ出す。 -->
+          <select v-model="editEpicId" class="edit-input" data-testid="sheet-edit-epic">
+            <option v-if="!ticket.epicId" value="">（未設定）</option>
+            <option v-for="e in epicOptions" :key="e.id" :value="e.id">{{ e.name }}</option>
           </select>
         </div>
         <div class="edit-field">
