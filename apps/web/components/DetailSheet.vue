@@ -420,6 +420,13 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
 
       <!-- 見積もりポーカー (story + bug / T7, F-20 で bug も見積もり対象に) -->
       <EstimationPanel v-if="ticket.type === 'story' || ticket.type === 'bug'" :key="ticket.id" :ticket="ticket" />
+      <!-- F-20: incident は見積もり対象外。SP 欄が無い理由が分からず「未実装?」と迷うため明示する。 -->
+      <div v-else-if="ticket.type === 'incident'" class="field" data-testid="incident-no-estimate">
+        <div class="l">見積もり</div>
+        <div class="value readonly" style="font-size: 12px; color: var(--ink-2)">
+          incident は見積もりポーカーの対象外です (SP は計画 SP に含めません)。SP で計画に載せたい作業は story か task で起票してください。
+        </div>
+      </div>
 
       <div class="field">
         <div class="l">LABELS</div>
