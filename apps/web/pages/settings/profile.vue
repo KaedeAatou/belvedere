@@ -21,6 +21,18 @@ const canManage = computed(() => {
 const route = useRoute();
 const onboarding = computed(() => route.query.onboard === '1');
 
+// F-04 (2026-07-08): アバターメニュー「新規 Workspace」からの遷移でフォームがページ中段に
+// 埋もれて迷う。?createws=1 (または onboarding) で来た時は作成フォームへスクロール + focus する。
+onMounted(() => {
+  if (route.query.createws === '1' || onboarding.value) {
+    nextTick(() => {
+      const el = document.getElementById('wsName');
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus({ preventScroll: true });
+    });
+  }
+});
+
 // ===== Workspace 新規作成 =====
 const wsName = ref('');
 const wsGoal = ref('');

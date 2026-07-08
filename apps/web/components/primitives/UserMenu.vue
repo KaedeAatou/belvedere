@@ -68,6 +68,13 @@ function goSettings(): void {
   open.value = false;
   router.push('/settings/profile');
 }
+
+// F-04 (2026-07-08): 「新規 Workspace」はフルページ遷移でフォームが中段に埋もれて迷うため、
+// query で作成フォームへの自動スクロール + focus を依頼する。
+function goCreateWorkspace(): void {
+  open.value = false;
+  router.push('/settings/profile?createws=1');
+}
 </script>
 
 <template>
@@ -107,7 +114,7 @@ function goSettings(): void {
           <!-- .badge-role は既存 e2e が一意 locator 前提のため WS 一覧では別クラス名 -->
           <span class="badge badge-ws-role" style="margin-left: auto">{{ w.role }}</span>
         </button>
-        <button class="menu-item ws-new" data-testid="ws-create-open" @click="goSettings">
+        <button class="menu-item ws-new" data-testid="ws-create-open" @click="goCreateWorkspace">
           <Icon name="plus" />
           <span>新規 Workspace</span>
         </button>
