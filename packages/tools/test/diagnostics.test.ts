@@ -130,13 +130,22 @@ describe('checkBacklogRefinement (純粋関数 / 直接)', () => {
     expect(sig(active, 'oversize_story', 'WC-1')).toBe(true);
   });
 
-  it('unstructured_dependency: blockedBy も US 親も無いと発火 / US 親があれば発火しない', () => {
-    const bad = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', valueImpact: 'high' })] }));
+  it('unstructured_dependency: task は親 (parentTicketId) 無しで発火 / 親ありで発火しない', () => {
+    const bad = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', type: 'task', valueImpact: 'high' })] }));
     expect(sig(bad, 'unstructured_dependency', 'WC-1')).toBe(true);
     const good = checkBacklogRefinement(
-      input({ tickets: [ticket({ id: 'WC-2', valueImpact: 'high', parentTicketId: 'US-1' })] }),
+      input({ tickets: [ticket({ id: 'WC-2', type: 'task', valueImpact: 'high', parentTicketId: 'US-1' })] }),
     );
     expect(sig(good, 'unstructured_dependency', 'WC-2')).toBe(false);
+  });
+
+  // 2026-07-09: bug / incident / spike は top-level PBI で親 Story を持たないため観点2 の対象外
+  // (以前は親 Story 欠落で誤発火していた)。story / task だけを対象にする。
+  it('unstructured_dependency: bug / incident / spike は親無しでも発火しない (top-level PBI)', () => {
+    for (const type of ['bug', 'incident', 'spike'] as const) {
+      const res = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', type, valueImpact: 'high' })] }));
+      expect(sig(res, 'unstructured_dependency', 'WC-1'), `${type} で誤発火`).toBe(false);
+    }
   });
 
   // F-11 (2026-07-08 Sprint 6 で (source: refinement) 付き再発): 観点2 が Story にも
@@ -228,7 +237,8 @@ describe('checkBacklogRefinement (純粋関数 / 直接)', () => {
   // R2-F: 出力順は外部契約 (API/MCP/Mock 応答) なので、観点を detect* に分離しても不変であることを固定。
   it('出力順不変: 1 ticket が複数観点に該当 → ticket グループ化で [oversize, unstructured, value_impact] の順', () => {
     const r = checkBacklogRefinement(
-      input({ tickets: [ticket({ id: 'WC-1', estimatePt: 13 })] }), // SP>8 + 依存無 + valueImpact 無
+      // story (親 Epic 無し) にして観点2 を含む複数観点を踏む: SP>8 + 親 Epic 無 + valueImpact 無。
+      input({ tickets: [ticket({ id: 'WC-1', type: 'story', estimatePt: 13 })] }),
     );
     expect(r.findings.map((f) => f.signal)).toEqual([
       'oversize_story',
@@ -273,12 +283,19 @@ describe('refinement 観点ごとの detect* (直接 / 退化入力)', () => {
     expect(detectOversizeStory(tk({ id: 'A', estimatePt: 0 }))).toEqual([]);
   });
 
-  it('detectUnstructuredDependency: 無紐付け→発火 / US-親→空 / blockedBy 非空→空 / blockedBy 空配列→発火', () => {
-    expect(detectUnstructuredDependency(tk({ id: 'A' }))).toHaveLength(1);
-    expect(detectUnstructuredDependency(tk({ id: 'A', parentTicketId: 'US-1' }))).toEqual([]);
-    expect(detectUnstructuredDependency(tk({ id: 'A', blockedBy: ['WC-9'] }))).toEqual([]);
-    // 退化: blockedBy が空配列 (length 0) は「無し」扱い → 発火する
-    expect(detectUnstructuredDependency(tk({ id: 'A', blockedBy: [] }))).toHaveLength(1);
+  it('detectUnstructuredDependency: task は親紐付けの有無のみで判定 (blockedBy は 2026-07-09 で無関係化)', () => {
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'task' }))).toHaveLength(1); // 親なし → 発火
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'task', parentTicketId: 'US-1' }))).toEqual([]); // 親あり → 空
+    // blockedBy はもう判定に影響しない: 親が無ければ blockedBy があっても発火する
+    // (blockedBy を直す UI が無いため「依存を整理せよ」を示唆から外した)。
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'task', blockedBy: ['WC-9'] }))).toHaveLength(1);
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'task', parentTicketId: 'US-1', blockedBy: ['WC-9'] }))).toEqual([]);
+  });
+
+  it('detectUnstructuredDependency: bug / incident / spike は対象外で常に空 (top-level PBI)', () => {
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'bug' }))).toEqual([]);
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'incident' }))).toEqual([]);
+    expect(detectUnstructuredDependency(tk({ id: 'A', type: 'spike' }))).toEqual([]);
   });
 
   it('detectValueImpactMissing: undefined→発火 / 設定済→空 (low/medium/high いずれも)', () => {
