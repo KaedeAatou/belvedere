@@ -38,10 +38,16 @@ export const RetroNotePatchBodySchema = z.object({
 export async function listRetroNotes(
   repo: RepoContainer,
   ctx: HandlerContext,
+  query: { sprintNumber?: number } = {},
 ): Promise<HandlerResult<RetroNote[]>> {
   // repo 側で createdAt 昇順にソート済 (memory / firestore 双方で契約一致)。
   const xs = await repo.retroNotes.list({ workspaceId: ctx.workspaceId });
-  return { ok: true, status: 200, body: xs };
+  // F-16: sprintNumber 指定時は由来スプリントのノートだけに絞る (未指定は全件 = 後方互換)。
+  // repo interface (packages/repo) は触らず handler で絞る。sprintNumber 未設定の legacy ノートは
+  // どのスプリント由来か判定できないため、絞り込み時は含めない。
+  const sn = query.sprintNumber;
+  const body = sn === undefined ? xs : xs.filter((n) => n.sprintNumber === sn);
+  return { ok: true, status: 200, body };
 }
 
 export async function createRetroNote(
