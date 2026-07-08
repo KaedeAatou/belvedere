@@ -111,6 +111,34 @@ describe('checkBacklogRefinement (純粋関数 / 直接)', () => {
     expect(sig(good, 'unstructured_dependency', 'WC-2')).toBe(false);
   });
 
+  // F-11 (2026-07-08 Sprint 6 で (source: refinement) 付き再発): 観点2 が Story にも
+  // parentTicketId (US-) 欠落を警告し、「Story を別の User Story に紐付けよ」という
+  // category confusion を起こしていた。Story は epicId (親 Epic) で紐付くのが正しい。
+  it('unstructured_dependency: story は epicId があれば発火しない (F-11 category confusion 修正)', () => {
+    const good = checkBacklogRefinement(
+      input({ tickets: [ticket({ id: 'WC-1', type: 'story', valueImpact: 'high', epicId: 'EP-1' })] }),
+    );
+    expect(sig(good, 'unstructured_dependency', 'WC-1')).toBe(false);
+  });
+  it('unstructured_dependency: story で epicId も blockedBy も無ければ発火 (Epic 紐付けを促す)', () => {
+    const bad = checkBacklogRefinement(
+      input({ tickets: [ticket({ id: 'WC-1', type: 'story', valueImpact: 'high' })] }),
+    );
+    expect(sig(bad, 'unstructured_dependency', 'WC-1')).toBe(true);
+  });
+  it('unstructured_dependency: story は parentTicketId (別 story) があっても epicId 無しなら発火', () => {
+    const bad = checkBacklogRefinement(
+      input({ tickets: [ticket({ id: 'WC-1', type: 'story', valueImpact: 'high', parentTicketId: 'US-1' })] }),
+    );
+    expect(sig(bad, 'unstructured_dependency', 'WC-1')).toBe(true);
+  });
+  it('unstructured_dependency: task は親 (parentTicketId) があれば発火しない', () => {
+    const good = checkBacklogRefinement(
+      input({ tickets: [ticket({ id: 'WC-1', type: 'task', valueImpact: 'high', parentTicketId: 'WC-9' })] }),
+    );
+    expect(sig(good, 'unstructured_dependency', 'WC-1')).toBe(false);
+  });
+
   it('value_impact_missing: valueImpact undefined で発火', () => {
     const r = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', parentTicketId: 'US-1' })] }));
     expect(sig(r, 'value_impact_missing', 'WC-1')).toBe(true);
