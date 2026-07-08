@@ -71,6 +71,18 @@ export async function patchEpic(
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
+  // Epic 完了/中止ガード (2026-07-09)。未完了 (done 以外) の子チケットが残る Epic を completed/
+  // cancelled にはできない。Epic を閉じる = 配下の作業も片付いている、という不変条件を守る
+  // (open な子を残したまま Epic を閉じると、その作業が宙に浮いて追えなくなる)。
+  // status を新たに completed/cancelled にする変更のときだけ検査する (他フィールドの patch は素通し)。
+  const closing = parsed.data.status === 'completed' || parsed.data.status === 'cancelled';
+  if (closing && parsed.data.status !== existing.status) {
+    const wsTickets = await repo.tickets.list({ workspaceId: ctx.workspaceId });
+    const openChildren = wsTickets.filter((t) => t.epicId === id && t.status !== 'done');
+    if (openChildren.length > 0) {
+      return { ok: false, status: 409, body: { error: 'epic_has_open_tickets', details: { openCount: openChildren.length } } };
+    }
+  }
   const updated: Epic = {
     ...existing,
     ...stripUndefinedPartial(parsed.data),

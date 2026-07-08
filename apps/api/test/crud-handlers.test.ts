@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
+import type { Status } from '@belvedere/shared';
 import {
   createTicket,
   patchTicket,
@@ -757,6 +758,57 @@ describe('createEpic / patchEpic', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(400);
+  });
+
+  describe('Epic 完了/中止ガード (未完了の子チケットが残ると閉じられない / 2026-07-09)', () => {
+    async function epicWithChild(childStatus: Status) {
+      const epic = await createEpic(repo, CTX, { name: 'E', });
+      if (!epic.ok) throw new Error('setup failed');
+      const story = await createTicket(repo, CTX, { title: 'child', type: 'story', epicId: epic.body.id });
+      if (!story.ok) throw new Error('setup failed');
+      if (childStatus !== story.body.status) {
+        await patchTicket(repo, CTX, story.body.id, { status: childStatus });
+      }
+      return epic.body.id;
+    }
+
+    it('未完了 (todo) の子が残る Epic は completed にできない → 409 epic_has_open_tickets', async () => {
+      const epicId = await epicWithChild('todo');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'completed' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('epic_has_open_tickets');
+    });
+
+    it('未完了の子が残る Epic は cancelled にもできない → 409', async () => {
+      const epicId = await epicWithChild('in-progress');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'cancelled' });
+      expect(res.ok).toBe(false);
+      if (res.ok) return;
+      expect(res.status).toBe(409);
+    });
+
+    it('子が全て done なら completed にできる → 200', async () => {
+      const epicId = await epicWithChild('done');
+      const res = await patchEpic(repo, CTX, epicId, { status: 'completed' });
+      expect(res.ok).toBe(true);
+      if (!res.ok) return;
+      expect(res.body.status).toBe('completed');
+    });
+
+    it('子チケットが無い Epic は completed にできる → 200', async () => {
+      const epic = await createEpic(repo, CTX, { name: 'empty epic' });
+      if (!epic.ok) throw new Error('setup failed');
+      const res = await patchEpic(repo, CTX, epic.body.id, { status: 'completed' });
+      expect(res.ok).toBe(true);
+    });
+
+    it('status を変えない patch (rationale のみ) は子が未完了でも通る', async () => {
+      const epicId = await epicWithChild('todo');
+      const res = await patchEpic(repo, CTX, epicId, { rationale: '意図' });
+      expect(res.ok).toBe(true);
+    });
   });
 });
 
