@@ -4,6 +4,8 @@
 >
 > 形だけ回るスクラムを **AI が「チケット品質」と「儀式運営」の両面から底上げする** Jira 型 PM サービス。
 > 比喩: 螺旋階段を上った先の眺望。
+>
+> **実績**: 自チームのプロジェクトで Belvedere を 6 スプリント分ドッグフード運用し、実操作で 36 件のバグ / UX / AI品質フィードバックを検出 → 34 件 (94%) を修正・実機確認済み (2026-07-08 時点)。
 
 [![Cloud Run](https://img.shields.io/badge/Cloud%20Run-deployed-2E7D32)](https://belvedere-api-prod-iuep3t4nma-an.a.run.app/health)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](./LICENSE)
@@ -14,7 +16,7 @@
 
 ## 動いているもの (今すぐ触れる)
 
-> **DevOps × AI Agent Hackathon 2026 応募作品** — 7/10 提出 / 8/19 最終ピッチ (渋谷ストリーム)
+> **DevOps × AI Agent Hackathon 2026 応募作品** — 7/12 提出 (締切延長) / 8/19 最終ピッチ (渋谷ストリーム)
 > 公開 URL は審査用デモ環境。Cloud Run + **本番 Gemini 推論** で稼働し、Firestore に seed (12 チケット / 4 Epic / 3 Sprint / 5 メンバ) を投入済です。
 
 | 種類 | URL / 場所 |
@@ -167,7 +169,7 @@ ai-agent-hackathon/
 
 ```bash
 pnpm install
-pnpm typecheck                                              # 全 11 ワークスペース
+pnpm typecheck                                              # 全 12 ワークスペース
 ```
 
 ### 起動コマンド
@@ -222,6 +224,7 @@ LLM_PROVIDER=vertex pnpm demo          # Vertex AI 経路 (未配線 / throw)
 - **Firebase Auth** (個人 Google + Email/Password) + Workspace ベースの**マルチテナント**。全 tool が workspaceId を closure に閉じ込め、**IDOR / 越境を構造的に防止**。
 - ロール権限 (`admin` / `po` / `sm` / `dev`) を `can()` 純粋関数に集約。
 - ⭐ **MCP Server** で Claude Code / Cursor から本番 Belvedere を直接操作 (AI Agent エコシステム統合)。
+- ⭐ **ドッグフード実証**: 別プロジェクト (家計簿アプリ) のスクラム運営を Belvedere で 6 スプリント分回し、実操作で 36 件のバグ / UX / AI品質フィードバックを検出 → 34 件 (94%) を修正・実機確認 (継続中)。
 
 > テストは全ワークスペースで vitest 緑 (純粋関数 unit / component unit / API 統合 / Playwright E2E / agent golden)。開発マイルストーンの詳細は [`ROADMAP.md`](./ROADMAP.md) / [`HACKATHON_COMPLIANCE.md`](./HACKATHON_COMPLIANCE.md)。
 
@@ -231,7 +234,7 @@ LLM_PROVIDER=vertex pnpm demo          # Vertex AI 経路 (未配線 / throw)
 
 - **主催**: [ファインディ株式会社](https://findy.co.jp/) / メインスポンサー: グーグル・クラウド・ジャパン
 - **公式ページ**: https://findy.notion.site/devops-ai-agent-hackathon-2026
-- **作品提出 〆切**: 2026-07-10 (金) 23:59
+- **作品提出 〆切**: 2026-07-12 (日) 23:59 (7/10 から延長)
 - **最終ピッチ**: 2026-08-19 (水) Google 渋谷オフィス (10 チーム招待制)
 - **賞金総額**: 200 万円 (最優秀 50 万 / 優秀 30 万×3 / 特別 10 万×6)
 - **必須技術**: Cloud Run / GKE / Cloud Functions / App Engine / TPU・GPU から 1 つ以上 + Gemini / Vertex AI / ADK / 各種 AI API から 1 つ以上
