@@ -150,4 +150,30 @@ describe('EventsHomeScreen Epics 編集 (Home Epic インライン編集)', () =
     expect(wrapper.find('[data-testid=epics-empty]').exists()).toBe(true);
     expect(wrapper.find('[data-testid=epic-row-EP-done]').exists()).toBe(false);
   });
+
+  it('未完了の子チケットがある Epic は完了/中止の選択肢が無効化され理由が出る (2026-07-09)', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-1', name: '進行中 Epic', status: 'active' })];
+    // EP-1 配下に未完了 (todo) の子 story を 1 件置く。
+    const tickets = [t('WC-1', 'todo', { epicId: 'EP-1' }), t('WC-2', 'done', { epicId: 'EP-1' })];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets, selectedId: null } });
+    await wrapper.find('[data-testid=epic-edit-EP-1]').trigger('click');
+    const opts = wrapper.findAll('[data-testid=epic-status-input-EP-1] option');
+    const completed = opts.find((o) => o.attributes('value') === 'completed');
+    const cancelled = opts.find((o) => o.attributes('value') === 'cancelled');
+    expect((completed!.element as HTMLOptionElement).disabled).toBe(true);
+    expect((cancelled!.element as HTMLOptionElement).disabled).toBe(true);
+    expect(wrapper.find('[data-testid=epic-guard-EP-1]').text()).toContain('1 件');
+  });
+
+  it('子が全て done なら完了/中止の選択肢は有効 (ガードなし)', async () => {
+    wsCurrent.value = { id: 'ws', name: 'W', role: 'admin', productGoal: '' };
+    epicsRef.value = [epic({ id: 'EP-1', name: 'Epic', status: 'active' })];
+    const tickets = [t('WC-1', 'done', { epicId: 'EP-1' }), t('WC-2', 'done', { epicId: 'EP-1' })];
+    const wrapper = await mountSuspended(EventsHomeScreen, { props: { tickets, selectedId: null } });
+    await wrapper.find('[data-testid=epic-edit-EP-1]').trigger('click');
+    const completed = wrapper.findAll('[data-testid=epic-status-input-EP-1] option').find((o) => o.attributes('value') === 'completed');
+    expect((completed!.element as HTMLOptionElement).disabled).toBe(false);
+    expect(wrapper.find('[data-testid=epic-guard-EP-1]').exists()).toBe(false);
+  });
 });

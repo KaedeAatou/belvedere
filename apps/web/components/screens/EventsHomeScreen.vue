@@ -40,6 +40,10 @@ const { epics, updateEpic } = useEpics();
 // 「終わった Epic」を畳んで、進行中/計画中だけを主役にする。編集で status を completed/cancelled に
 // 保存するとこの一覧から消える (再表示したくなったら別途「完了済みも表示」トグルを検討)。
 const visibleEpics = computed(() => epics.value.filter((e) => e.status !== 'completed' && e.status !== 'cancelled'));
+// Epic 完了/中止ガード (2026-07-09): 未完了 (done 以外) の子チケットが残る Epic は completed/
+// cancelled にできない (API も 409 epic_has_open_tickets で弾く)。編集フォームで選択肢を無効化する。
+const openChildCount = (epicId: string): number =>
+  props.tickets.filter((t) => t.epicId === epicId && t.status !== 'done').length;
 const canEditEpics = canEditGoal;
 const editingEpicId = ref<string | null>(null);
 const epicDraft = reactive({ name: '', rationale: '', successMetric: '', strategicTheme: '', status: 'planned' as Epic['status'] });
@@ -196,9 +200,12 @@ const stalled = computed(() =>
               <select v-model="epicDraft.status" class="pg-input" :data-testid="`epic-status-input-${e.id}`">
                 <option value="planned">計画中</option>
                 <option value="active">進行中</option>
-                <option value="completed">完了 (done)</option>
-                <option value="cancelled">中止</option>
+                <option value="completed" :disabled="openChildCount(e.id) > 0">完了 (done)</option>
+                <option value="cancelled" :disabled="openChildCount(e.id) > 0">中止</option>
               </select>
+              <p v-if="openChildCount(e.id) > 0" class="epic-guard-hint" :data-testid="`epic-guard-${e.id}`">
+                未完了の子チケットが {{ openChildCount(e.id) }} 件あるため、完了・中止にはできません。先に子チケットを done にしてください。
+              </p>
               <textarea v-model="epicDraft.rationale" class="pg-input" rows="2" :data-testid="`epic-rationale-input-${e.id}`" placeholder="戦略意図 / なぜこの Epic か" />
               <input v-model="epicDraft.successMetric" class="pg-input" :data-testid="`epic-metric-input-${e.id}`" placeholder="成功指標 (例: 誤検出率 10% 以下)" />
               <input v-model="epicDraft.strategicTheme" class="pg-input" :data-testid="`epic-theme-input-${e.id}`" placeholder="戦略テーマ (任意)" />
@@ -309,6 +316,7 @@ const stalled = computed(() =>
 .epic-field { font-family: var(--sans); font-size: 12px; color: var(--ink-2); margin: 4px 0 0; }
 .epic-field b { color: var(--ink-1); font-weight: 600; font-size: 11px; margin-right: 6px; }
 .epic-form { display: flex; flex-direction: column; gap: 6px; }
+.epic-guard-hint { font-family: var(--sans); font-size: 11.5px; color: var(--warn); margin: 0; }
 .ehome-counts { display: flex; gap: 12px; flex-wrap: wrap; }
 .count-card {
   flex: 1; min-width: 96px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start;
