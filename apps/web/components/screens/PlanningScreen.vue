@@ -2,7 +2,8 @@
 // Planning 画面 (floor 01 / Wave 1 で 3 区画共通ビューに統一)。
 // ゴール / SMART / PLANNED-VELOCITY は CURRENT (active sprint) に対して表示する。
 // その下に SprintSectionedList (CURRENT / NEXT / BACKLOG)。
-// 「スプリント計画/開始」ダイアログ + Pull from backlog は次スプリント (nextPlanned) を練る入口として維持する。
+// 「スプリント計画/開始」ダイアログは次スプリント (nextPlanned) を練る入口として維持する。
+// Pull from backlog は投入先 (CURRENT / Next) を選べる (F-08 / 既定は Next)。
 import type { Ticket } from '@belvedere/shared';
 
 const props = defineProps<{
@@ -167,24 +168,39 @@ async function startNextSprint() {
   } catch (e) { sprintError.value = errText(e); } finally { sprintBusy.value = false; }
 }
 
-// ===== Pull from backlog ダイアログ (次スプリント nextPlanned へ積む) =====
+// ===== Pull from backlog ダイアログ (CURRENT / Next へ積む) =====
 const showPullDialog = ref(false);
 const pullSelected = ref<Set<string>>(new Set());
 const pullBusy = ref(false);
 const pullError = ref<string | null>(null);
 
-// バックログチケット: nextPlanned に属さず status === 'backlog'
+// 投入先 (F-08): 従来は Next 固定で CURRENT へ一括で入れられなかった。
+// 実在する区画 (nextPlanned / activeSprint) だけを候補に出し、既定は Next (従来挙動)。
+type PullTarget = 'next' | 'current';
+const pullTarget = ref<PullTarget>('next');
+const pullTargetOptions = computed<{ value: PullTarget; label: string }[]>(() => {
+  const opts: { value: PullTarget; label: string }[] = [];
+  if (nextPlanned.value) opts.push({ value: 'next', label: `${nextLabel.value} (NEXT)` });
+  if (activeSprint.value) opts.push({ value: 'current', label: `${currentLabel.value} (CURRENT)` });
+  return opts;
+});
+const pullTargetSprint = computed(() => (pullTarget.value === 'current' ? activeSprint.value : nextPlanned.value));
+const pullTargetLabel = computed(() => (pullTarget.value === 'current' ? currentLabel.value : nextLabel.value));
+
+// バックログチケット: 投入先スプリントに属さず status === 'backlog'
 const pullableBacklog = computed(() => {
-  const planId = nextPlanned.value?.id;
+  const targetId = pullTargetSprint.value?.id;
   return props.tickets.filter((t) => {
-    const notInPlanSprint = !planId || t.sprintId !== planId;
-    return notInPlanSprint && t.status === 'backlog';
+    const notInTargetSprint = !targetId || t.sprintId !== targetId;
+    return notInTargetSprint && t.status === 'backlog';
   });
 });
 
 function openPullDialog(): void {
   pullSelected.value = new Set();
   pullError.value = null;
+  // 既定は Next (従来挙動)。Next スプリントが無い環境では CURRENT に倒す。
+  pullTarget.value = nextPlanned.value ? 'next' : 'current';
   showPullDialog.value = true;
 }
 
@@ -195,7 +211,7 @@ function togglePullRow(id: string): void {
 }
 
 async function submitPull(): Promise<void> {
-  const sprint = nextPlanned.value;
+  const sprint = pullTargetSprint.value;
   if (!sprint) return;
   const ids = [...pullSelected.value];
   if (ids.length === 0) return;
@@ -322,7 +338,7 @@ onMounted(() => {
       <h2>Sprint planning</h2>
       <span style="margin-left: auto" />
       <button class="h-btn" data-testid="pull-from-backlog"
-              :disabled="!nextPlanned"
+              :disabled="!nextPlanned && !activeSprint"
               @click="openPullDialog">
         <Icon name="plus" /> Pull from backlog
       </button>
@@ -341,7 +357,7 @@ onMounted(() => {
     </div>
   </div>
 
-  <!-- Pull from backlog ダイアログ (次スプリント nextPlanned へ積む) -->
+  <!-- Pull from backlog ダイアログ (投入先 CURRENT / Next を選んで積む / F-08) -->
   <div v-if="showPullDialog" class="dialog-overlay" data-testid="pull-dialog" @click.self="showPullDialog = false">
     <div class="dialog pull-dialog">
       <div class="dialog-head">
@@ -349,8 +365,15 @@ onMounted(() => {
         <button class="close-btn" @click="showPullDialog = false">×</button>
       </div>
       <div class="dialog-body" style="padding-bottom: 8px">
+        <!-- 投入先 (F-08): 従来の Next 固定を廃し、CURRENT / Next から選ぶ (既定 Next)。 -->
+        <div class="field">
+          <label class="label" for="pull-target">投入先</label>
+          <select id="pull-target" v-model="pullTarget" data-testid="pull-target" class="text-input">
+            <option v-for="o in pullTargetOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+        </div>
         <p style="font-size: 12px; color: var(--ink-2); margin: 0; line-height: 1.6">
-          {{ nextLabel }} に追加するチケットを選択してください。
+          {{ pullTargetLabel }} に追加するチケットを選択してください。
         </p>
         <div class="pull-list">
           <p v-if="pullableBacklog.length === 0"
