@@ -1,3 +1,76 @@
+<script lang="ts">
+// ===== F-29: メニュー / フライアウトの fixed 座標計算 (純粋関数) =====
+//
+// メニュー系は祖先 .screen-body { overflow: hidden } にクリップされるため、
+// <Teleport to="body"> + position:fixed で描画する。座標はトリガー矩形から計算し、
+// ビューポート下端では上方向へフリップ / 右端では左横へフリップする。
+// ここは退化入力込みで直接 unit テストを持つ (test/BulkActionBar.test.ts)。
+
+/** getBoundingClientRect 互換の最小矩形 (DOMRect をそのまま渡せる)。 */
+export interface AnchorRect { top: number; left: number; right: number; bottom: number }
+export interface BoxSize { width: number; height: number }
+
+/**
+ * kebab トリガー矩形からメニューの fixed 座標を計算する。
+ * 右揃え (トリガー右端 = メニュー右端) を基本に、左右は viewport 内へクランプ。
+ * 縦は「下に gap 空けて出す」を基本に、下端で収まらなければ上へフリップする。
+ */
+export function computeMenuPosition(
+  trigger: AnchorRect,
+  menu: BoxSize,
+  viewport: BoxSize,
+  gap = 6,
+  margin = 8,
+): { top: number; left: number } {
+  let left = trigger.right - menu.width;
+  left = Math.min(left, viewport.width - menu.width - margin);
+  left = Math.max(left, margin);
+
+  let top = trigger.bottom + gap;
+  if (top + menu.height > viewport.height - margin) {
+    const above = trigger.top - gap - menu.height;
+    // 上にも収まらない退化 (極小ビューポート) では margin に張り付ける (負にしない)。
+    top = above >= margin ? above : Math.max(margin, viewport.height - margin - menu.height);
+  }
+  return { top, left };
+}
+
+/**
+ * 親項目 (bulk-item-wrap) の矩形からフライアウトの fixed 座標を計算する。
+ * 右横 (left = item.right) を基本に、右端で収まらなければ左横へフリップ。
+ * 縦は親項目と同じ top を基本に、下端で収まらなければ viewport 内へ上方向シフト
+ * (シフト後もフライアウトは親項目の y 域を覆うため hover 連続性は保たれる)。
+ */
+export function computeFlyoutPosition(
+  item: AnchorRect,
+  flyout: BoxSize,
+  viewport: BoxSize,
+  margin = 8,
+): { top: number; left: number } {
+  let left = item.right;
+  if (left + flyout.width > viewport.width - margin) {
+    left = Math.max(margin, item.left - flyout.width);
+  }
+  let top = item.top;
+  if (top + flyout.height > viewport.height - margin) {
+    top = Math.max(margin, viewport.height - margin - flyout.height);
+  }
+  return { top, left };
+}
+
+/** 計算済み座標を inline style へ。計測前 (null) は visibility:hidden でチラつきを防ぐ。 */
+export function toFixedStyle(pos: { top: number; left: number } | null): Record<string, string> {
+  const style: Record<string, string> = { position: 'fixed' };
+  if (pos) {
+    style.top = `${pos.top}px`;
+    style.left = `${pos.left}px`;
+  } else {
+    style.visibility = 'hidden';
+  }
+  return style;
+}
+</script>
+
 <script setup lang="ts">
 // 複数チケット一括操作ツールバー (「3点リーダ」バー)。
 // 各一覧画面の上部に count>0 のとき sticky で出す。kebab (縦3点) を押すと
@@ -29,16 +102,82 @@ const STATUSES: Status[] = ['backlog', 'todo', 'in-progress', 'review', 'done'];
 const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'urgent'];
 const VALUE_IMPACTS: ValueImpact[] = ['low', 'medium', 'high'];
 
-// kebab メニューの開閉。サブメニュー (値リスト) は CSS :hover で右横にフライアウト
-// 表示するため、どの属性を開いているかを保持する state は不要 (openSub/sub を廃止)。
+// ===== kebab メニューの開閉 (F-29: Teleport + fixed) =====
+// 祖先 .screen-body { overflow: hidden } がメニューをクリップし、ビューポート下端で
+// サブメニューが見切れてクリック不能になるため、メニューは <Teleport to="body"> +
+// position:fixed で描画し、座標は kebab 矩形から computeMenuPosition で計算する。
 const menuOpen = ref(false);
+const kebabEl = ref<HTMLElement | null>(null);
+const menuEl = ref<HTMLElement | null>(null);
+// 計測 (nextTick 後) まで null = visibility:hidden で初期フレームのチラつきを防ぐ。
+const menuPos = ref<{ top: number; left: number } | null>(null);
+
+const menuStyle = computed(() => toFixedStyle(menuPos.value));
 
 function toggleMenu(): void {
-  menuOpen.value = !menuOpen.value;
+  if (menuOpen.value) {
+    closeMenu();
+    return;
+  }
+  menuOpen.value = true;
+  menuPos.value = null;
+  void nextTick().then(() => {
+    if (!menuOpen.value) return;
+    const trigger = kebabEl.value?.getBoundingClientRect();
+    const menu = menuEl.value?.getBoundingClientRect();
+    menuPos.value = computeMenuPosition(
+      trigger ?? { top: 0, left: 0, right: 0, bottom: 0 },
+      { width: menu?.width ?? 0, height: menu?.height ?? 0 },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+  });
 }
+
 function closeMenu(): void {
   menuOpen.value = false;
+  menuPos.value = null;
+  openFlyout.value = null;
+  flyoutPos.value = null;
   disarmRemove(); // メニューを閉じたら armed 削除も解除 (再オープン時は 1 回目から)
+}
+
+// ===== サブメニュー (フライアウト) の開閉 (F-29) =====
+// 旧実装は CSS :hover + position:absolute で、fixed 化に伴い開閉と座標を JS で持つ。
+// hover (mouseenter) で開き mouseleave で閉じる。クリックでも開く (自動化 / タッチ対応)。
+// フライアウトは wrap の DOM 子のままなので、fixed で箱の外に出ても
+// ポインタがフライアウト上にある間は wrap の mouseleave は発火しない (DOM 木基準)。
+type FlyoutKey = 'status' | 'assignee' | 'priority' | 'valueImpact' | 'sprint';
+const openFlyout = ref<FlyoutKey | null>(null);
+const flyoutEl = ref<HTMLElement | null>(null);
+const flyoutPos = ref<{ top: number; left: number } | null>(null);
+
+const flyoutStyle = computed(() => toFixedStyle(flyoutPos.value));
+
+function showFlyout(key: FlyoutKey, e: Event): void {
+  // currentTarget は await 後に null になるため、矩形は同期で先に取る。
+  // mouseenter は .bulk-item-wrap、click は .bulk-item だが両者の箱は一致する
+  // (フライアウトは fixed = out of flow で wrap の箱に影響しない)。
+  const anchor = e.currentTarget as HTMLElement | null;
+  if (!anchor) return;
+  const item = anchor.getBoundingClientRect();
+  openFlyout.value = key;
+  flyoutPos.value = null;
+  void nextTick().then(() => {
+    if (openFlyout.value !== key) return;
+    const fly = flyoutEl.value?.getBoundingClientRect();
+    flyoutPos.value = computeFlyoutPosition(
+      item,
+      { width: fly?.width ?? 0, height: fly?.height ?? 0 },
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+  });
+}
+
+function hideFlyout(key: FlyoutKey): void {
+  if (openFlyout.value === key) {
+    openFlyout.value = null;
+    flyoutPos.value = null;
+  }
 }
 
 // 各属性の確定 (選択 → 一括適用 → メニューを閉じる)。
@@ -83,40 +222,47 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
 
     <span class="bulk-spacer" />
 
-    <div class="bulk-kebab-wrap">
-      <button
-        class="bulk-kebab"
-        data-testid="bulk-kebab"
-        :disabled="busy"
-        :aria-expanded="menuOpen"
-        title="一括操作"
-        @click.stop="toggleMenu"
-      >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-          <circle cx="8" cy="3" r="1.4" />
-          <circle cx="8" cy="8" r="1.4" />
-          <circle cx="8" cy="13" r="1.4" />
-        </svg>
-      </button>
+    <button
+      ref="kebabEl"
+      class="bulk-kebab"
+      data-testid="bulk-kebab"
+      :disabled="busy"
+      :aria-expanded="menuOpen"
+      title="一括操作"
+      @click.stop="toggleMenu"
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <circle cx="8" cy="3" r="1.4" />
+        <circle cx="8" cy="8" r="1.4" />
+        <circle cx="8" cy="13" r="1.4" />
+      </svg>
+    </button>
 
-      <div v-if="menuOpen" class="bulk-menu" data-testid="bulk-menu" @click.stop>
-        <!-- ステータス変更 (親項目を hover で値リストを左横にフライアウト) -->
-        <div class="bulk-item-wrap">
-          <button class="bulk-item" data-testid="bulk-set-status">
+    <!-- F-29: メニューは body へ Teleport (祖先 .screen-body の overflow:hidden を回避)。 -->
+    <Teleport to="body">
+      <!-- メニュー外クリックで閉じる -->
+      <div v-if="menuOpen" class="bulk-backdrop" data-testid="bulk-backdrop" @click="closeMenu" />
+
+      <div v-if="menuOpen" ref="menuEl" class="bulk-menu" data-testid="bulk-menu" :style="menuStyle" @click.stop>
+        <!-- ステータス変更 (hover / クリックで値リストを横にフライアウト) -->
+        <div class="bulk-item-wrap" @mouseenter="showFlyout('status', $event)" @mouseleave="hideFlyout('status')">
+          <button class="bulk-item" data-testid="bulk-set-status" :aria-expanded="openFlyout === 'status'"
+                  @click="showFlyout('status', $event)">
             <span>ステータス変更</span><Icon name="caretRight" :size="12" />
           </button>
-          <div class="bulk-flyout">
+          <div v-if="openFlyout === 'status'" ref="flyoutEl" class="bulk-flyout" data-testid="bulk-flyout" :style="flyoutStyle">
             <button v-for="s in STATUSES" :key="s" class="bulk-subitem"
                     :data-testid="`bulk-status-${s}`" @click="pickStatus(s)">{{ s }}</button>
           </div>
         </div>
 
         <!-- 担当者変更 -->
-        <div class="bulk-item-wrap">
-          <button class="bulk-item" data-testid="bulk-set-assignee">
+        <div class="bulk-item-wrap" @mouseenter="showFlyout('assignee', $event)" @mouseleave="hideFlyout('assignee')">
+          <button class="bulk-item" data-testid="bulk-set-assignee" :aria-expanded="openFlyout === 'assignee'"
+                  @click="showFlyout('assignee', $event)">
             <span>担当者変更</span><Icon name="caretRight" :size="12" />
           </button>
-          <div class="bulk-flyout">
+          <div v-if="openFlyout === 'assignee'" ref="flyoutEl" class="bulk-flyout" data-testid="bulk-flyout" :style="flyoutStyle">
             <button v-for="m in members" :key="m.userId" class="bulk-subitem"
                     :data-testid="`bulk-assignee-${m.userId}`" @click="pickAssignee(m.userId)">
               {{ m.displayName }}
@@ -126,33 +272,36 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
         </div>
 
         <!-- 優先度変更 -->
-        <div class="bulk-item-wrap">
-          <button class="bulk-item" data-testid="bulk-set-priority">
+        <div class="bulk-item-wrap" @mouseenter="showFlyout('priority', $event)" @mouseleave="hideFlyout('priority')">
+          <button class="bulk-item" data-testid="bulk-set-priority" :aria-expanded="openFlyout === 'priority'"
+                  @click="showFlyout('priority', $event)">
             <span>優先度変更</span><Icon name="caretRight" :size="12" />
           </button>
-          <div class="bulk-flyout">
+          <div v-if="openFlyout === 'priority'" ref="flyoutEl" class="bulk-flyout" data-testid="bulk-flyout" :style="flyoutStyle">
             <button v-for="p in PRIORITIES" :key="p" class="bulk-subitem"
                     :data-testid="`bulk-priority-${p}`" @click="pickPriority(p)">{{ p }}</button>
           </div>
         </div>
 
         <!-- valueImpact 変更 -->
-        <div class="bulk-item-wrap">
-          <button class="bulk-item" data-testid="bulk-set-value-impact">
+        <div class="bulk-item-wrap" @mouseenter="showFlyout('valueImpact', $event)" @mouseleave="hideFlyout('valueImpact')">
+          <button class="bulk-item" data-testid="bulk-set-value-impact" :aria-expanded="openFlyout === 'valueImpact'"
+                  @click="showFlyout('valueImpact', $event)">
             <span>valueImpact 変更</span><Icon name="caretRight" :size="12" />
           </button>
-          <div class="bulk-flyout">
+          <div v-if="openFlyout === 'valueImpact'" ref="flyoutEl" class="bulk-flyout" data-testid="bulk-flyout" :style="flyoutStyle">
             <button v-for="v in VALUE_IMPACTS" :key="v" class="bulk-subitem"
                     :data-testid="`bulk-value-impact-${v}`" @click="pickValueImpact(v)">{{ v }}</button>
           </div>
         </div>
 
         <!-- スプリント移動 (BACKLOG = sprintId 解除 / 既存スプリントへ set) -->
-        <div class="bulk-item-wrap">
-          <button class="bulk-item" data-testid="bulk-set-sprint">
+        <div class="bulk-item-wrap" @mouseenter="showFlyout('sprint', $event)" @mouseleave="hideFlyout('sprint')">
+          <button class="bulk-item" data-testid="bulk-set-sprint" :aria-expanded="openFlyout === 'sprint'"
+                  @click="showFlyout('sprint', $event)">
             <span>スプリント移動</span><Icon name="caretRight" :size="12" />
           </button>
-          <div class="bulk-flyout">
+          <div v-if="openFlyout === 'sprint'" ref="flyoutEl" class="bulk-flyout" data-testid="bulk-flyout" :style="flyoutStyle">
             <button class="bulk-subitem" data-testid="bulk-sprint-backlog" @click="pickSprint(null)">
               BACKLOG (未割当)
             </button>
@@ -175,10 +324,7 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
           {{ removeArmed ? `削除する (${count}件) — もう一度押して確定` : `${count} 件を削除` }}
         </button>
       </div>
-    </div>
-
-    <!-- メニュー外クリックで閉じる -->
-    <div v-if="menuOpen" class="bulk-backdrop" data-testid="bulk-backdrop" @click="closeMenu" />
+    </Teleport>
   </div>
 </template>
 
@@ -221,7 +367,6 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
 .bulk-link:hover { color: var(--ink-0); }
 .bulk-spacer { flex: 1; }
 
-.bulk-kebab-wrap { position: relative; }
 .bulk-kebab {
   display: inline-flex;
   align-items: center;
@@ -242,10 +387,11 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
   inset: 0;
   z-index: 40;
 }
+/* F-29: body へ Teleport + fixed (top/left は computeMenuPosition の inline style)。
+   絶対配置 (kebab 基準) だと祖先 .screen-body { overflow: hidden } にクリップされ、
+   ビューポート下端でメニュー / サブメニューが見切れてクリック不能になる。 */
 .bulk-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
+  position: fixed;
   z-index: 50;
   min-width: 200px;
   background: var(--bg-1);
@@ -280,36 +426,27 @@ onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
   background: var(--line-1);
   margin: 4px 6px;
 }
-/* 親項目 + フライアウトを 1 つの relative ラッパで囲む。ラッパ全体を hover
-   判定領域にすることで、マウスが親→flyout へ移動する間に消えないようにする。 */
-.bulk-item-wrap {
-  position: relative;
-}
-/* 値リストは親メニュー (right:0 で右寄せ) からはみ出さないよう左横に出す。
-   親と flyout の隙間 (4px) は透明な右パディングで橋渡しし、マウスが移動する
-   間も hover ターゲットが途切れないようにする (連続領域を保つ)。 */
+.bulk-item-wrap { position: relative; }
+/* F-29: フライアウトも fixed (top/left は computeFlyoutPosition の inline style)。
+   開閉は JS (mouseenter/mouseleave + クリック)。wrap の DOM 子のままなので、fixed で
+   箱の外に出てもポインタがフライアウト上にある間は wrap の mouseleave は発火せず、
+   親項目 → フライアウト間の hover 連続性が保たれる (座標は edge-to-edge で接する)。 */
 .bulk-flyout {
-  position: absolute;
-  top: 0;
-  right: 100%;
+  position: fixed;
   z-index: 60;
-  display: none;
+  display: flex;
   flex-direction: column;
   min-width: 140px;
   padding: 4px;
-  padding-right: 8px;
   background: var(--bg-1);
-  background-clip: padding-box;
   border: var(--hairline) solid var(--line-2);
   border-radius: var(--radius);
   box-shadow: 0 8px 24px rgba(8, 8, 8, 0.14);
 }
-.bulk-item-wrap:hover > .bulk-flyout,
-.bulk-flyout:hover {
-  display: flex;
-}
-/* hover 中の親項目を視覚的にハイライト (flyout 表示中の現在地を示す)。 */
-.bulk-item-wrap:hover > .bulk-item {
+/* hover 中 / フライアウト表示中の親項目を視覚的にハイライト (現在地を示す)。
+   フライアウトは wrap の DOM 子のため、fixed でもポインタが乗れば wrap は :hover になる。 */
+.bulk-item-wrap:hover > .bulk-item,
+.bulk-item[aria-expanded='true'] {
   background: var(--bg-2);
 }
 .bulk-subitem {
