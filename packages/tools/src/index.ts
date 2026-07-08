@@ -464,7 +464,7 @@ export function buildOrchestratorTools(
     spec: {
       name: 'agent.invoke',
       description:
-        'スクラムマスター (Orchestrator) が 5 儀式 agent (planner/daily/refinement/reviewer/retrospective) の 1 体を子として起動し、その出力を受け取って協議を統括する。協議は深さ 1 (呼ばれた agent はさらに agent.invoke できない)。',
+        'スクラムマスター (Orchestrator) が 5 儀式 agent (planner/daily/refinement/reviewer/retrospective) の 1 体を子として起動し、その出力を受け取って協議を統括する。協議は深さ 1 (呼ばれた agent はさらに agent.invoke できない)。バックログ/スプリントの点検・診断・品質確認・計画・リスク評価・レビュー・振り返りを求められたら (「協議して」の明示や「必要なら」と委ねられた場合も含め)、一般論で答えず該当 agent をこの tool で招集すること。',
       parameters: {
         type: 'object',
         properties: {
