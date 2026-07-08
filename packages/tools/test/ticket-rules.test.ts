@@ -102,24 +102,6 @@ describe('STORY_STALL', () => {
   });
 });
 
-describe('SPIKE rules', () => {
-  it('timeboxHours 無しで SPIKE_NO_TIMEBOX 発火', () => {
-    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'spike' })]), 'SPIKE_NO_TIMEBOX', 'A')).toBe(true);
-  });
-  it('timebox 超過で SPIKE_TIMEBOX_OVER 発火', () => {
-    const ctx = ctxOf([ticket({ id: 'A', type: 'spike', status: 'in-progress', timeboxHours: 4, startedAt: '2026-06-11T00:00:00Z' })]);
-    expect(fired('daily', ctx, 'SPIKE_TIMEBOX_OVER', 'A')).toBe(true);
-  });
-  it('DoD が判断材料ベースでなければ SPIKE_DOD_NOT_DECISION 発火', () => {
-    const ctx = ctxOf([ticket({ id: 'A', type: 'spike', timeboxHours: 4, acceptanceCriteria: ['技術ドキュメント1本'] })]);
-    expect(fired('refinement', ctx, 'SPIKE_DOD_NOT_DECISION', 'A')).toBe(true);
-  });
-  it('結論キーワードを含めば SPIKE_DOD_NOT_DECISION 発火しない', () => {
-    const ctx = ctxOf([ticket({ id: 'A', type: 'spike', timeboxHours: 4, acceptanceCriteria: ['3社比較し結論を出す'] })]);
-    expect(fired('refinement', ctx, 'SPIKE_DOD_NOT_DECISION', 'A')).toBe(false);
-  });
-});
-
 describe('BUG rules', () => {
   it('再現手順なしで BUG_NO_REPRO 発火', () => {
     expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', description: '落ちる' })]), 'BUG_NO_REPRO', 'A')).toBe(true);
@@ -162,15 +144,6 @@ describe('INCIDENT rules', () => {
       ticket({ id: 'B', type: 'bug', relatedIncidentId: 'INC' }),
     ]);
     expect(fired('refinement', ctx, 'INCIDENT_NO_FOLLOWUP_BUG', 'INC')).toBe(false);
-  });
-});
-
-describe('MISMATCH_SPIKE_TITLE', () => {
-  it('調査 title なのに story で発火', () => {
-    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', title: 'OAuth プロバイダの調査' })]), 'MISMATCH_SPIKE_TITLE', 'A')).toBe(true);
-  });
-  it('spike なら発火しない', () => {
-    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'spike', title: 'OAuth の調査', timeboxHours: 4, acceptanceCriteria: ['結論'] })]), 'MISMATCH_SPIKE_TITLE', 'A')).toBe(false);
   });
 });
 

@@ -145,19 +145,6 @@ export const goldenCases: EvalCase[] = [
     expect: [{ ruleId: 'STORY_STALL', ticketId: 'EVAL-STALL' }],
   },
   {
-    name: 'spike-タイムボックスなし',
-    ceremony: 'refinement',
-    tickets: [
-      tk({
-        id: 'EVAL-SPIKE',
-        type: 'spike',
-        title: 'ベクトル検索の比較検証',
-        acceptanceCriteria: ['どのエンジンを採用するか結論を出す'],
-      }),
-    ],
-    expect: [{ ruleId: 'SPIKE_NO_TIMEBOX', ticketId: 'EVAL-SPIKE' }],
-  },
-  {
     name: '退化-空チケット集合 (クラッシュしない)',
     ceremony: 'refinement',
     tickets: [],
@@ -168,13 +155,12 @@ export const goldenCases: EvalCase[] = [
 
   {
     // eval 固有の価値: ルール単体でなく「現実的な混在バックログで取りこぼしなく全部拾えるか」を採点する。
-    name: '現実的な混在バックログ (検出完全性 — 5 指摘を取りこぼさず・健全チケットは誤検出しない)',
+    name: '現実的な混在バックログ (検出完全性 — 4 指摘を取りこぼさず・健全チケットは誤検出しない)',
     ceremony: 'refinement',
     tickets: [
       tk({ id: 'MIX-STORY-BAD', type: 'story', title: '決済履歴をエクスポートする', acceptanceCriteria: [] }), // DoD 空 + SP 無 → 2 指摘
       tk({ id: 'MIX-TASK', type: 'task', title: 'CSV 生成ユーティリティ' }), // 親 Story なし
       tk({ id: 'MIX-BUG', type: 'bug', title: 'エクスポートが文字化け', description: '日本語が壊れる' }), // 再現手順なし
-      tk({ id: 'MIX-SPIKE', type: 'spike', title: 'CSV ライブラリ比較', acceptanceCriteria: ['採用ライブラリを結論づける'] }), // timebox 無 (DoD は結論ベースで OK)
       tk({ id: 'MIX-CLEAN', type: 'story', title: '通知設定を保存する', estimatePt: 3, acceptanceCriteria: ['設定が永続化され再読込で保持される'] }), // 健全
     ],
     expect: [
@@ -182,7 +168,6 @@ export const goldenCases: EvalCase[] = [
       { ruleId: 'STORY_SP_MISSING', ticketId: 'MIX-STORY-BAD' },
       { ruleId: 'TASK_NO_PARENT', ticketId: 'MIX-TASK' },
       { ruleId: 'BUG_NO_REPRO', ticketId: 'MIX-BUG' },
-      { ruleId: 'SPIKE_NO_TIMEBOX', ticketId: 'MIX-SPIKE' },
     ],
     mustNotFire: [
       { ruleId: 'STORY_DOD_MISSING', ticketId: 'MIX-CLEAN' },

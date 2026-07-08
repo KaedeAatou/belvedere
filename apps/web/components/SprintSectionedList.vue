@@ -244,6 +244,12 @@ const newAC = ref(''); // 改行区切り
 const newValueImpact = ref<ValueImpact | ''>('');
 const newReproSteps = ref('');     // bug 専用 (WC-2dba4170 の欄を作成時にも)
 const newRegressionNote = ref(''); // bug 専用
+// bug がどの incident の再発防止かを紐付ける (任意 / 2026-07-09)。設定すると done incident の
+// INCIDENT_NO_FOLLOWUP_BUG ピルが消灯する。候補は全区画の incident チケット。
+const newRelatedIncidentId = ref('');
+const incidentOptions = computed(() =>
+  [...props.current, ...props.next, ...props.backlog].filter((t) => t.type === 'incident'),
+);
 // 起票時の添付画像 (WC-a8f0be16)。![](/api/images/id) の配列。submitCreate で説明末尾に追記する。
 const newImages = ref<string[]>([]);
 const newImageBusy = ref(false);
@@ -289,11 +295,6 @@ function sprintIdForSection(s: CreateSection): string | undefined {
   if (s === 'next') return nextPlanned.value?.id;
   return undefined;
 }
-
-const suggestSpike = computed(
-  () => props.allowedTypes.includes('spike') && /(調査|検証|比較|スパイク)/.test(newTitle.value) && newType.value !== 'spike',
-);
-function applySpike(): void { newType.value = 'spike'; }
 
 // ===== User Story 3 欄フォーム + AI 品質チェック (newType==='story' のとき) =====
 // 「誰が / 何をしたい / なぜ」で description を構成し、起票前に AI で形骸化 + ゴール適合を診断する。
@@ -390,6 +391,7 @@ function openCreate(): void {
   newValueImpact.value = '';
   newReproSteps.value = '';
   newRegressionNote.value = '';
+  newRelatedIncidentId.value = '';
   newImages.value = [];
   newImageBusy.value = false;
   // story 作成時の親 Epic セレクタ用に Epic 一覧を確実に読み込む (単体マウント経路でも空にしない)。
@@ -440,6 +442,7 @@ async function submitCreate(): Promise<void> {
     estimatePt?: number; timeboxHours?: number; description?: string;
     sprintId?: string; status?: 'backlog' | 'todo'; epicId?: string;
     valueImpact?: ValueImpact; acceptanceCriteria?: string[]; reproSteps?: string; regressionNote?: string;
+    relatedIncidentId?: string;
   } = {
     title: effectiveTitle,
     priority: newPriority.value,
@@ -455,6 +458,7 @@ async function submitCreate(): Promise<void> {
     if (newType.value === 'bug') {
       if (newReproSteps.value.trim()) input.reproSteps = newReproSteps.value.trim();
       if (newRegressionNote.value.trim()) input.regressionNote = newRegressionNote.value.trim();
+      if (newRelatedIncidentId.value) input.relatedIncidentId = newRelatedIncidentId.value;
     }
     if (newType.value === 'spike' && newTimebox.value !== null) input.timeboxHours = newTimebox.value;
   }
@@ -827,10 +831,6 @@ async function submitSplit(): Promise<void> {
             placeholder="例: ログイン画面の入力 validation を追加"
           />
         </div>
-        <div v-if="!isStory && suggestSpike" class="spike-hint">
-          <span>💡 調査系のタイトルです。Spike にしますか?</span>
-          <button type="button" class="spike-btn" data-testid="suggest-spike" @click="applySpike">Spike にする</button>
-        </div>
         <div class="field-row">
           <div class="field">
             <label class="label" for="ssl-new-priority">優先度</label>
@@ -891,6 +891,14 @@ async function submitSplit(): Promise<void> {
             <label class="label" for="ssl-new-regression">回帰テスト</label>
             <textarea id="ssl-new-regression" v-model="newRegressionNote" data-testid="new-ticket-regression"
                       class="text-input" rows="2" maxlength="1000" placeholder="再発防止の自動テスト方針" />
+          </div>
+          <!-- 再発防止対象の incident (任意 / 2026-07-09)。選ぶと done incident の「Bug未起票」ピルが消灯する。 -->
+          <div v-if="incidentOptions.length > 0" class="field">
+            <label class="label" for="ssl-new-related-incident">再発防止対象の incident (任意)</label>
+            <select id="ssl-new-related-incident" v-model="newRelatedIncidentId" data-testid="new-ticket-related-incident" class="select-input">
+              <option value="">（紐付けなし）</option>
+              <option v-for="inc in incidentOptions" :key="inc.id" :value="inc.id">{{ inc.id }} · {{ inc.title }}</option>
+            </select>
           </div>
         </template>
         <div class="field-row">
@@ -1126,22 +1134,6 @@ async function submitSplit(): Promise<void> {
 .field-row .field { flex: 1; }
 .label { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
 .req { color: var(--accent); }
-.spike-hint {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px;
-  border: 1px dashed var(--accent-dim);
-  background: var(--accent-bg);
-  border-radius: var(--radius);
-  font-size: 12px; color: var(--ink-1);
-}
-.spike-btn {
-  margin-left: auto;
-  padding: 4px 10px;
-  background: var(--accent); color: #FBF8F2;
-  border: none; border-radius: var(--radius);
-  font-family: var(--sans); font-size: 12px; cursor: pointer;
-  white-space: nowrap;
-}
 .text-input, .select-input {
   padding: 10px 12px;
   border: var(--hairline) solid var(--line-2);
