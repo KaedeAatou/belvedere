@@ -97,7 +97,10 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
       tag: '議論候補',
       msg: 'スプリントのメトリクスから Keep / Problem / Try の候補を提案できます。',
       actions: [{
-        label: 'アクションに追加', primary: true, kind: 'prompt',
+        // F-12 (2026-07-08): 旧ラベル「アクションに追加」はチャットに提案を出すだけで KPT 列には
+        // 何も追加しない (ラベル詐欺) だった。実態に合わせて「議論候補を出す」に変更。
+        // KPT への自動追加は L2 自律性 (提案止まり / 書込はユーザー操作) の設計判断が絡むため実装しない。
+        label: '議論候補を出す', primary: true, kind: 'prompt',
         prompt: 'このスプリントのメトリクスから Keep / Problem / Try の候補を抽出して。特に次スプリントに転記すべき Try を提案して。',
       }],
     });
