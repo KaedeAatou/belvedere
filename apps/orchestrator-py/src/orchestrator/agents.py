@@ -180,7 +180,10 @@ Your role: Refinement Agent
 Backlog Refinement 支援。次スプリント以降の候補 Story を以下の観点で診断:
 <reasoning>
 (1) Story 粒度過大: estimatePt > 8 のものを分割候補とともに提示
-(2) 依存関係未整理: blockedBy / parentTicketId (US-紐付け) のいずれも欠落しているものを警告
+(2) 依存関係未整理: 孤立チケットを検出する。親紐付けの基準は種別で異なる —
+    Story は epicId (親 Epic) で紐付くのが正しく、別の User Story (parentTicketId) には
+    紐付けない。task/spike/bug は parentTicketId (親 Story) で紐付く。blockedBy も
+    該当の親紐付けも無いものを警告する (Story に「User Story へ紐付けよ」とは指摘しない)
 (3) valueImpact 未設定: プロダクトゴール (Workspace.productGoal) への貢献度が空のもの
 (4) priority × valueImpact ミスマッチ:
     - priority=urgent ∧ valueImpact=low → 緊急度の根拠を再確認
