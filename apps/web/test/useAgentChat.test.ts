@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ScreenId } from '~/composables/useUiMeta';
 import type { Sprint, Ticket } from '@belvedere/shared';
-import { resolveAgentName, buildAgentContext, isFlagEnabled, type AgentContextInput } from '~/composables/useAgentChat';
+import { resolveAgentName, buildAgentContext, isFlagEnabled, chatStorageKey, type AgentContextInput } from '~/composables/useAgentChat';
 
 const ALL_SCREENS: ScreenId[] = ['backlog', 'refinement', 'planning', 'daily', 'review', 'retro'];
 
@@ -26,6 +26,23 @@ describe('resolveAgentName (④ orchestrator window flag)', () => {
     for (const s of ALL_SCREENS) {
       expect(resolveAgentName(s, true)).toBe('orchestrator');
     }
+  });
+});
+
+// F-02 (2026-07-08): localStorage キーが 'belv:ai-chat:v1' 固定で workspace 非スコープだったため、
+// Workspace 切替 (location.reload) 後も前 WS の会話が残留した。キーを workspace 単位に分離する。
+describe('chatStorageKey (F-02 — 会話の localStorage キーを workspace 単位に分離)', () => {
+  it('workspace ごとに別キーになる (切替で前 WS の会話が漏れない)', () => {
+    expect(chatStorageKey('ws-a')).not.toBe(chatStorageKey('ws-b'));
+    expect(chatStorageKey('ws-a')).toContain('ws-a');
+    expect(chatStorageKey('ws-b')).toContain('ws-b');
+  });
+
+  it('退化入力: workspaceId 不明 (null / undefined / 空文字) は旧来の共通キーに落ちる', () => {
+    // WS 未選択 (onboarding 前 / SSR) では会話をどの WS にも帰属させられないため旧キーを使う。
+    expect(chatStorageKey(null)).toBe('belv:ai-chat:v1');
+    expect(chatStorageKey(undefined)).toBe('belv:ai-chat:v1');
+    expect(chatStorageKey('')).toBe('belv:ai-chat:v1');
   });
 });
 
