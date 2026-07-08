@@ -17,16 +17,16 @@ const corpus = seedRetroTries.map((t) => {
 const validSourceIds = new Set(corpus.map((d) => d.sourceId));
 
 describe('過去 Try の RAG 検索', () => {
-  it('retro クエリ「AC 完了予定日」で S12 の Try を sourceId 付きで返す', async () => {
+  it('retro クエリ「ベロシティ 超えない 計画」で S12 の Try を sourceId 付きで返す', async () => {
     const s = new MockKnowledgeSearcher(corpus);
-    const hits = await s.search('AC 完了予定日 ふりかえり Try', { workspaceId: 'ws-belvedere' });
+    const hits = await s.search('ベロシティ 超えない 計画 詰め込み ストーリーポイント', { workspaceId: 'ws-belvedere' });
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.some((h) => h.sourceId === 'retro-try:try-seed-s12-ac')).toBe(true);
   });
 
   it('捏造防止: 返る sourceId は必ずコーパスに実在する', async () => {
     const s = new MockKnowledgeSearcher(corpus);
-    const hits = await s.search('Try BLOCKED 理由 AC 完了予定日 ふりかえり', { workspaceId: 'ws-belvedere' });
+    const hits = await s.search('Try BLOCKED 理由 ベロシティ 計画 ふりかえり', { workspaceId: 'ws-belvedere' });
     expect(hits.length).toBeGreaterThan(0);
     expect(hits.every((h) => validSourceIds.has(h.sourceId))).toBe(true);
   });

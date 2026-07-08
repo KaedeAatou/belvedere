@@ -9,8 +9,10 @@ import type { RetroTry } from '@belvedere/shared';
  * knowledge.search (意味検索) でも過去 Try が surface する = 継続的改善ループ (まわす軸)。
  *
  * デモ仕込み (チケット同様「最初から用意されたデータ」/ AI 挙動は変えない):
- *  - try-seed-s12-ac:      「AC に完了予定日」= 今スプリントで守られた kept の主役
- *  - try-seed-s11-blocked: 「BLOCKED 理由を書く」= 継続 Try として再掲される broken の対比
+ *  - try-seed-s12-ac:      「velocity を超えて計画しない」= 継続改善ループのキラー主役。今スプリント
+ *                          (S13=計画68pt / 実績velocity27) の過剰計画を Planner が SPRINT_OVER_VELOCITY で
+ *                          検出し、「前回この Try を決めたのに守れていない」と数字で突く broken の主役。
+ *  - try-seed-s11-blocked: 「BLOCKED 理由を書く」= 継続 Try として再掲される broken の対比。
  *
  * createdAt 昇順契約 (memory.ts / firestore.ts) に沿って古い積み上げ (S11) を先に置く。
  */
@@ -27,7 +29,7 @@ export const seedRetroTries: RetroTry[] = [
   {
     id: 'try-seed-s12-ac',
     workspaceId: 'ws-belvedere',
-    text: '受け入れ条件 (AC) に完了予定日を必ず入れる',
+    text: 'スプリントに計画を詰め込みすぎない。計画したストーリーポイントの合計が、前スプリントの実績ベロシティを超えないようにする',
     sprintNumber: 12,
     sprintId: 'sprint-12',
     done: false,
