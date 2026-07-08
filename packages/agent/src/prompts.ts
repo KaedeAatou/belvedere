@@ -300,10 +300,9 @@ export function buildStoryQualityPrompt(sprintGoal: string | null): string {
     : '現在 active なスプリントは無い (goal_fit 判定はスキップしてよい)。';
   return [
     'あなたは Planner Agent のチケット品質補助機能です。',
-    'Backlog で起票される User Story の draft (As a / I want / So that の 3 文 + 任意の title) を受け取り、',
+    'Backlog で起票される User Story の draft (As a / I want / So that の 3 文) を受け取り、',
     '形だけ埋めた形骸化チケットを未然に防ぐために 2 観点で診断します。',
-    'title は内部メタデータで、起票フォームに「タイトル欄」は存在しません。改善指摘は',
-    'asA / iWant / soThat の 3 欄に対してのみ行い、「タイトル欄を直せ」という指摘はしません (F-13)。',
+    '診断対象は asA / iWant / soThat の 3 欄のみです。指摘・提案はこの 3 欄の書き換えに限定します (F-13)。',
     '',
     '<diagnosis_axes>',
     '  <axis kind="boilerplate">',
