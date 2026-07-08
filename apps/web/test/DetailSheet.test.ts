@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { ref } from 'vue';
-import type { Ticket, Sprint } from '@belvedere/shared';
+import type { Ticket, Sprint, Epic } from '@belvedere/shared';
 import DetailSheet from '~/components/DetailSheet.vue';
 import { sprintOptionsForEdit } from '~/composables/useSprints';
 
@@ -31,6 +31,12 @@ const mocks = vi.hoisted(() => {
 
 // WC-28: DetailSheet が親子解決に使う tickets (useState 全件相当)。テストごとに差し替える。
 const ticketsRef = ref<Ticket[]>([]);
+// F-03: 親 Epic の表示/変更に使う epics。ref はモジュールレベル (mockNuxtImport factory は遅延実行)。
+const epicsRef = ref<Epic[]>([
+  { id: 'EP-1', workspaceId: 'ws-belvedere', name: '決済基盤', status: 'active', createdAt: '2026-06-01T00:00:00Z' },
+  { id: 'EP-2', workspaceId: 'ws-belvedere', name: '運営の自動化', status: 'active', createdAt: '2026-06-01T00:00:00Z' },
+]);
+const fetchEpicsSpy = vi.fn(() => Promise.resolve());
 
 mockNuxtImport('useMembers', () => mocks.useMembers);
 mockNuxtImport('useFindings', () => mocks.useFindings);
@@ -39,6 +45,15 @@ mockNuxtImport('useTickets', () => () => ({
   patchTicket: mocks.patchTicket,
   deleteTicket: mocks.deleteTicket,
   addComment: mocks.addComment,
+}));
+mockNuxtImport('useEpics', () => () => ({
+  epics: epicsRef,
+  selectableEpics: epicsRef,
+  fetchEpics: fetchEpicsSpy,
+  createEpic: vi.fn(),
+  updateEpic: vi.fn(),
+  isLoading: ref(false),
+  error: ref(null),
 }));
 // useSprints は ref を返すため factory (遅延実行) 内で ref を使う (vi.hoisted 内は TDZ で不可)。
 mockNuxtImport('useSprints', () => () => ({
@@ -198,6 +213,56 @@ describe('sprintOptionsForEdit — 編集セレクトの候補 (WC-35)', () => {
 
   it('退化: 空配列 → 空', () => {
     expect(sprintOptionsForEdit([], 'x')).toEqual([]);
+  });
+});
+
+// F-03: チケット詳細に親 Epic の表示 (閲覧) + セレクタ (編集) が無く、ドッグフードで
+// 「このチケットがどの Epic 配下か」を確認・付け替えできなかった。配線を固定する。
+describe('DetailSheet 親 Epic の表示と変更 (F-03)', () => {
+  it('閲覧モード: epicId を持つチケットは Epic 名を表示する', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', epicId: 'EP-1' }) },
+    });
+    const epic = wrapper.find('[data-testid="sheet-epic"]');
+    expect(epic.exists()).toBe(true);
+    expect(epic.text()).toContain('決済基盤');
+  });
+
+  it('閲覧モード: epicId が無ければ Epic 表示は出ない', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    expect(wrapper.find('[data-testid="sheet-epic"]').exists()).toBe(false);
+  });
+
+  it('編集モード: Epic セレクタで変更して保存すると patch に epicId が載る', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', epicId: 'EP-1' }) },
+    });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="sheet-edit-epic"]').setValue('EP-2');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.patchTicket.mock.calls[0]![1]).toMatchObject({ epicId: 'EP-2' });
+  });
+
+  it('編集モード: Epic 未変更なら patch に epicId を載せない (変更時のみ送る)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', epicId: 'EP-1' }) },
+    });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.patchTicket.mock.calls[0]![1]).not.toHaveProperty('epicId');
+  });
+
+  it('編集モード: Epic 未設定のチケットで Epic を選んで保存すると epicId が載る', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="sheet-edit-epic"]').setValue('EP-1');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket.mock.calls[0]![1]).toMatchObject({ epicId: 'EP-1' });
   });
 });
 

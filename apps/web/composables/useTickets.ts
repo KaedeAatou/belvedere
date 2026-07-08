@@ -49,6 +49,8 @@ export interface PatchTicketInput {
   type?: TicketType;
   timeboxHours?: number;
   orderIndex?: number;
+  /** 親 Epic の付け替え (F-03 / DetailSheet 編集)。undefined は「変更なし」(解除は非対応)。 */
+  epicId?: string;
   /** Review 儀式の指摘ノート。read→append した全配列を渡す (配列まるごと replace)。 */
   reviewNotes?: string[];
   /** Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。 */
