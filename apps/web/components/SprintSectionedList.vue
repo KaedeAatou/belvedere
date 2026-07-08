@@ -290,11 +290,6 @@ function sprintIdForSection(s: CreateSection): string | undefined {
   return undefined;
 }
 
-const suggestSpike = computed(
-  () => props.allowedTypes.includes('spike') && /(調査|検証|比較|スパイク)/.test(newTitle.value) && newType.value !== 'spike',
-);
-function applySpike(): void { newType.value = 'spike'; }
-
 // ===== User Story 3 欄フォーム + AI 品質チェック (newType==='story' のとき) =====
 // 「誰が / 何をしたい / なぜ」で description を構成し、起票前に AI で形骸化 + ゴール適合を診断する。
 const usAsA = ref('');
@@ -827,10 +822,6 @@ async function submitSplit(): Promise<void> {
             placeholder="例: ログイン画面の入力 validation を追加"
           />
         </div>
-        <div v-if="!isStory && suggestSpike" class="spike-hint">
-          <span>💡 調査系のタイトルです。Spike にしますか?</span>
-          <button type="button" class="spike-btn" data-testid="suggest-spike" @click="applySpike">Spike にする</button>
-        </div>
         <div class="field-row">
           <div class="field">
             <label class="label" for="ssl-new-priority">優先度</label>
@@ -1126,22 +1117,6 @@ async function submitSplit(): Promise<void> {
 .field-row .field { flex: 1; }
 .label { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em; text-transform: uppercase; }
 .req { color: var(--accent); }
-.spike-hint {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 12px;
-  border: 1px dashed var(--accent-dim);
-  background: var(--accent-bg);
-  border-radius: var(--radius);
-  font-size: 12px; color: var(--ink-1);
-}
-.spike-btn {
-  margin-left: auto;
-  padding: 4px 10px;
-  background: var(--accent); color: #FBF8F2;
-  border: none; border-radius: var(--radius);
-  font-family: var(--sans); font-size: 12px; cursor: pointer;
-  white-space: nowrap;
-}
 .text-input, .select-input {
   padding: 10px 12px;
   border: var(--hairline) solid var(--line-2);

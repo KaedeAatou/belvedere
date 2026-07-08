@@ -72,10 +72,8 @@ function suffix(estimated: boolean): string {
 }
 
 const PROCEDURAL = /(実装|設計|対応|作成|修正|追加|変更|テスト|リリース)(する|します)?$/;
-const DECISION = /(判断|結論|比較|わかる|分かる|明らか|決定|選定)/;
 const REGRESSION = /(回帰|リグレッション|テスト追加|自動テスト)/;
 const REPRO = /(再現|手順|steps)/i;
-const SPIKE_TITLE = /(調査|検証|比較|スパイク)/;
 
 // ========== ルール表 (docs/design-ticket-types.md §3-2 の正) ==========
 
@@ -192,39 +190,6 @@ export const ticketRules: TicketRule[] = [
     },
   },
   {
-    id: 'SPIKE_NO_TIMEBOX',
-    appliesTo: ['spike'],
-    ceremonies: ['planning', 'refinement'],
-    check: (t) =>
-      t && t.timeboxHours == null
-        ? [{ ruleId: 'SPIKE_NO_TIMEBOX', ticketId: t.id, severity: 'warn', message: 'Spike にタイムボックス (timeboxHours) が設定されていません。打ち切り時間を決めてください。', action: { kind: 'edit-ticket', label: 'タイムボックスを設定' } }]
-        : [],
-  },
-  {
-    id: 'SPIKE_TIMEBOX_OVER',
-    appliesTo: ['spike'],
-    ceremonies: ['daily'],
-    check: (t, ctx) => {
-      if (!t || t.status !== 'in-progress' || t.timeboxHours == null) return [];
-      const a = sinceAnchor(t);
-      return hoursSince(a.iso, ctx.now) > t.timeboxHours
-        ? [{ ruleId: 'SPIKE_TIMEBOX_OVER', ticketId: t.id, severity: 'error', message: `Spike がタイムボックス (${t.timeboxHours}h) を超過しています。結論を出すか打ち切ってください${suffix(a.estimated)}。` }]
-        : [];
-    },
-  },
-  {
-    id: 'SPIKE_DOD_NOT_DECISION',
-    appliesTo: ['spike'],
-    ceremonies: ['refinement'],
-    check: (t) => {
-      if (!t || !t.acceptanceCriteria || t.acceptanceCriteria.length === 0) return [];
-      const hasDecision = t.acceptanceCriteria.some((l) => DECISION.test(l));
-      return hasDecision
-        ? []
-        : [{ ruleId: 'SPIKE_DOD_NOT_DECISION', ticketId: t.id, severity: 'warn', message: 'Spike の DoD が「判断材料が揃った/結論が出た」になっていません。成果物 (判断・結論) で完了を定義してください。', action: { kind: 'edit-ticket', label: 'DoD を結論ベースに' } }];
-    },
-  },
-  {
     id: 'BUG_NO_REPRO',
     appliesTo: ['bug'],
     ceremonies: ['refinement'],
@@ -273,15 +238,6 @@ export const ticketRules: TicketRule[] = [
         ? []
         : [{ ruleId: 'INCIDENT_NO_FOLLOWUP_BUG', ticketId: t.id, severity: 'warn', message: '復旧済インシデントですが、根本対応の Bug が起票されていません。再発防止策を Bug として PBI 化してください。', action: { kind: 'create-bug', label: '根本対応 Bug を起票' } }];
     },
-  },
-  {
-    id: 'MISMATCH_SPIKE_TITLE',
-    appliesTo: ['story', 'task'],
-    ceremonies: ['refinement'],
-    check: (t) =>
-      t && SPIKE_TITLE.test(t.title) && t.type !== 'spike'
-        ? [{ ruleId: 'MISMATCH_SPIKE_TITLE', ticketId: t.id, severity: 'info', message: 'タイトルが調査・検証を示唆していますが種別が spike ではありません。Spike にすべきか確認してください。', action: { kind: 'edit-ticket', label: 'spike に変更' } }]
-        : [],
   },
   {
     id: 'SPRINT_OVER_VELOCITY',
