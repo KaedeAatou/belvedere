@@ -447,7 +447,20 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
   });
 
   // ------- Retro KPT ボードのノート (Keep / Problem / Try) -------
-  app.get('/api/retro-notes', async (c) => respond(c, await listRetroNotes(repo, buildCtx(c))));
+  app.get('/api/retro-notes', async (c) => {
+    // F-16: ?sprintNumber= で「今回の振り返り」の由来スプリントに絞る (未指定は全件 = 後方互換)。
+    // 数値でない値は 400 で弾く (as キャスト素通しで黙って 0 件になるのを避ける — tickets query と同じ規律)。
+    const query: { sprintNumber?: number } = {};
+    const sn = c.req.query('sprintNumber');
+    if (sn !== undefined) {
+      const n = Number(sn);
+      if (!Number.isFinite(n)) {
+        return c.json({ error: 'invalid_query', field: 'sprintNumber', expected: 'number' }, 400);
+      }
+      query.sprintNumber = n;
+    }
+    return respond(c, await listRetroNotes(repo, buildCtx(c), query));
+  });
   app.post('/api/retro-notes', async (c) => {
     const body = await c.req.json<unknown>().catch(() => ({}));
     return respond(c, await createRetroNote(repo, buildCtx(c), body));

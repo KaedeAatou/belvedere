@@ -7,18 +7,45 @@
 
 import type { RetroNote } from '@belvedere/shared';
 
+/**
+ * KPT 列 + 由来スプリントで絞って votes 降順で返す純粋関数 (F-16 / 直接 unit テスト対象)。
+ * バグ: column でしか絞らずスプリントを跨いでノートが累積表示され「今回の振り返り」が
+ * 区別できなかった。退化入力の扱い:
+ * - activeSprintNumber=null (active スプリント無し) → sprint で絞らない (ノートを隠さない)
+ * - sprintNumber 未設定 (legacy 実データ) のノート → どのスプリント由来か判定できないため絞り込み時は含めない
+ */
+export function notesInColumn(
+  notes: RetroNote[],
+  column: RetroNote['column'],
+  activeSprintNumber: number | null,
+): RetroNote[] {
+  return notes
+    .filter((n) => n.column === column)
+    .filter((n) => activeSprintNumber === null || n.sprintNumber === activeSprintNumber)
+    .sort((a, b) => b.votes.length - a.votes.length);
+}
+
 export const useRetroNotes = () => {
   const notes = useState<RetroNote[]>('retro-notes', () => []);
   const isLoading = useState<boolean>('retro-notes-loading', () => false);
   const error = useState<string | null>('retro-notes-error', () => null);
+  // F-16: 直近の取得スコープ。mutate 後の再 fetch が全件に戻らないよう記憶する。
+  const lastQuery = useState<{ sprintNumber?: number }>('retro-notes-query', () => ({}));
 
   const api = useApiClient();
 
-  async function fetchNotes(): Promise<void> {
+  /**
+   * ノートを取得。opts を渡すとスコープを更新し、省略すると直近スコープで再取得する
+   * (mutate 後の再 fetch 用)。sprintNumber 指定時は「今回の振り返り」に絞る (F-16)。
+   */
+  async function fetchNotes(opts?: { sprintNumber?: number }): Promise<void> {
+    if (opts !== undefined) lastQuery.value = opts;
+    const sn = lastQuery.value.sprintNumber;
+    const path = sn !== undefined ? `/api/retro-notes?sprintNumber=${sn}` : '/api/retro-notes';
     isLoading.value = true;
     error.value = null;
     try {
-      notes.value = await api.get<RetroNote[]>('/api/retro-notes');
+      notes.value = await api.get<RetroNote[]>(path);
     } catch (e) {
       error.value = apiErrorMessage(e);
       notes.value = [];

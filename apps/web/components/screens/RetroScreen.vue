@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { RetroNote, RetroTry } from '@belvedere/shared';
 import { VueDraggable } from 'vue-draggable-plus';
+import { notesInColumn } from '~/composables/useRetroNotes';
 
 const { memberName } = useMembers();
 const { activeSprint } = useSprints();
@@ -12,9 +13,18 @@ const { tries: stack, fetchTries, create: createTry, toggleDone, remove: removeT
 // ノートと積み上げは Firestore 永続。レトロを実際に開催するための実データ。
 onMounted(() => {
   fetchMe();
-  fetchNotes();
   fetchTries();
 });
+
+// F-16: KPT ノートは「今回の振り返り」= active sprint の番号で取得する。
+// sprints は useState 共有 (app 側で fetch 済み) — active が後からロードされても watch で再取得する。
+watch(
+  () => activeSprint.value?.number,
+  (n) => {
+    void fetchNotes(n !== undefined ? { sprintNumber: n } : {});
+  },
+  { immediate: true },
+);
 
 type ColKey = 'keep' | 'problem' | 'try';
 
@@ -30,11 +40,10 @@ const colDefs: { key: ColKey; label: string; desc: string }[] = [
   { key: 'try', label: 'Try', desc: '次に試す候補' },
 ];
 
-// 列ごとに votes 数で降順表示。
+// 列ごとに votes 数で降順表示。F-16: 今回 (active sprint) のノートだけに絞る
+// (絞りロジックは notesInColumn 純粋関数 — useRetroNotes.test.ts で直接テスト)。
 function notesIn(key: ColKey): RetroNote[] {
-  return notes.value
-    .filter((n) => n.column === key)
-    .sort((a, b) => b.votes.length - a.votes.length);
+  return notesInColumn(notes.value, key, activeSprint.value?.number ?? null);
 }
 
 const myId = computed(() => me.value?.userId ?? null);
@@ -79,7 +88,8 @@ function syncColNotes(): void {
   for (const c of colDefs) colNotes[c.key] = notesIn(c.key);
 }
 syncColNotes();
-watch(notes, syncColNotes, { deep: true });
+// F-16: 絞り込みが activeSprint にも依存するため、active の遅延ロード/切替でも再ミラーする。
+watch([notes, () => activeSprint.value?.number], syncColNotes, { deep: true });
 
 const stackMirror = ref<RetroTry[]>([]);
 watch(stack, () => { stackMirror.value = [...stack.value]; }, { immediate: true, deep: true });

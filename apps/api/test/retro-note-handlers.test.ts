@@ -2,8 +2,10 @@
 // memory backend で直接呼び、CRUD 正常系 / vote toggle / IDOR 404 / zod 400 を確認。
 // レトロは全メンバー参加なので role ゲートは無い (dev でも追加/編集/投票/削除できる)。
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
+import { createLLMProvider } from '@belvedere/llm';
+import { createApp } from '../src/app';
 import {
   listRetroNotes,
   createRetroNote,
@@ -11,6 +13,21 @@ import {
   voteRetroNote,
   deleteRetroNote,
 } from '../src/handlers/retro-note-handlers';
+
+// Firebase Admin SDK をモック (app-auth.test.ts と同理由: CI に ADC が無く実 verifyIdToken はハングする)。
+// route テストはサービストークン経路 (Firebase を呼ばない) だけを使う。
+vi.mock('firebase-admin/app', () => ({
+  initializeApp: () => ({}),
+  applicationDefault: () => ({}),
+  getApps: () => [],
+}));
+vi.mock('firebase-admin/auth', () => ({
+  getAuth: () => ({
+    verifyIdToken: async () => {
+      throw new Error('mock: firebase not available in test');
+    },
+  }),
+}));
 
 const WS = 'ws-belvedere';
 const DEV = { workspaceId: WS, user: { userId: 'u-dev', email: 'dev@example.com' }, role: 'dev' as const };
@@ -81,6 +98,36 @@ describe('listRetroNotes', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.body.map((n) => n.text)).toEqual(['1st', '2nd']);
+  });
+
+  // F-16 (2026-07-08): KPT ノートがスプリントを跨いで累積し「今回の振り返り」が区別できなかった。
+  // sprintNumber query で由来スプリントに絞れることを固定する (未指定は全件 = 後方互換)。
+  it('sprintNumber query で由来スプリントのノートだけに絞る (F-16)', async () => {
+    await repo.retroNotes.upsert({ id: 'note-s12', workspaceId: WS, sprintNumber: 12, column: 'keep', text: '前回', authorId: 'u-dev', votes: [], createdAt: '2026-04-21T10:00:00+09:00', createdBy: 'u-dev' });
+    await repo.retroNotes.upsert({ id: 'note-s13', workspaceId: WS, sprintNumber: 13, column: 'keep', text: '今回', authorId: 'u-dev', votes: [], createdAt: '2026-05-05T10:00:00+09:00', createdBy: 'u-dev' });
+    const res = await listRetroNotes(repo, DEV, { sprintNumber: 13 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.map((n) => n.text)).toEqual(['今回']);
+  });
+
+  it('sprintNumber 未指定なら全スプリントのノートを返す (後方互換)', async () => {
+    await repo.retroNotes.upsert({ id: 'note-s12', workspaceId: WS, sprintNumber: 12, column: 'keep', text: '前回', authorId: 'u-dev', votes: [], createdAt: '2026-04-21T10:00:00+09:00', createdBy: 'u-dev' });
+    await repo.retroNotes.upsert({ id: 'note-s13', workspaceId: WS, sprintNumber: 13, column: 'keep', text: '今回', authorId: 'u-dev', votes: [], createdAt: '2026-05-05T10:00:00+09:00', createdBy: 'u-dev' });
+    const res = await listRetroNotes(repo, DEV, {});
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body).toHaveLength(2);
+  });
+
+  it('退化入力: sprintNumber 未設定 (legacy) のノートは絞り込み時に含めない', async () => {
+    // 型上は必須だが、古い実データには欠落がありうる。どのスプリント由来か判定できないので絞り込みからは除外。
+    await repo.retroNotes.upsert({ id: 'note-legacy', workspaceId: WS, column: 'keep', text: 'legacy', authorId: 'u-dev', votes: [], createdAt: '2026-04-01T10:00:00+09:00', createdBy: 'u-dev' } as never);
+    await repo.retroNotes.upsert({ id: 'note-s13', workspaceId: WS, sprintNumber: 13, column: 'keep', text: '今回', authorId: 'u-dev', votes: [], createdAt: '2026-05-05T10:00:00+09:00', createdBy: 'u-dev' });
+    const res = await listRetroNotes(repo, DEV, { sprintNumber: 13 });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.map((n) => n.text)).toEqual(['今回']);
   });
 });
 
@@ -185,5 +232,47 @@ describe('deleteRetroNote', () => {
     if (res.ok) return;
     expect(res.status).toBe(404);
     expect(await repo.retroNotes.get('note-1')).not.toBeNull();
+  });
+});
+
+// F-16: route レベルの query 配線 (?sprintNumber= のパース + 不正値 400) を HTTP 契約として固定する。
+describe('GET /api/retro-notes?sprintNumber= (route 配線 / F-16)', () => {
+  const TOKEN = 'test-service-token';
+  let repo: RepoContainer;
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(async () => {
+    process.env.MCP_SERVICE_TOKEN = TOKEN;
+    repo = createMemoryRepoContainer();
+    app = createApp({ repo, llm: createLLMProvider('mock') });
+    await repo.retroNotes.upsert({ id: 'note-s12', workspaceId: WS, sprintNumber: 12, column: 'keep', text: '前回', authorId: 'u-dev', votes: [], createdAt: '2026-04-21T10:00:00+09:00', createdBy: 'u-dev' });
+    await repo.retroNotes.upsert({ id: 'note-s13', workspaceId: WS, sprintNumber: 13, column: 'keep', text: '今回', authorId: 'u-dev', votes: [], createdAt: '2026-05-05T10:00:00+09:00', createdBy: 'u-dev' });
+  });
+
+  function req(path: string): Request {
+    return new Request(`http://localhost${path}`, {
+      headers: { Authorization: `Bearer ${TOKEN}`, 'X-Workspace-Id': WS },
+    });
+  }
+
+  it('?sprintNumber=13 で由来スプリントに絞る', async () => {
+    const res = await app.fetch(req('/api/retro-notes?sprintNumber=13'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Array<{ text: string }>;
+    expect(body.map((n) => n.text)).toEqual(['今回']);
+  });
+
+  it('query 未指定は全件 (後方互換)', async () => {
+    const res = await app.fetch(req('/api/retro-notes'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as unknown[];
+    expect(body).toHaveLength(2);
+  });
+
+  it('数値でない sprintNumber は 400 (黙って 0 件にしない)', async () => {
+    const res = await app.fetch(req('/api/retro-notes?sprintNumber=abc'));
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('invalid_query');
   });
 });
