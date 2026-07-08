@@ -38,6 +38,7 @@ function toggleMenu(): void {
 }
 function closeMenu(): void {
   menuOpen.value = false;
+  disarmRemove(); // メニューを閉じたら armed 削除も解除 (再オープン時は 1 回目から)
 }
 
 // 各属性の確定 (選択 → 一括適用 → メニューを閉じる)。
@@ -47,12 +48,31 @@ function pickPriority(p: Priority): void { emit('setPriority', p); closeMenu(); 
 function pickValueImpact(v: ValueImpact): void { emit('setValueImpact', v); closeMenu(); }
 function pickSprint(sp: string | null): void { emit('setSprint', sp); closeMenu(); }
 
-function confirmRemove(): void {
-  closeMenu();
-  if (window.confirm(`${props.count} 件のチケットを削除します。よろしいですか?`)) {
-    emit('remove');
-  }
+// ===== 一括削除の 2 段階確認 (F-18) =====
+// native window.confirm は (a) ブラウザ自動化 (e2e / MCP 実機検証) を完全にブロックし
+// (b) アプリ内の確認 UI (DetailSheet の 2 段階削除) とスタイルが不統一なため使わない。
+// 1 回目のクリックで armed 状態 (ボタン文言が「もう一度押して確定」に変化)、
+// 2 回目で確定。数秒で自動解除し、メニューを閉じた時も解除する (誤爆防止)。
+const removeArmed = ref(false);
+let removeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function disarmRemove(): void {
+  if (removeTimer) { clearTimeout(removeTimer); removeTimer = null; }
+  removeArmed.value = false;
 }
+
+function confirmRemove(): void {
+  if (!removeArmed.value) {
+    removeArmed.value = true;
+    removeTimer = setTimeout(() => { removeArmed.value = false; removeTimer = null; }, 3000);
+    return;
+  }
+  disarmRemove();
+  closeMenu();
+  emit('remove');
+}
+
+onUnmounted(() => { if (removeTimer) clearTimeout(removeTimer); });
 </script>
 
 <template>
@@ -144,9 +164,15 @@ function confirmRemove(): void {
 
         <div class="bulk-divider" />
 
-        <!-- 削除 (確認ダイアログ経由 / サブメニュー無しの単独アクション) -->
-        <button class="bulk-item bulk-item--danger" data-testid="bulk-delete" @click="confirmRemove">
-          {{ count }} 件を削除
+        <!-- 削除 (2 段階確認 / F-18: 1 回目で armed、2 回目で確定。native confirm は使わない) -->
+        <button
+          class="bulk-item bulk-item--danger"
+          :class="{ 'bulk-item--armed': removeArmed }"
+          data-testid="bulk-delete"
+          :data-armed="removeArmed ? 'true' : null"
+          @click="confirmRemove"
+        >
+          {{ removeArmed ? `削除する (${count}件) — もう一度押して確定` : `${count} 件を削除` }}
         </button>
       </div>
     </div>
@@ -246,6 +272,9 @@ function confirmRemove(): void {
 .bulk-item:hover { background: var(--bg-2); }
 .bulk-item--danger { color: var(--err); }
 .bulk-item--danger:hover { background: var(--accent-bg, #fff3ee); }
+/* armed 状態 (F-18): 反転強調で「もう一度押すと消える」ことを視覚的に伝える。 */
+.bulk-item--armed,
+.bulk-item--armed:hover { background: var(--err); color: #fff; font-weight: 600; }
 .bulk-divider {
   height: var(--hairline);
   background: var(--line-1);
