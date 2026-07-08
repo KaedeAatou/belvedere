@@ -166,6 +166,9 @@ export function checkBacklogRefinement(
 ): BacklogRefinementResult {
   const candidateTickets = input.tickets.filter(
     (t) =>
+      // F-35 (2026-07-08): 完了済 (done) チケットは 6 観点診断の対象外。旧スプリントの done を
+      // 「分割せよ」「依存を整理せよ」等と指摘するのは無意味で、AI の時系列取り違えの温床になる。
+      t.status !== 'done' &&
       (filter.sprintId === undefined || t.sprintId === filter.sprintId) &&
       (filter.projectId === undefined || t.projectId === filter.projectId),
   );
