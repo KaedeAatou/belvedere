@@ -86,7 +86,9 @@ export function buildChecks(screen: ScreenId, _tickets: Ticket[]): AICheck[] {
       msg: '完了チケットのデモシナリオを準備できます。受け入れ条件の充足も確認します。',
       actions: [{
         label: 'デモ台本を生成', primary: true, kind: 'prompt',
-        prompt: '完了チケットのデモシナリオ(台本)を生成して。各チケットの受け入れ条件が満たされているかも確認して。',
+        // F-33 (2026-07-08): スプリント範囲の指定が無く、AI が旧スプリントの完了チケットで
+        // 台本を作っていた。対象を「現在の (active) スプリント」に明示して範囲を固定する。
+        prompt: '現在の (active) スプリントで完了したチケットに限定して、デモシナリオ(台本)を生成して。sprint.current で active スプリントを特定し、ticket.list に sprintId を渡して取得すること。各チケットの受け入れ条件が満たされているかも確認して。',
       }],
     });
 

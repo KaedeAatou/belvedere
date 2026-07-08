@@ -104,6 +104,13 @@ export function buildAgentContext(input: AgentContextInput): string {
       .slice(0, 20)
       .map((t) => `${t.id}: ${t.title} [${t.status}/SP=${t.estimatePt ?? '未'}]`);
     lines.push(`表示中のチケット (${shown.length}/${tickets.length} 件):\n${shown.join('\n')}`);
+    // F-24/F-36 (2026-07-08): 上限で切られたチケットを AI が「存在しない」と断定していた。
+    // 一覧が一部であることと、存在確認の正しい手段 (ticket.get) を明示する。
+    if (tickets.length > 20) {
+      lines.push(
+        'この一覧は一部のみ (先頭 20 件)。ここに無いチケットも存在しうるので、「存在しない」と断定せず ticket.get / ticket.list で確認すること。',
+      );
+    }
   }
 
   return `[現在の画面とスプリント状況]\n${lines.join('\n')}`;
