@@ -3,6 +3,7 @@
 // verdict 反映で ok/weak + note 表示」だけを検証する (採点ロジックは handler/mock テストが担う)。
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ref, type Ref } from 'vue';
+import { flushPromises } from '@vue/test-utils';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import PlanningScreen from '~/components/screens/PlanningScreen.vue';
 import type { Ticket } from '@belvedere/shared';
@@ -23,7 +24,10 @@ mockNuxtImport('useSprints', () => () => ({
   nextPlanned: nextPlannedRef, currentLabel: ref('Sprint 1'), nextLabel: ref('Next'),
   patchSprint: vi.fn(), startSprint: startSprintSpy,
 }));
-mockNuxtImport('useTickets', () => () => ({ tickets: ref([]), patchTicket: vi.fn() }));
+// F-08: Pull from backlog の投入先テストで patch 引数を見るためモジュールレベル spy にする。
+const patchTicketSpy = vi.fn((_id: string, _patch: Record<string, unknown>) =>
+  Promise.resolve<{ id: string } | null>({ id: _id }));
+mockNuxtImport('useTickets', () => () => ({ tickets: ref([]), patchTicket: patchTicketSpy }));
 mockNuxtImport('useMembers', () => () => ({ members: ref([]) }));
 mockNuxtImport('useSprintSections', () => () => ({ current: ref([]), next: ref([]), backlog: ref([]) }));
 mockNuxtImport('useSmartEval', () => () => ({
@@ -113,6 +117,63 @@ describe('PlanningScreen SMART 実評価 (WC-14)', () => {
 const tk = (over: Partial<Ticket> & { id: string }): Ticket => ({
   workspaceId: 'ws', title: over.id, status: 'todo', priority: 'medium',
   createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: 'human', ...over,
+});
+
+// F-08: Pull from backlog の投入先が Next 固定で、CURRENT (active sprint) に一括で
+// 入れられなかった。投入先セレクタ (CURRENT / Next) の配線を固定する。
+describe('PlanningScreen Pull from backlog の投入先選択 (F-08)', () => {
+  beforeEach(() => {
+    verdictRef.value = null;
+    patchTicketSpy.mockClear();
+    activeSprintRef.value = { id: 's-active', goal: '決済MVPを完成させる' };
+    nextPlannedRef.value = { id: 's-next', status: 'planned', number: 2 };
+  });
+
+  const backlogTickets = () => [
+    tk({ id: 'WC-10', status: 'backlog' }),
+    tk({ id: 'WC-11', status: 'backlog' }),
+  ];
+
+  async function openPull(tickets: Ticket[]) {
+    const wrapper = await mountSuspended(PlanningScreen, { props: { tickets, selectedId: null }, ...mountOpts });
+    await wrapper.find('[data-testid=pull-from-backlog]').trigger('click');
+    return wrapper;
+  }
+
+  it('投入先セレクタが出て、既定は Next (従来挙動の維持)', async () => {
+    const wrapper = await openPull(backlogTickets());
+    const sel = wrapper.find('[data-testid=pull-target]');
+    expect(sel.exists()).toBe(true);
+    expect((sel.element as HTMLSelectElement).value).toBe('next');
+  });
+
+  it('既定 (Next) のまま追加 → nextPlanned.id へ patch する', async () => {
+    const wrapper = await openPull(backlogTickets());
+    await wrapper.find('[data-testid=pull-row-WC-10]').trigger('click');
+    await wrapper.find('[data-testid=pull-submit]').trigger('click');
+    await flushPromises();
+    expect(patchTicketSpy).toHaveBeenCalledWith('WC-10', { sprintId: 's-next', status: 'todo' });
+  });
+
+  it('CURRENT を選ぶと activeSprint.id へ一括 patch する', async () => {
+    const wrapper = await openPull(backlogTickets());
+    await wrapper.find('[data-testid=pull-target]').setValue('current');
+    await wrapper.find('[data-testid=pull-row-WC-10]').trigger('click');
+    await wrapper.find('[data-testid=pull-row-WC-11]').trigger('click');
+    await wrapper.find('[data-testid=pull-submit]').trigger('click');
+    await flushPromises();
+    expect(patchTicketSpy).toHaveBeenCalledWith('WC-10', { sprintId: 's-active', status: 'todo' });
+    expect(patchTicketSpy).toHaveBeenCalledWith('WC-11', { sprintId: 's-active', status: 'todo' });
+  });
+
+  it('nextPlanned が無い環境では CURRENT のみが選べて既定になる', async () => {
+    nextPlannedRef.value = null;
+    const wrapper = await openPull(backlogTickets());
+    const sel = wrapper.find('[data-testid=pull-target]');
+    expect(sel.exists()).toBe(true);
+    expect((sel.element as HTMLSelectElement).value).toBe('current');
+    expect(sel.findAll('option').map((o) => o.attributes('value'))).toEqual(['current']);
+  });
 });
 
 describe('PlanningScreen 持ち越し確認 (WC-30)', () => {
