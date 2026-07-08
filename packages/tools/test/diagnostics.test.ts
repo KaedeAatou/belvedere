@@ -68,9 +68,25 @@ describe('checkTicketQuality (純粋関数 / 直接)', () => {
     expect(r.issues.some((i) => i.includes('Story Point'))).toBe(false);
   });
 
-  it('退化: parentTicketId が US- 始まりでない → US 紐付け issue が立つ', () => {
-    const r = checkTicketQuality(ticket({ id: 'WC-5', acceptanceCriteria: ['x'], estimatePt: 2, parentTicketId: 'WC-99' }));
-    expect(r.issues.some((i) => i.includes('User Story'))).toBe(true);
+  // F-07/F-11 (2026-07-08): 親紐付けの基準は種別で異なる。旧実装は全種別に parentTicketId の
+  // US- 前方一致を求め、全 story を「User Story 紐付けなし」と誤指摘していた (ドッグフード F-07 の真因)。
+  it('非 story は親 (parentTicketId) が WC- 形式でも親紐付け issue は立たない (F-07)', () => {
+    const r = checkTicketQuality(ticket({ id: 'WC-5', type: 'task', acceptanceCriteria: ['x'], estimatePt: 2, parentTicketId: 'WC-99' }));
+    expect(r.issues.some((i) => i.includes('紐付け'))).toBe(false);
+  });
+  it('非 story で親が全く無い → 「親 Story 紐付けなし」issue が立つ', () => {
+    const r = checkTicketQuality(ticket({ id: 'WC-6', type: 'task', acceptanceCriteria: ['x'], estimatePt: 2 }));
+    expect(r.issues.some((i) => i.includes('親 Story 紐付けなし'))).toBe(true);
+  });
+  it('story は epicId が有れば親紐付け issue なし / 「User Story」issue は決して出ない (F-07 category confusion)', () => {
+    const r = checkTicketQuality(ticket({ id: 'WC-7', type: 'story', acceptanceCriteria: ['x'], estimatePt: 2, epicId: 'EP-1' }));
+    expect(r.issues.some((i) => i.includes('紐付け'))).toBe(false);
+    expect(r.issues.some((i) => i.includes('User Story'))).toBe(false);
+  });
+  it('story は epicId が無ければ「親 Epic 紐付けなし」(「User Story 紐付けなし」ではない / F-07)', () => {
+    const r = checkTicketQuality(ticket({ id: 'WC-8', type: 'story', acceptanceCriteria: ['x'], estimatePt: 2 }));
+    expect(r.issues.some((i) => i.includes('親 Epic 紐付けなし'))).toBe(true);
+    expect(r.issues.some((i) => i.includes('User Story'))).toBe(false);
   });
 });
 
