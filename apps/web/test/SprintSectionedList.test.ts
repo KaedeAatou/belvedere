@@ -111,11 +111,11 @@ const el = (attr: string, val: string): HTMLElement => {
 
 async function fireDragEnd(
   props: SSLProps,
-  evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement },
+  evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement; newIndex?: number },
 ): Promise<void> {
   const wrapper = await mountSuspended(SprintSectionedList, { props });
   // 3 区画の VueDraggable はすべて同じ onDragEnd を @end に束ねる。どれに emit しても
-  // ハンドラは evt の data-section / data-ticket-id だけを読むので先頭に発火させる。
+  // ハンドラは evt の data-section / data-ticket-id / newIndex だけを読むので先頭に発火させる。
   const dnd = wrapper.findAllComponents(VueDraggable);
   // $emit は同期的に onDragEnd を起動し、その中で reorderTickets が await 前に呼ばれる。
   dnd[0]!.vm.$emit('end', evt);
@@ -138,8 +138,8 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
     expect(mocks.reorderTickets).toHaveBeenCalledWith({ orderedIds: ['A', 'B', 'C'] });
   });
 
-  it('区画跨ぎ → current: movedId + sprintId=activeSprint.id を載せる', async () => {
-    // 移動先 current にすでに A が入っている状態 (SortableJS がドロップ済) を再現。
+  it('区画跨ぎ → current (ミラー同期済): movedId + sprintId=activeSprint.id を載せる', async () => {
+    // 移動先 current にすでに A が入っている状態 (vue-draggable-plus がミラー反映済) を再現。
     await fireDragEnd(
       { ...baseProps, current: [t('A'), t('X')], next: [], backlog: [t('B')] },
       { item: el('data-ticket-id', 'A'), from: el('data-section', 'backlog'), to: el('data-section', 'current') },
@@ -151,7 +151,63 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
     });
   });
 
-  it('区画跨ぎ → backlog: movedId + sprintId=null (未割当へ解除)', async () => {
+  // ===== F-05 再現 (2026-07-08): 実データ状態 = 「移動前の props のまま」emit する =====
+  // 実機では cross-section ドロップ時に vue-draggable-plus のローカルミラー同期が onEnd に
+  // 間に合わないことがあり (CURRENT に既存チケットがいる 2 件目のドロップで発症)、旧ガード
+  // 「移動先ミラーに id が居なければ syncLists() で握りつぶす」が無言 revert していた。
+  // 移動先区画に id がまだ居ない evt を emit し、evt.newIndex から並びを再構成して
+  // reorderTickets が呼ばれることを固定する。
+  it('F-05: 区画跨ぎ → current でミラー未同期 (2件目ドロップ) でも evt.newIndex から確定する', async () => {
+    mocks.reorderTickets.mockClear();
+    // 移動前の props のまま: current には X しか居ない (A はまだ backlog 側)。
+    await fireDragEnd(
+      { ...baseProps, current: [t('X')], next: [], backlog: [t('A'), t('B')] },
+      {
+        item: el('data-ticket-id', 'A'),
+        from: el('data-section', 'backlog'),
+        to: el('data-section', 'current'),
+        newIndex: 1, // X の下へドロップ
+      },
+    );
+    expect(mocks.reorderTickets).toHaveBeenCalledWith({
+      orderedIds: ['X', 'A'],
+      movedId: 'A',
+      sprintId: 's-active',
+    });
+  });
+
+  it('F-05: ミラー未同期 + newIndex=0 (先頭へドロップ) は先頭に挿入して確定する', async () => {
+    mocks.reorderTickets.mockClear();
+    await fireDragEnd(
+      { ...baseProps, current: [t('X'), t('Y')], next: [], backlog: [t('A')] },
+      {
+        item: el('data-ticket-id', 'A'),
+        from: el('data-section', 'backlog'),
+        to: el('data-section', 'current'),
+        newIndex: 0,
+      },
+    );
+    expect(mocks.reorderTickets).toHaveBeenCalledWith({
+      orderedIds: ['A', 'X', 'Y'],
+      movedId: 'A',
+      sprintId: 's-active',
+    });
+  });
+
+  it('F-05: ミラー未同期で newIndex が無い evt は末尾に挿入して確定する (revert しない)', async () => {
+    mocks.reorderTickets.mockClear();
+    await fireDragEnd(
+      { ...baseProps, current: [t('X')], next: [], backlog: [t('A')] },
+      { item: el('data-ticket-id', 'A'), from: el('data-section', 'backlog'), to: el('data-section', 'current') },
+    );
+    expect(mocks.reorderTickets).toHaveBeenCalledWith({
+      orderedIds: ['X', 'A'],
+      movedId: 'A',
+      sprintId: 's-active',
+    });
+  });
+
+  it('区画跨ぎ → backlog (ミラー同期済): movedId + sprintId=null (未割当へ解除)', async () => {
     await fireDragEnd(
       { ...baseProps, current: [t('B')], next: [], backlog: [t('A'), t('Y')] },
       { item: el('data-ticket-id', 'A'), from: el('data-section', 'current'), to: el('data-section', 'backlog') },
@@ -163,7 +219,28 @@ describe('SprintSectionedList onDragEnd → reorderTickets', () => {
     });
   });
 
-  it('移動先 section に id が居ない (不整合 evt) → reorderTickets を呼ばず再同期で握りつぶす', async () => {
+  it('F-05: 区画跨ぎ → backlog でミラー未同期でも sprintId=null で確定する', async () => {
+    mocks.reorderTickets.mockClear();
+    // 移動前の props のまま: A はまだ current 側に居る。
+    await fireDragEnd(
+      { ...baseProps, current: [t('A'), t('B')], next: [], backlog: [t('Y')] },
+      {
+        item: el('data-ticket-id', 'A'),
+        from: el('data-section', 'current'),
+        to: el('data-section', 'backlog'),
+        newIndex: 0,
+      },
+    );
+    expect(mocks.reorderTickets).toHaveBeenCalledWith({
+      orderedIds: ['A', 'Y'],
+      movedId: 'A',
+      sprintId: null,
+    });
+  });
+
+  it('同一区画で id が居ない (不整合 evt) → reorderTickets を呼ばず再同期で握りつぶす', async () => {
+    // 区画内並び替えは同一リストの SortableJS が自分の v-model を同期するため、id 不在は
+    // 純粋な不整合 evt。cross-section (F-05) と違い再構成せず無視してよい。
     mocks.reorderTickets.mockClear();
     await fireDragEnd(
       { ...baseProps, current: [], next: [], backlog: [t('A')] },
