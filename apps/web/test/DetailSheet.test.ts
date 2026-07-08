@@ -359,3 +359,40 @@ describe('DetailSheet 親子リンク (WC-28)', () => {
     expect(wrapper.find('[data-testid="sheet-relations"]').exists()).toBe(false);
   });
 });
+
+describe('DetailSheet 再発防止対象 incident (INCIDENT_NO_FOLLOWUP_BUG 消灯用 / 2026-07-09)', () => {
+  beforeEach(() => {
+    ticketsRef.value = [];
+    mocks.patchTicket.mockClear().mockResolvedValue({ id: 'WC-BUG' });
+  });
+
+  it('bug の編集で incident を選び保存すると relatedIncidentId が patch に乗る', async () => {
+    ticketsRef.value = [ticket({ id: 'WC-INC', type: 'incident', title: '本番 500 エラー' })];
+    const bug = ticket({ id: 'WC-BUG', type: 'bug', acceptanceCriteria: [] });
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: bug } });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="sheet-edit-related-incident"]').setValue('WC-INC');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket).toHaveBeenCalledTimes(1);
+    const patch = mocks.patchTicket.mock.calls[0]![1] as Record<string, unknown>;
+    expect(patch.relatedIncidentId).toBe('WC-INC');
+  });
+
+  it('紐付け済 bug は閲覧時に再発防止対象リンクを出し、クリックで select を emit する', async () => {
+    ticketsRef.value = [ticket({ id: 'WC-INC', type: 'incident', title: '本番 500 エラー' })];
+    const bug = ticket({ id: 'WC-BUG', type: 'bug', relatedIncidentId: 'WC-INC' });
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: bug } });
+    const link = wrapper.find('[data-testid="sheet-related-incident-link"]');
+    expect(link.exists()).toBe(true);
+    expect(link.text()).toContain('WC-INC');
+    await link.trigger('click');
+    expect(wrapper.emitted('select')).toEqual([['WC-INC']]);
+  });
+
+  it('bug 以外 (incident 欄) は表示しない', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1', type: 'task' }) } });
+    expect(wrapper.find('[data-testid="sheet-edit-related-incident"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="sheet-related-incident-link"]').exists()).toBe(false);
+  });
+});
