@@ -147,15 +147,26 @@ function listRefFor(section: SectionKey) {
 // 並べ替えは既にローカル配列へ反映済 → 移動先区画の全 id を新並び順でサーバへ送り密再採番する。
 // 旧「近傍 2 行の中点を 1 件 patch」は区画内に orderIndex 未設定/等値が在ると先頭ジャンプや
 // 元位置復帰を起こした (orderBetween + compareTicketOrder 規則2) ため、区画全体の再採番に統一。
-async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement }): Promise<void> {
+async function onDragEnd(evt: { item: HTMLElement; from: HTMLElement; to: HTMLElement; newIndex?: number }): Promise<void> {
   const id = evt.item?.getAttribute?.('data-ticket-id') ?? null;
   const fromSection = (evt.from?.getAttribute?.('data-section') ?? null) as SectionKey | null;
   const toSection = (evt.to?.getAttribute?.('data-section') ?? null) as SectionKey | null;
   if (!id || !toSection) { syncLists(); return; }
   const list = listRefFor(toSection).value;
-  if (!list.some((t) => t.id === id)) { syncLists(); return; }
+  let orderedIds = list.map((t) => t.id);
+  if (!orderedIds.includes(id)) {
+    // F-05 (2026-07-08): cross-section ドロップでは vue-draggable-plus のローカルミラー同期
+    // (移動先リストの onAdd → v-model 反映) が onEnd に間に合わないことがあり、旧ガード
+    // 「ミラーに居なければ syncLists() で握りつぶす」が無言 revert していた (CURRENT に既存
+    // チケットがいる 2 件目のドロップで発症)。区画跨ぎは evt.newIndex から移動先並びを再構成
+    // して確定する。同一区画で id 不在は純粋な不整合 evt なので従来どおり無視 (自リストの
+    // SortableJS は自分の v-model を必ず同期するため)。
+    if (fromSection === toSection) { syncLists(); return; }
+    const at = Math.min(Math.max(evt.newIndex ?? orderedIds.length, 0), orderedIds.length);
+    orderedIds = [...orderedIds.slice(0, at), id, ...orderedIds.slice(at)];
+  }
   const input: { orderedIds: string[]; movedId?: string; sprintId?: string | null } = {
-    orderedIds: list.map((t) => t.id),
+    orderedIds,
   };
   // 区画が変わったら movedId 1 件だけ sprintId を変更 (current=active / next=planned / backlog=null 解除)。
   if (fromSection !== toSection) {
