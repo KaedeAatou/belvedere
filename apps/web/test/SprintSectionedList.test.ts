@@ -569,6 +569,28 @@ describe('SprintSectionedList 分割の親Epic継承 (案A)', () => {
   });
 });
 
+// F-15: 儀式画面 (Refinement/Planning) の New issue は incident/bug しか作れないのが仕様だが、
+// 初見では「story が無い」理由が分からず詰まる。種別セレクタ付近の案内文 1 行の配線を固定する。
+describe('SprintSectionedList story 不可画面の案内文 (F-15)', () => {
+  it('story を作れない画面 (incident/bug のみ) では案内文が出る', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, allowedTypes: ['incident', 'bug'] as TicketType[], current: [], next: [], backlog: [] },
+    });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    const hint = wrapper.find('[data-testid=type-hint]');
+    expect(hint.exists()).toBe(true);
+    expect(hint.text()).toContain('story の起票は Backlog タブから');
+  });
+
+  it('story を作れる画面 (Backlog) では案内文を出さない', async () => {
+    const wrapper = await mountSuspended(SprintSectionedList, {
+      props: { ...baseProps, allowedTypes: ['story', 'task', 'bug'] as TicketType[], current: [], next: [], backlog: [] },
+    });
+    await wrapper.get('[data-testid=section-new-ticket-btn]').trigger('click');
+    expect(wrapper.find('[data-testid=type-hint]').exists()).toBe(false);
+  });
+});
+
 // ===== WC-517e029a: 区画の折り畳み + localStorage 保持 =====
 // 配線を固定する: ヘッダクリックで caret の open が反転し localStorage に保存される / 保存済みなら
 // 再マウントで復元 / New issue は @click.stop でトグルしない。物理的な見た目は review で目視。

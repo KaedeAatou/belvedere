@@ -727,6 +727,11 @@ async function submitSplit(): Promise<void> {
           <select id="ssl-new-type" v-model="newType" data-testid="new-ticket-type" class="select-input">
             <option v-for="tp in allowedTypes" :key="tp" :value="tp">{{ tp }}</option>
           </select>
+          <!-- F-15: 儀式画面は incident/bug のみ起票可 (仕様 / 上部コメント参照)。初見で
+               「story が無い」理由が分からず詰まるため、案内文 1 行を添える (挙動は変えない)。 -->
+          <p v-if="!allowedTypes.includes('story')" class="type-hint" data-testid="type-hint">
+            story の起票は Backlog タブから (PO が追加)
+          </p>
         </div>
 
         <!-- User Story: 誰が / 何をしたい / なぜ の 3 欄 + AI 品質チェック -->
@@ -1038,6 +1043,8 @@ async function submitSplit(): Promise<void> {
 .us-suggestion { margin: 8px 0 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 /* 親 Epic セレクタ補助文 (create / split 共通): 候補ゼロ or 継承不能時の案内 */
 .us-epic-empty { margin: 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
+/* 種別セレクタの案内文 (F-15): 儀式画面で story を起票できない理由を 1 行で示す */
+.type-hint { margin: 0; font-size: 12px; color: var(--ink-2); font-family: var(--sans); }
 /* 起票時の画像添付ボタン (WC-a8f0be16) */
 .img-upload-btn {
   display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
