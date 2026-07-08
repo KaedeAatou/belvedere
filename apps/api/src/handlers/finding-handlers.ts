@@ -29,12 +29,13 @@ export async function getFindings(
   if (!VALID_CEREMONIES.includes(ceremony)) {
     return { ok: false, status: 400, body: { error: 'invalid_ceremony', details: VALID_CEREMONIES } };
   }
-  const [tickets, sprints, estimations] = await Promise.all([
+  const [tickets, sprints, estimations, epics] = await Promise.all([
     repo.tickets.list({ workspaceId: ctx.workspaceId }),
     repo.sprints.list({ workspaceId: ctx.workspaceId }),
     repo.estimations.list({ workspaceId: ctx.workspaceId }),
+    repo.epics.list({ workspaceId: ctx.workspaceId }),
   ]);
-  const ruleCtx = buildRuleContext(new Date().toISOString(), tickets, sprints, estimations);
+  const ruleCtx = buildRuleContext(new Date().toISOString(), tickets, sprints, estimations, epics);
   const findings = runTicketRules(ceremony, ruleCtx);
   return { ok: true, status: 200, body: { ceremony, findingCount: findings.length, findings } };
 }

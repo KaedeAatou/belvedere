@@ -378,8 +378,8 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </div>
       </div>
 
-      <!-- 見積もりポーカー (story のみ / T7) -->
-      <EstimationPanel v-if="ticket.type === 'story'" :key="ticket.id" :ticket="ticket" />
+      <!-- 見積もりポーカー (story + bug / T7, F-20 で bug も見積もり対象に) -->
+      <EstimationPanel v-if="ticket.type === 'story' || ticket.type === 'bug'" :key="ticket.id" :ticket="ticket" />
 
       <div class="field">
         <div class="l">LABELS</div>

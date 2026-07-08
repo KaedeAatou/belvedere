@@ -16,6 +16,7 @@ import type {
   TicketType,
   Ritual,
   EstimationSession,
+  Epic,
 } from '@belvedere/shared';
 import { FIBONACCI_POINTS, averageVelocity } from '@belvedere/shared';
 
@@ -33,6 +34,8 @@ export interface RuleContext {
   ticketsById: Map<string, Ticket>;
   sprints: Sprint[];
   estimationSessions: EstimationSession[];
+  /** Epic 索引 (EPIC_RATIONALE_MISSING 用 / F-25 2026-07-08)。未注入の呼出側互換のため空 Map 許容。 */
+  epicsById: Map<string, Epic>;
 }
 
 export interface TicketRule {
@@ -133,6 +136,41 @@ export const ticketRules: TicketRule[] = [
       t && t.estimatePt == null
         ? [{ ruleId: 'STORY_SP_MISSING', ticketId: t.id, severity: 'warn', message: 'Story に Story Point がありません。見積もりポーカーで決めてください。', action: { kind: 'open-estimation', label: '見積もりセッションを開始' } }]
         : [],
+  },
+  {
+    // F-27 (2026-07-08): 粒度過大の診断は 6 観点 (detectOversizeStory) にしか無く、UI 品質ピルが
+    // 読む本ルール表に未配線で「SP13 の story にどのピルも出ない」が再現した。同じ閾値 (>8) で追加。
+    id: 'STORY_OVERSIZE',
+    appliesTo: ['story'],
+    ceremonies: ['refinement'],
+    check: (t) =>
+      t && t.estimatePt != null && t.estimatePt > 8
+        ? [{ ruleId: 'STORY_OVERSIZE', ticketId: t.id, severity: 'warn', message: `Story Point ${t.estimatePt} は粒度過大です (>8)。最小価値ストーリーへの分割を検討してください。`, action: { kind: 'edit-ticket', label: '分割を検討' } }]
+        : [],
+  },
+  {
+    // F-20 (2026-07-08): 設計 (design-ticket-types.md) では bug は見積もり対象 (estimatePt) なのに
+    // SP 未定ピル / ポーカー導線が story 限定だった。実装を設計に合わせる (incident は対象外のまま)。
+    id: 'BUG_SP_MISSING',
+    appliesTo: ['bug'],
+    ceremonies: ['refinement'],
+    check: (t) =>
+      t && t.estimatePt == null
+        ? [{ ruleId: 'BUG_SP_MISSING', ticketId: t.id, severity: 'warn', message: 'Bug に Story Point がありません。見積もりポーカーで決めてください。', action: { kind: 'open-estimation', label: '見積もりセッションを開始' } }]
+        : [],
+  },
+  {
+    // F-25/F-26 (2026-07-08): Epic.rationale (戦略意図/Why) の欠落が UI に一切出ず、配下チケットが
+    // 「何のために?」を見失う形骸化サインを人が拾えなかった。配下チケットの行ピルとして可視化する。
+    id: 'EPIC_RATIONALE_MISSING',
+    appliesTo: 'all',
+    ceremonies: ['refinement'],
+    check: (t, ctx) => {
+      if (!t || !t.epicId) return [];
+      const epic = ctx.epicsById.get(t.epicId);
+      if (!epic || epic.rationale?.trim()) return [];
+      return [{ ruleId: 'EPIC_RATIONALE_MISSING', ticketId: t.id, severity: 'warn', message: `親 Epic「${epic.name}」に戦略意図 (rationale / Why) が未設定です。配下チケットが目的を見失う形骸化サインです。Home の Epic 編集で記入してください。` }];
+    },
   },
   {
     id: 'STORY_STALL',
@@ -307,12 +345,13 @@ export function runTicketRules(ceremony: Ritual, ctx: RuleContext): TicketFindin
   return findings;
 }
 
-/** RuleContext を tickets / sprints / estimationSessions から組み立てるヘルパ */
+/** RuleContext を tickets / sprints / estimationSessions (+epics) から組み立てるヘルパ */
 export function buildRuleContext(
   now: string,
   tickets: Ticket[],
   sprints: Sprint[],
   estimationSessions: EstimationSession[],
+  epics: Epic[] = [],
 ): RuleContext {
   return {
     now,
@@ -320,5 +359,6 @@ export function buildRuleContext(
     ticketsById: new Map(tickets.map((t) => [t.id, t])),
     sprints,
     estimationSessions,
+    epicsById: new Map(epics.map((e) => [e.id, e])),
   };
 }

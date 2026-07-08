@@ -22,9 +22,9 @@ onMounted(() => { fetchFindings('refinement'); });
 const allTickets = computed(() => props.tickets);
 const { current, next, backlog } = useSprintSections(allTickets);
 
-// SP 未見積もりのストーリーか (ポーカー開始ボタンの表示条件)。
+// SP 未見積もりの story / bug か (ポーカー開始ボタンの表示条件)。bug も見積もり対象 (F-20 / 2026-07-08)。
 function needsPoker(t: Ticket): boolean {
-  return findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING');
+  return findingsFor(t.id).some((f) => f.ruleId === 'STORY_SP_MISSING' || f.ruleId === 'BUG_SP_MISSING');
 }
 
 // 区画跨ぎ d&d 移動 (sprintId 変更) は SprintSectionedList.onDragEnd → reorderTickets が直接担う
