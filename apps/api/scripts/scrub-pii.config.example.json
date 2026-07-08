@@ -1,0 +1,11 @@
+{
+  "_comment": "scrub-firestore-pii.ts の PII 置換セットのテンプレート。この example をコピーし、山括弧のプレースホルダを実値に置き換えてリポジトリ外 (既定 ~/.claude/belvedere-scrub-pii.config.json / または SCRUB_PII_CONFIG で指定) に保存する。実 PII を含む config は絶対にコミットしない (identifier-guard hook + .gitignore で二重防止)。",
+  "_format": "replacements は [from, to] 文字列ペアの配列。from は配列の先頭ほど先に適用されるため、メアド完全形 -> 裸ユーザー名 -> 実名 の順に並べて部分一致の取りこぼしを防ぐ。to は git 履歴スクラブ (filter-repo) と同一のサニタイズ済み値に揃える。",
+  "replacements": [
+    ["<個人メアド完全形>", "owner@example.com"],
+    ["<個人メアドのローカルパート / 旧ユーザー名>", "owner"],
+    ["<旧 userId>", "kaede"],
+    ["<実名 (漢字)>", "Kaede"],
+    ["<実名 (ローマ字)>", "Kaede"]
+  ]
+}
