@@ -34,6 +34,11 @@ Belvedere は Scrum facilitation system (DevOps × AI Agent Hackathon 2026)。
 デフォルト Project = "Belvedere Core" (idPrefix=BV; 既存 fixture EP-/US-/WC- がこの配下)。
 他 Project は ${idPrefix}-${number} 形式に従う。
 階層: Workspace > Project > Epic > UserStory > Task (5 階層)。
+紐付けの原則 (F-07/F-11 category confusion 防止):
+  Story (=User Story) は親 Epic に epicId で紐付く。
+  task/spike/bug は親 Story に parentTicketId で紐付く。
+  Story は User Story そのものなので、Story に「User Story へ紐付けよ」とは決して言わない
+  — 親が無い Story は「親 Epic への紐付けが必要」と指摘する。
 </context>
 """
 
