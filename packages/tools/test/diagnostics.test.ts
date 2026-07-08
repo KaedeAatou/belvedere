@@ -102,6 +102,18 @@ describe('checkBacklogRefinement (純粋関数 / 直接)', () => {
     expect(sig(edge, 'oversize_story', 'WC-2')).toBe(false);
   });
 
+  // F-35: 完了済 (done) チケットは 6 観点診断の対象外 (scanned にも数えない・ruleFindings にも出さない)。
+  it('done チケットは診断対象外: 6 観点・scanned・ruleFindings のいずれにも出ない (F-35)', () => {
+    const doneStory = ticket({ id: 'WC-1', type: 'story', status: 'done', estimatePt: 13 }); // 未完了なら oversize + valueImpact 等が立つ
+    const r = checkBacklogRefinement(input({ tickets: [doneStory] }));
+    expect(r.scanned).toBe(0);
+    expect(sig(r, 'oversize_story', 'WC-1')).toBe(false);
+    expect(r.ruleFindings.some((f) => f.ticketId === 'WC-1')).toBe(false);
+    // 対照: 同じチケットが todo なら 6 観点が発火する (除外は done 限定である証拠)
+    const active = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', type: 'story', status: 'todo', estimatePt: 13 })] }));
+    expect(sig(active, 'oversize_story', 'WC-1')).toBe(true);
+  });
+
   it('unstructured_dependency: blockedBy も US 親も無いと発火 / US 親があれば発火しない', () => {
     const bad = checkBacklogRefinement(input({ tickets: [ticket({ id: 'WC-1', valueImpact: 'high' })] }));
     expect(sig(bad, 'unstructured_dependency', 'WC-1')).toBe(true);

@@ -42,6 +42,13 @@ export interface TicketRule {
   id: string;
   appliesTo: TicketType[] | 'all' | 'aggregate';
   ceremonies: Ritual[];
+  /**
+   * status=done の完了済チケットにもこのルールを適用するか (既定 false / F-35 2026-07-08)。
+   * 完了済チケットに「SP を見積もれ」「DoD を書け」等を指摘するのは無意味かつ、旧スプリントを
+   * 今スプリントと取り違える AI 誤指摘の温床になるため、per-ticket ルールは既定で done を除外する。
+   * done を「要求」するルール (INCIDENT_NO_FOLLOWUP_BUG = 復旧済インシデントの追跡) だけ true。
+   */
+  includeDone?: boolean;
   check(t: Ticket | null, ctx: RuleContext): TicketFinding[];
 }
 
@@ -258,6 +265,7 @@ export const ticketRules: TicketRule[] = [
     id: 'INCIDENT_NO_FOLLOWUP_BUG',
     appliesTo: ['incident'],
     ceremonies: ['refinement'],
+    includeDone: true, // done の incident を対象にする唯一のルール (F-35 の done 除外から除く)
     check: (t, ctx) => {
       if (!t || t.status !== 'done') return [];
       const hasFollowup = ctx.tickets.some((b) => b.type === 'bug' && b.relatedIncidentId === t.id);
@@ -338,6 +346,8 @@ export function runTicketRules(ceremony: Ritual, ctx: RuleContext): TicketFindin
       continue;
     }
     for (const t of ctx.tickets) {
+      // F-35: 完了済 (done) チケットは per-ticket 診断の対象外 (includeDone のルールだけ通す)。
+      if (t.status === 'done' && !rule.includeDone) continue;
       const match = rule.appliesTo === 'all' || (t.type !== undefined && rule.appliesTo.includes(t.type));
       if (match) findings.push(...rule.check(t, ctx));
     }

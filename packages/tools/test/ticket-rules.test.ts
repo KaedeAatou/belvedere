@@ -305,3 +305,30 @@ describe('EPIC_RATIONALE_MISSING (F-25/F-26)', () => {
     expect(fired('refinement', ctx, 'EPIC_RATIONALE_MISSING', 'B')).toBe(false);
   });
 });
+
+// F-35 (2026-07-08 ドッグフード): 診断が status=done の完了済チケットを除外せず、
+// 「完了済チケットに Story Point を見積もってください」等を旧スプリントの done チケットに
+// 対して指摘していた (AI が旧スプリントを今スプリントと取り違える誤指摘の温床)。
+// per-ticket ルールは done をスキップ。ただし done を「要求」する INCIDENT_NO_FOLLOWUP_BUG
+// (includeDone) だけは従来どおり発火する。
+describe('done チケット除外 (F-35)', () => {
+  it('done の story には STORY_SP_MISSING を発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', status: 'done' })]), 'STORY_SP_MISSING', 'A')).toBe(false);
+  });
+  it('done の story には STORY_DOD_MISSING を発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', status: 'done' })]), 'STORY_DOD_MISSING', 'A')).toBe(false);
+  });
+  it('done の story には STORY_OVERSIZE (SP>8) を発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', status: 'done', estimatePt: 13 })]), 'STORY_OVERSIZE', 'A')).toBe(false);
+  });
+  it('done の bug には BUG_SP_MISSING を発火しない', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'bug', status: 'done', reproSteps: '手順', regressionNote: 'ok' })]), 'BUG_SP_MISSING', 'A')).toBe(false);
+  });
+  it('todo の story には従来どおり STORY_SP_MISSING が発火する (除外は done 限定)', () => {
+    expect(fired('refinement', ctxOf([ticket({ id: 'A', type: 'story', status: 'todo' })]), 'STORY_SP_MISSING', 'A')).toBe(true);
+  });
+  it('done を要求する INCIDENT_NO_FOLLOWUP_BUG (includeDone) は done でも発火する', () => {
+    const ctx = ctxOf([ticket({ id: 'INC', type: 'incident', status: 'done' })]);
+    expect(fired('refinement', ctx, 'INCIDENT_NO_FOLLOWUP_BUG', 'INC')).toBe(true);
+  });
+});
