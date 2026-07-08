@@ -533,7 +533,6 @@ interface StoryDraft {
   asA: string;
   iWant: string;
   soThat: string;
-  title: string;
   goal: string;
 }
 
@@ -548,13 +547,14 @@ function isStoryQualityRequest(req: LLMRequest): boolean {
 
 // user message に handler が埋め込むラベル付き draft をパースする。
 // 形式 (story-quality-handlers.ts と契約): 各行 `asA: ...` / `iWant: ...` / `soThat: ...` /
-// `title: ...` / `sprintGoal: ...`。欠落フィールドは空文字に倒す。
+// `sprintGoal: ...`。欠落フィールドは空文字に倒す。
+// (title は F-13 で診断入力から除外した — LLM が存在しない「タイトル欄」に言及するのを防ぐため。)
 function parseStoryDraft(req: LLMRequest): StoryDraft {
   const userMsg = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
   const pick = (label: string): string => {
     // 行頭の `<label>:` を拾う (大文字小文字無視)。値は同一行の行末まで。
     // コロンの後は horizontal whitespace のみ許可 ([^\S\n])。`\s*` だと改行も食って
-    // soThat が空のとき次の `title:` 行を誤って値に取り込むため (回帰防止)。
+    // soThat が空のとき次の行を誤って値に取り込むため (回帰防止)。
     const re = new RegExp(`^[^\\S\\n]*${label}[^\\S\\n]*:[^\\S\\n]*(.*)$`, 'im');
     const m = userMsg.match(re);
     return (m?.[1] ?? '').trim();
@@ -563,7 +563,6 @@ function parseStoryDraft(req: LLMRequest): StoryDraft {
     asA: pick('asA'),
     iWant: pick('iWant'),
     soThat: pick('soThat'),
-    title: pick('title'),
     goal: pick('sprintGoal'),
   };
 }
@@ -638,7 +637,7 @@ function composeStoryQuality(req: LLMRequest): StoryQualityVerdict {
   // --- (b) goal_fit 観点 ---
   if (draft.goal.length > 0) {
     const goalTokens = tokenize(draft.goal);
-    const draftTokens = tokenize(`${draft.title} ${draft.asA} ${draft.iWant} ${draft.soThat}`);
+    const draftTokens = tokenize(`${draft.asA} ${draft.iWant} ${draft.soThat}`);
     let overlap = 0;
     for (const t of goalTokens) {
       if (draftTokens.has(t)) overlap += 1;

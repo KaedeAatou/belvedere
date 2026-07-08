@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createMemoryRepoContainer, type RepoContainer } from '@belvedere/repo';
-import { MockLLMProvider } from '@belvedere/llm';
+import { MockLLMProvider, type LLMProvider, type LLMRequest } from '@belvedere/llm';
 import { checkStoryQuality } from '../src/handlers/story-quality-handlers';
 
 const CTX = { workspaceId: 'ws-belvedere', user: { userId: 'u', email: 'u@example.com' } };
@@ -92,5 +92,28 @@ describe('checkStoryQuality', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.status).toBe(400);
+  });
+
+  // F-13: LLM が存在しない「タイトル欄」に言及する誤りの根治。title は body として受けても
+  // LLM への user message には一切載せない (診断は asA/iWant/soThat の 3 欄のみ)。
+  it('(5) title を body で受けても LLM への入力には渡さない (F-13)', async () => {
+    let captured: LLMRequest | null = null;
+    const capturing: LLMProvider = {
+      name: 'capturing',
+      generate: async (req) => {
+        captured = req;
+        return llm.generate(req);
+      },
+    };
+    await checkStoryQuality(repo, capturing, CTX, {
+      asA: '開発チームのレビュアー',
+      iWant: 'PR 一覧でレビュー待ち時間を把握したい',
+      soThat: 'レビュー滞留を早期に発見できる',
+      title: 'ゼッタイニ渡ってはいけないタイトル文字列',
+    });
+    expect(captured).not.toBeNull();
+    const userMsg = captured!.messages.find((m) => m.role === 'user')?.content ?? '';
+    expect(userMsg).not.toContain('ゼッタイニ渡ってはいけないタイトル文字列');
+    expect(userMsg.toLowerCase()).not.toContain('title');
   });
 });
