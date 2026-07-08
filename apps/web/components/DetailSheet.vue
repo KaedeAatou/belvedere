@@ -145,9 +145,13 @@ async function saveEdit(): Promise<void> {
     patch.reproSteps = editReproSteps.value.trim();
     patch.regressionNote = editRegressionNote.value.trim();
   }
-  // sprintId: API は null/空での解除をサポートしないため、選択がある場合のみ送信する。
-  // 「バックログ (なし)」選択肢は提供しない (解除不可のため)。
-  if (editSprintId.value) patch.sprintId = editSprintId.value;
+  // sprint (F-19): 変更時のみ送る。'' = 「未割当 (Backlog へ戻す)」で sprintId: null を送り解除する
+  // (API は TicketPatchBodySchema で null 解除に対応済。status との整合はサーバの
+  //  reconcileSprintStatus が担保する)。未割当のまま保存は null を無駄打ちしない。
+  const origSprintId = props.ticket.sprintId ?? '';
+  if (editSprintId.value !== origSprintId) {
+    patch.sprintId = editSprintId.value === '' ? null : editSprintId.value;
+  }
   const updated = await patchTicket(props.ticket.id, patch);
   saving.value = false;
   if (updated) {
@@ -296,10 +300,10 @@ onUnmounted(() => { if (deleteTimer) clearTimeout(deleteTimer); });
         </div>
         <div class="edit-field">
           <label class="l">SPRINT</label>
-          <!-- sprintId 解除は API 非対応 (z.string() のみ / null 不可) のため「なし」選択肢は出さない。
-               未割当チケットは空値のまま → 保存時に sprintId を送らず現状維持。 -->
+          <!-- F-19: 「未割当 (Backlog へ戻す)」を常に出す。選択して保存すると sprintId: null で解除
+               (API は TicketPatchBodySchema の z.string().nullable() で対応済)。 -->
           <select v-model="editSprintId" class="edit-input" data-testid="sheet-edit-sprint">
-            <option v-if="!ticket.sprintId" value="">（未割当）</option>
+            <option value="">未割当 (Backlog へ戻す)</option>
             <option v-for="s in sprintOptions" :key="s.id" :value="s.id">
               {{ sprintLabel(s, s.status === 'completed' ? '完了' : '', `Sprint ${s.number}`) }}
             </option>
