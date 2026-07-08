@@ -94,18 +94,25 @@ watch([notes, () => activeSprint.value?.number], syncColNotes, { deep: true });
 const stackMirror = ref<RetroTry[]>([]);
 watch(stack, () => { stackMirror.value = [...stack.value]; }, { immediate: true, deep: true });
 
+// Try ノートを積み上げ (RetroTry) に昇格する中核。ボタン (主導線 / F-14) と d&d の両方から呼ぶ。
+// 冪等性: 同一 text が既に積み上げにあれば無視 (二重追加防止)。
+async function promoteToStack(note: RetroNote): Promise<void> {
+  if (inStack(note.text)) return;
+  await createTry({
+    text: note.text,
+    sprintNumber: activeSprint.value?.number ?? 0,
+    ...(activeSprint.value && { sprintId: activeSprint.value.id }),
+  });
+}
+
 // 積み上げに clone がドロップされた時。clone は破棄して実データ(stack)で描画し直し、createTry を 1 回呼ぶ。
 async function onStackAdd(evt: { item: HTMLElement }): Promise<void> {
   const noteId = evt.item?.getAttribute?.('data-note-id') ?? null;
   // SortableJS が stackMirror に挿入した clone を即破棄 (実体は createTry → fetchTries で来る)。
   stackMirror.value = [...stack.value];
   const note = notes.value.find((n) => n.id === noteId);
-  if (!note || inStack(note.text)) return; // 冪等性: 同一 text が既に積み上げにあれば無視
-  await createTry({
-    text: note.text,
-    sprintNumber: activeSprint.value?.number ?? 0,
-    ...(activeSprint.value && { sprintId: activeSprint.value.id }),
-  });
+  if (!note) return;
+  await promoteToStack(note);
 }
 </script>
 
@@ -136,7 +143,17 @@ async function onStackAdd(evt: { item: HTMLElement }): Promise<void> {
               <div class="meta">
                 <Avatar :user="n.authorId" />
                 <span>{{ memberName(n.authorId) }}</span>
-                <span v-if="c.key === 'try'" class="drag-hint retro-drag-grab" style="touch-action: none; user-select: none"><Icon name="branch" :size="11" /> 積み上げへ</span>
+                <span v-if="c.key === 'try'" class="drag-hint retro-drag-grab" style="touch-action: none; user-select: none" title="ドラッグで積み上げへ"><Icon name="branch" :size="11" /></span>
+                <!-- F-14: 主導線はボタン (d&d は上の grab ハンドルで残す)。積み上げ済みは冪等スキップ + disabled。 -->
+                <button
+                  v-if="c.key === 'try'"
+                  class="stack-add"
+                  data-testid="retro-stack-add"
+                  :disabled="inStack(n.text)"
+                  :title="inStack(n.text) ? '積み上げ済み' : '積み上げ (Action items) へ追加'"
+                  @click="promoteToStack(n)">
+                  {{ inStack(n.text) ? '積み上げ済み' : '積み上げへ追加' }}
+                </button>
                 <button
                   data-testid="retro-vote"
                   :class="['vote', hasVoted(n) && 'hot']"
@@ -179,7 +196,7 @@ async function onStackAdd(evt: { item: HTMLElement }): Promise<void> {
     <div class="retro-stack" data-testid="retro-stack">
       <div class="stack-head">
         <h3>Action items <span class="carry">— carry-forward 積み上げ</span></h3>
-        <p>Try ノートを <b>ドラッグ</b>して積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
+        <p>Try ノートの<b>「積み上げへ追加」</b> (またはドラッグ) で積み上げると、スプリントを跨いで蓄積され各儀式 AI のコンテキストになります。</p>
       </div>
       <VueDraggable v-model="stackMirror" :group="STACK_GROUP" :sort="false" :animation="150"
                     class="stack-list" @add="onStackAdd">
@@ -195,8 +212,33 @@ async function onStackAdd(evt: { item: HTMLElement }): Promise<void> {
         </div>
       </VueDraggable>
       <div v-if="stackMirror.length === 0" class="stack-empty">
-        Try ノートをここにドラッグして積み上げを開始
+        Try ノートの「積み上げへ追加」(またはここへドラッグ) で積み上げを開始
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+/* F-14: Try ノート→積み上げの主導線ボタン (d&d の drag-hint は残置)。 */
+.stack-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: var(--hairline) solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.stack-add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.stack-add:disabled {
+  border-color: var(--line-1);
+  color: var(--ink-3);
+  cursor: default;
+}
+</style>
