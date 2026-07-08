@@ -314,7 +314,7 @@ onMounted(() => {
 
       <!-- PLANNED / VELOCITY — CURRENT (active sprint) の積み上げ SP vs velocity 実績 -->
       <div class="vel-inline">
-        <span class="t-cap" title="Velocity = 直近スプリントで完了した Story Point の実績平均。計画 SP がこれを超えると過剰計画のサイン">PLANNED / VELOCITY</span>
+        <span class="t-cap" title="Velocity = 全完了スプリントの velocity 実績の平均 (四捨五入)。計画 SP がこれを超えると過剰計画のサイン">PLANNED / VELOCITY</span>
         <span class="nums">
           <span style="color: var(--accent)">{{ totalSP }}</span>
           <span class="div">/</span>
