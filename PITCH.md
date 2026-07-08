@@ -177,7 +177,7 @@ Jira を使うチームで広く起きる「なんちゃってアジャイル」
 
 ### ストーリー③ 特徴 ── つくる・まわす・とどける
 - **つくる (自律的 AI エージェント)**: Orchestrator + Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを **単一窓口で協議編成**。画面操作を受けて Orchestrator が必要なエージェントを `agent.invoke` で招集・統括する (子には invoke を渡さず**深さ1を構造保証** + コストキャップ)。本番の編成は自前 TS runAgent、**Refinement は ADK (google-adk) エージェントに A2A で委譲**もできる (Strangler Fig / 不達時は自動 fallback)。各エージェントはチケット種別ルールエンジン (17 観点) を共有し、DoD/US/SP/停滞/戦略整合性 (Epic.rationale 欠落) を査読。**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の協議編成。
-- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で全テストをゲートしながら本番へ (prod は **dev E2E を通過したテスト済み SHA だけを昇格**する promotion by tested SHA + 承認ゲート)。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Firestore Vector RAG で意味検索 / Elastic にも env 1 つで切替可)。プロンプト改善は **agent eval (golden) を CI ゲート**にして後退を防ぐ (実装済)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード。
+- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で全テストをゲートしながら本番へ (prod は **dev E2E を通過したテスト済み SHA だけを昇格**する promotion by tested SHA + 承認ゲート)。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Firestore Vector RAG で意味検索 / Elastic にも env 1 つで切替可)。プロンプト改善は **agent eval (golden) を CI ゲート**にして後退を防ぐ (実装済)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード — 別プロジェクト (家計簿アプリ) のスクラム運営を Belvedere で 6 スプリント分回し、実操作で 36 件のバグ/UX/AI品質フィードバックを検出し 34 件 (94%) を修正・実機確認した。
 - **とどける (本番品質を Cloud Run で)**: フロント (Nuxt 3 SSR) と API (Hono) を Cloud Run に、Firestore + Firebase Auth + マルチテナント (Workspace) で本番稼働。儀式ごとに専用画面 (Jira の 1 ボードに対し Backlog + 5 儀式の 6 画面) で形骸化を可視化。
 
 ### 提出フォーム (Google Form) 必須 3 URL
