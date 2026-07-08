@@ -53,8 +53,8 @@ const smart = computed(() =>
     ? smartVerdict.value.criteria.map((c) => ({ letter: c.letter, name: c.name, ok: c.ok, note: c.note, evaluated: true }))
     : SMART_GUIDE.map((g) => ({ ...g, ok: null as boolean | null, evaluated: false })),
 );
-// Planning コンパクト化: SMART 分析はデフォルト折りたたみ、ヘッダクリックで展開 (チケットリストを主役にする)。
-const smartCollapsed = ref(true);
+// SMART 分析はデフォルト展開 (デモで AI 評価を主役にする / 2026-07-08)。ヘッダクリックで折りたたみ可。
+const smartCollapsed = ref(false);
 
 // 自動評価 (WC-14 / A 案): Goal が変わった時だけ実評価し、開いた時は前回結果 (キャッシュ) を表示する。
 // SMART 評価は実 Gemini 呼び出しなので無駄打ちを避ける。チケット追加で SP を見直したい時等は手動「再評価」で。
