@@ -12,6 +12,9 @@ const { memberName } = useMembers();
 const est = useEstimation();
 // F-09: adopt は Ticket.estimatePt を書き換えるため、共有 tickets state の再取得に使う。
 const { fetchTickets } = useTickets();
+// F-09 残渣: adopt は useTickets の mutation 群 (findings invalidation の単一ソース) を通らない
+// 独立経路のため、findings を明示的に再取得しないと「SP未定 / 分割候補」ピルがリロードまで残る。
+const { refresh: refreshFindings } = useFindings();
 
 type EstimationView = Awaited<ReturnType<typeof est.fetch>>;
 const session = ref<EstimationView>(null);
@@ -56,7 +59,11 @@ async function adopt(v: number) {
   session.value = next;
   // F-09: ローカル session の差し替えだけでは、一覧行・区画集計・AI パネルが読む
   // 共有 useTickets().tickets が古い estimatePt のまま残る。成功時は再取得して即反映する。
-  if (next) await fetchTickets();
+  // findings も再取得しないと SP未定 / 分割候補ピルがリロードまで stale のまま残る (F-09 残渣)。
+  if (next) {
+    await fetchTickets();
+    void refreshFindings();
+  }
 }
 
 onMounted(async () => {

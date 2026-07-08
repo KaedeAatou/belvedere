@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => {
   // 権限切替用の me (canFacilitate=admin/sm / canAdopt=admin/sm/dev)。テストごとに差し替える。
   const me = { value: { role: 'sm' } as null | { role: string } };
   const fetchTickets = vi.fn(() => Promise.resolve());
+  // F-09 残渣: adopt は SP を書き換え → 「SP未定」「分割候補」等の finding も変わるので findings も再取得する。
+  const refreshFindings = vi.fn(() => Promise.resolve());
   // useEstimation の 5 endpoint スパイ。各テストが状態 (revealed / adopted) を差し込む。
   const estFetch = vi.fn<() => Promise<EstimationView | null>>(() => Promise.resolve(null));
   const start = vi.fn<() => Promise<EstimationView | null>>(() =>
@@ -28,12 +30,13 @@ const mocks = vi.hoisted(() => {
   const reveal = vi.fn<() => Promise<EstimationView | null>>(() => Promise.resolve(null));
   const adopt = vi.fn<() => Promise<EstimationView | null>>(() =>
     Promise.resolve({ status: 'adopted', votes: [{ userId: 'u1', value: 5 }], adoptedValue: 5 }));
-  return { me, fetchTickets, estFetch, start, vote, reveal, adopt };
+  return { me, fetchTickets, refreshFindings, estFetch, start, vote, reveal, adopt };
 });
 
 mockNuxtImport('useMe', () => () => ({ me: mocks.me }));
 mockNuxtImport('useMembers', () => () => ({ memberName: (id: string) => id }));
 mockNuxtImport('useTickets', () => () => ({ fetchTickets: mocks.fetchTickets }));
+mockNuxtImport('useFindings', () => () => ({ refresh: mocks.refreshFindings }));
 mockNuxtImport('useEstimation', () => () => ({
   error: { value: null },
   fetch: mocks.estFetch,
@@ -68,6 +71,7 @@ const adoptedView: EstimationView = {
 beforeEach(() => {
   mocks.me.value = { role: 'sm' };
   mocks.fetchTickets.mockClear();
+  mocks.refreshFindings.mockClear();
   mocks.estFetch.mockReset().mockResolvedValue(null);
   mocks.start.mockClear().mockResolvedValue({ status: 'voting', myVote: null, votedUserIds: [], voteCount: 0 });
   mocks.adopt.mockClear().mockResolvedValue(adoptedView);
@@ -82,10 +86,12 @@ describe('F-09: SP 採用 → 共有 tickets state の再取得', () => {
     await flushPromises();
     expect(mocks.adopt).toHaveBeenCalledWith('WC-101', 5);
     expect(mocks.fetchTickets).toHaveBeenCalledTimes(1);
+    // F-09 残渣: 診断ピル (SP未定 / 分割候補) もリロード無しで消えるよう findings も再取得する。
+    expect(mocks.refreshFindings).toHaveBeenCalledTimes(1);
     wrapper.unmount(); // 5s ポーリングの後片付け
   });
 
-  it('adopt 失敗 (null) では fetchTickets を呼ばない (無駄な再取得をしない)', async () => {
+  it('adopt 失敗 (null) では fetchTickets / findings 再取得を呼ばない (無駄な再取得をしない)', async () => {
     mocks.estFetch.mockResolvedValue(revealedView);
     mocks.adopt.mockResolvedValue(null);
     const wrapper = await mountSuspended(EstimationPanel, { props: { ticket } });
@@ -93,6 +99,7 @@ describe('F-09: SP 採用 → 共有 tickets state の再取得', () => {
     await wrapper.find('[data-testid="est-adopt-5"]').trigger('click');
     await flushPromises();
     expect(mocks.fetchTickets).not.toHaveBeenCalled();
+    expect(mocks.refreshFindings).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
