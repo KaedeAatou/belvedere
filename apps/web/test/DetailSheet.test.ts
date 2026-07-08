@@ -4,7 +4,7 @@
 // (saving フラグ) / patchTicket への patch 組み立て。見た目 CSS は対象外。
 // EstimationPanel は story 種別のみ描画されるため、ここでは type=task のチケットで mount する。
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { flushPromises } from '@vue/test-utils';
 import { mountSuspended, mockNuxtImport } from '@nuxt/test-utils/runtime';
 import { ref } from 'vue';
@@ -56,8 +56,10 @@ mockNuxtImport('useEpics', () => () => ({
   error: ref(null),
 }));
 // useSprints は ref を返すため factory (遅延実行) 内で ref を使う (vi.hoisted 内は TDZ で不可)。
+// F-19: sprint セレクタのテスト用にモジュールレベル ref で差し替え可能にする (既定は空)。
+const sprintsRef = ref<Sprint[]>([]);
 mockNuxtImport('useSprints', () => () => ({
-  sprints: ref([]),
+  sprints: sprintsRef,
   sprintLabel: (s: { name?: string } | null, suffix = '', fb = '') =>
     (s?.name?.trim() ? (suffix ? `${s.name.trim()} (${suffix})` : s.name.trim()) : fb),
 }));
@@ -213,6 +215,67 @@ describe('sprintOptionsForEdit — 編集セレクトの候補 (WC-35)', () => {
 
   it('退化: 空配列 → 空', () => {
     expect(sprintOptionsForEdit([], 'x')).toEqual([]);
+  });
+});
+
+// F-19: 編集モードの SPRINT ドロップダウンに「未割当 (Backlog へ戻す)」が無く、詳細シートから
+// スプリント割当を解除できなかった (API は sprintId: null で解除対応済 / TicketPatchBodySchema)。
+describe('DetailSheet SPRINT 未割当 (Backlog へ戻す) (F-19)', () => {
+  const sp = (id: string, status: Sprint['status']): Sprint => ({
+    id, workspaceId: 'ws', number: 1, startsAt: '', endsAt: '', goal: '', capacity: 0, status,
+  });
+  beforeEach(() => { sprintsRef.value = [sp('s-a', 'active'), sp('s-p', 'planned')]; });
+  afterEach(() => { sprintsRef.value = []; }); // 後続 describe へ漏らさない
+
+  it('編集セレクタに「未割当 (Backlog へ戻す)」の選択肢が常に出る (割当済チケットでも)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', sprintId: 's-a' }) },
+    });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    const options = wrapper.find('[data-testid="sheet-edit-sprint"]').findAll('option');
+    const unassign = options.find((o) => o.text().includes('未割当'));
+    expect(unassign).toBeDefined();
+    expect(unassign!.attributes('value')).toBe('');
+  });
+
+  it('割当済チケットで「未割当」を選んで保存 → patch.sprintId = null (解除)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', sprintId: 's-a' }) },
+    });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="sheet-edit-sprint"]').setValue('');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.patchTicket.mock.calls[0]![1]).toMatchObject({ sprintId: null });
+  });
+
+  it('sprint 未変更なら patch に sprintId を載せない (変更時のみ送る)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, {
+      props: { ticket: ticket({ id: 'WC-1', sprintId: 's-a' }) },
+    });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket).toHaveBeenCalledTimes(1);
+    expect(mocks.patchTicket.mock.calls[0]![1]).not.toHaveProperty('sprintId');
+  });
+
+  it('未割当チケットにスプリントを選んで保存 → patch.sprintId にその id (string)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="sheet-edit-sprint"]').setValue('s-p');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket.mock.calls[0]![1]).toMatchObject({ sprintId: 's-p' });
+  });
+
+  it('未割当チケットで「未割当」のまま保存 → sprintId を送らない (null を無駄打ちしない)', async () => {
+    const wrapper = await mountSuspended(DetailSheet, { props: { ticket: ticket({ id: 'WC-1' }) } });
+    await wrapper.find('[data-testid="edit-ticket"]').trigger('click');
+    await wrapper.find('[data-testid="save-ticket"]').trigger('click');
+    await flushPromises();
+    expect(mocks.patchTicket.mock.calls[0]![1]).not.toHaveProperty('sprintId');
   });
 });
 
