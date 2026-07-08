@@ -10,6 +10,8 @@ const props = defineProps<{ ticket: Ticket }>();
 const { me } = useMe();
 const { memberName } = useMembers();
 const est = useEstimation();
+// F-09: adopt は Ticket.estimatePt を書き換えるため、共有 tickets state の再取得に使う。
+const { fetchTickets } = useTickets();
 
 type EstimationView = Awaited<ReturnType<typeof est.fetch>>;
 const session = ref<EstimationView>(null);
@@ -49,7 +51,13 @@ async function refresh() { session.value = await est.fetch(props.ticket.id); }
 async function start() { session.value = await est.start(props.ticket.id); }
 async function vote(v: EstimationValue) { session.value = await est.vote(props.ticket.id, v); }
 async function reveal() { session.value = await est.reveal(props.ticket.id); }
-async function adopt(v: number) { session.value = await est.adopt(props.ticket.id, v); }
+async function adopt(v: number) {
+  const next = await est.adopt(props.ticket.id, v);
+  session.value = next;
+  // F-09: ローカル session の差し替えだけでは、一覧行・区画集計・AI パネルが読む
+  // 共有 useTickets().tickets が古い estimatePt のまま残る。成功時は再取得して即反映する。
+  if (next) await fetchTickets();
+}
 
 onMounted(async () => {
   // Refinement の「ポーカー開始」合図 (T9) があれば即 start、無ければ現状取得
@@ -102,6 +110,9 @@ onUnmounted(() => { if (timer) clearInterval(timer); });
     <!-- adopted -->
     <div v-else-if="resultView && resultView.status === 'adopted'" class="est-block">
       <div class="est-adopted">SP <b>{{ resultView.adoptedValue }}</b> 採用済</div>
+      <!-- F-28: 採用後も再見積もりできる導線 (API は adopted 後の再 start を許可済)。
+           SP の直接編集は設けない (SP はポーカー維持の既決事項)。 -->
+      <button v-if="canFacilitate" class="est-secondary" data-testid="est-repoker" @click="start">再ポーカー</button>
     </div>
 
     <!-- revealed / discarded -->
