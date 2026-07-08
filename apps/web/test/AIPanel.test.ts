@@ -46,6 +46,16 @@ describe('buildChecks アクション配線 (WC-f17989df)', () => {
     expect(a?.prompt).toMatch(/滞留/);
   });
 
+  // F-12 (2026-07-08): retro の旧ラベル「アクションに追加」はチャットに提案を出すだけで
+  // KPT 列には何も追加しない (ラベル詐欺) だった。実態 (kind:'prompt' = 議論候補の提示) に
+  // 合わせたラベルであることを固定する。KPT への自動追加は L2 自律性の設計判断が絡むため未実装。
+  it('retro のアクションは「議論候補を出す」ラベルの prompt (F-12: 「アクションに追加」はラベル詐欺)', () => {
+    const a = buildChecks('retro', [])[0]?.actions?.[0];
+    expect(a?.label).toBe('議論候補を出す');
+    expect(a?.kind).toBe('prompt');
+    expect(a?.prompt).toMatch(/Keep \/ Problem \/ Try/);
+  });
+
   it('AI 系画面のアクションは全て prompt か navigate で kind が付く (未配線ゼロ)', () => {
     for (const screen of ['backlog', 'planning', 'daily', 'refinement', 'review', 'retro'] as const) {
       for (const c of buildChecks(screen, [])) {
