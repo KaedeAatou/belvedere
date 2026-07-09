@@ -146,6 +146,26 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(res.status).toBe(400);
   });
 
+  // security review MEDIUM (2026-07-09): prompt/context/history に上限が無くコスト暴走が可能だった。
+  it('④b 巨大 prompt は 400 input_too_large で弾く (コスト暴走防止)', async () => {
+    const { app } = makeApp();
+    const res = await app.fetch(
+      req('/api/agents/planner', { token: TOKEN, method: 'POST', body: { prompt: 'あ'.repeat(8_001) } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error?: string }).error).toBe('input_too_large');
+  });
+
+  it('④c history の件数超過も 400 input_too_large', async () => {
+    const { app } = makeApp();
+    const history = Array.from({ length: 41 }, () => ({ role: 'user' as const, content: 'x' }));
+    const res = await app.fetch(
+      req('/api/agents/planner', { token: TOKEN, method: 'POST', body: { prompt: 'ok', history } }),
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error?: string }).error).toBe('input_too_large');
+  });
+
   it('⑤ orchestrator は childRuns 付き (agent.invoke で儀式 agent を招集)', async () => {
     const { app } = makeApp();
     const res = await app.fetch(

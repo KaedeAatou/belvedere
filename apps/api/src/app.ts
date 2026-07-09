@@ -93,6 +93,41 @@ const VALID_AGENTS: ReadonlyArray<AgentName> = [
 // Mock LLM は costUsd=0 (packages/llm/src/mock.ts) なので CI/デモでは発火しない = 無害。
 const AGENT_INVOKE_COST_CAP_USD = 1.0;
 
+// エージェント入力の上限 (security review MEDIUM / 2026-07-09)。/api/agents は認証済みなら
+// 誰でも叩けるが prompt/context/history に長さ制限が無く、巨大入力で実 Gemini のトークン費用を
+// 押し上げられた (コスト暴走)。クライアント (AI パネル) の現実的なサイズを大きく超える所で弾く。
+const AGENT_MAX_PROMPT = 8_000;
+const AGENT_MAX_CONTEXT = 16_000;
+const AGENT_MAX_HISTORY_ENTRIES = 40;
+const AGENT_MAX_HISTORY_TOTAL = 40_000;
+
+type AgentInputBody = {
+  prompt?: string;
+  context?: string;
+  history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationId?: string;
+};
+
+/** エージェント入力のサイズ超過を検出する純粋関数。問題なければ null、あれば 400 用エラー文字列。 */
+function validateAgentInput(body: AgentInputBody): string | null {
+  if (typeof body.prompt === 'string' && body.prompt.length > AGENT_MAX_PROMPT) {
+    return `prompt が長すぎます (${body.prompt.length} > ${AGENT_MAX_PROMPT})`;
+  }
+  if (typeof body.context === 'string' && body.context.length > AGENT_MAX_CONTEXT) {
+    return `context が長すぎます (${body.context.length} > ${AGENT_MAX_CONTEXT})`;
+  }
+  if (Array.isArray(body.history)) {
+    if (body.history.length > AGENT_MAX_HISTORY_ENTRIES) {
+      return `history の件数が多すぎます (${body.history.length} > ${AGENT_MAX_HISTORY_ENTRIES})`;
+    }
+    const total = body.history.reduce((n, h) => n + (typeof h?.content === 'string' ? h.content.length : 0), 0);
+    if (total > AGENT_MAX_HISTORY_TOTAL) {
+      return `history の合計文字数が多すぎます (${total} > ${AGENT_MAX_HISTORY_TOTAL})`;
+    }
+  }
+  return null;
+}
+
 function buildCtx(c: Context): HandlerContext {
   return {
     workspaceId: c.get('workspaceId'),
@@ -573,6 +608,8 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         conversationId?: string;
       }>()
       .catch(() => ({}));
+    const inputErr = validateAgentInput(body);
+    if (inputErr) return c.json({ error: 'input_too_large', message: inputErr }, 400);
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
     // Refinement を ADK + A2A ピアへ委譲する flag ルート (既定 OFF / 自前くるくるは本体のまま)。
@@ -612,6 +649,8 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         conversationId?: string;
       }>()
       .catch(() => ({}));
+    const inputErr = validateAgentInput(body);
+    if (inputErr) return c.json({ error: 'input_too_large', message: inputErr }, 400);
     const prompt = body.prompt ?? `Sprint 13 の${name}実行をお願いします。`;
 
     return streamSSE(c, async (stream) => {
