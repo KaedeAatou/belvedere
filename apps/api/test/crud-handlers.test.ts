@@ -128,6 +128,18 @@ describe('createTicket', () => {
     expect(res.status).toBe(400);
   });
 
+  // security review LOW (2026-07-09): 肥大ペイロード DoS 防止の文字列/配列長上限。
+  it('異常系: 上限超えの title (>200) / labels 件数 (>30) → 400 invalid_body', async () => {
+    const longTitle = await createTicket(repo, CTX, { title: 'あ'.repeat(201) });
+    expect(longTitle.ok).toBe(false);
+    if (!longTitle.ok) expect(longTitle.status).toBe(400);
+    const manyLabels = await createTicket(repo, CTX, {
+      title: 'ok', labels: Array.from({ length: 31 }, (_, i) => `l${i}`),
+    });
+    expect(manyLabels.ok).toBe(false);
+    if (!manyLabels.ok) expect(manyLabels.status).toBe(400);
+  });
+
   it('セキュリティ: body に workspaceId を入れても ctx の WS が採用される (なりすまし防止)', async () => {
     const res = await createTicket(repo, CTX, {
       title: 'spoof attempt',

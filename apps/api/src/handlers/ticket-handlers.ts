@@ -43,37 +43,39 @@ export type HandlerResult<T = unknown> =
 // ------- リクエスト body schema -------
 
 // POST /api/tickets body — 必須: title。残りはオプション (workspaceId は body に置かない)。
+// 文字列/配列の上限 (security review LOW / 2026-07-09): 肥大ペイロードによる storage/帯域 DoS 防止。
+// seed の実データを大きく上回る寛容な値。PATCH は .partial() 派生で自動的にこの上限を継承する。
 export const TicketCreateBodySchema = z.object({
-  title: z.string().min(1, 'title is required'),
-  description: z.string().optional(),
+  title: z.string().min(1, 'title is required').max(200),
+  description: z.string().max(10_000).optional(),
   status: StatusSchema.optional(),
   priority: PrioritySchema.optional(),
   valueImpact: ValueImpactSchema.optional(),
   ritual: RitualSchema.optional(),
-  sprintId: z.string().optional(),
-  assigneeId: z.string().optional(),
+  sprintId: z.string().max(200).optional(),
+  assigneeId: z.string().max(200).optional(),
   estimatePt: z.number().int().min(0).optional(),
-  acceptanceCriteria: z.array(z.string()).optional(),
-  labels: z.array(z.string()).optional(),
-  parentTicketId: z.string().optional(),
-  blockedBy: z.array(z.string()).optional(),
-  projectId: z.string().optional(),
+  acceptanceCriteria: z.array(z.string().max(1_000)).max(50).optional(),
+  labels: z.array(z.string().max(100)).max(30).optional(),
+  parentTicketId: z.string().max(200).optional(),
+  blockedBy: z.array(z.string().max(200)).max(50).optional(),
+  projectId: z.string().max(200).optional(),
   // type==='story' の親 Epic。schema 上は optional のまま据え置く
   // (story 限定の必須化 + 実在検証は createTicket ハンドラ内の手続きチェックで行う。
   //  ここに .refine を掛けると .partial() 派生の TicketPatchBodySchema へ必須化が漏れるため)。
-  epicId: z.string().optional(),
+  epicId: z.string().max(200).optional(),
   type: TicketTypeSchema.optional(),
-  timeboxHours: z.number().min(0).optional(),
+  timeboxHours: z.number().min(0).max(1_000).optional(),
   // Review 儀式の指摘ノート。create で渡すことは基本無いが、.partial() 派生の TicketPatchBodySchema で
   // PATCH が reviewNotes を受けられるようにするため create body にも optional で置く (配列まるごと replace 契約)。
-  reviewNotes: z.array(z.string().min(1)).optional(),
+  reviewNotes: z.array(z.string().min(1).max(2_000)).max(100).optional(),
   // Bug の再現手順 / 回帰テスト専用欄 (WC-2dba4170)。PATCH (.partial() 派生) で詳細パネルから保存する。
-  reproSteps: z.string().optional(),
-  regressionNote: z.string().optional(),
+  reproSteps: z.string().max(10_000).optional(),
+  regressionNote: z.string().max(5_000).optional(),
   // Bug がどの incident の再発防止 (根本対応) かを指すリンク (2026-07-09)。INCIDENT_NO_FOLLOWUP_BUG
   // ピルは done incident をこの id で指す bug の有無で消灯する。UI (bug 作成/編集) から設定できるよう
   // create/patch 双方で受ける (PATCH は .partial() 派生で自動的に optional)。
-  relatedIncidentId: z.string().optional(),
+  relatedIncidentId: z.string().max(200).optional(),
   // 手動並び順 (fractional indexing)。PATCH は .partial() で自動的に optional になる。
   orderIndex: z.number().optional(),
 });
@@ -92,7 +94,7 @@ export const TicketStatusChangeBodySchema = z.object({
 // POST /api/tickets/:id/comments body — 追記スレッドに 1 件足す (WC-2640fecd)。
 // authorId / createdAt は API 側で確定する (body 経由の偽装を防ぐ)。
 export const TicketCommentBodySchema = z.object({
-  body: z.string().min(1, 'body is required'),
+  body: z.string().min(1, 'body is required').max(5_000),
 });
 
 // POST /api/tickets/reorder body — 区画 d&d 確定時に「その区画の全 id を新並び順で」受け取り、
