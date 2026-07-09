@@ -22,8 +22,28 @@ function bucketName(): string | null {
 }
 
 /**
+ * 実バイト先頭のマジックバイトが宣言 MIME と一致するか (security review LOW / 2026-07-09)。
+ * data URL の MIME 文字列は自己申告なので、`data:image/png;base64,<任意バイト>` で任意バイナリを
+ * 画像として格納できてしまう。下流 (Reviewer Multimodal 等) が「画像」として扱う前提を守るため実検証する。
+ */
+function matchesMagic(contentType: string, b: Buffer): boolean {
+  switch (contentType) {
+    case 'image/png':
+      return b.length >= 8 && b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+    case 'image/jpeg':
+      return b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
+    case 'image/gif':
+      return b.length >= 6 && b.subarray(0, 4).toString('latin1') === 'GIF8';
+    case 'image/webp':
+      return b.length >= 12 && b.subarray(0, 4).toString('latin1') === 'RIFF' && b.subarray(8, 12).toString('latin1') === 'WEBP';
+    default:
+      return false;
+  }
+}
+
+/**
  * data URL (`data:image/png;base64,xxxx`) を検証して {contentType, bytes, ext} に分解する純粋関数。
- * 不正な形式 / 非許可 MIME は null。サイズ上限チェックは呼び出し側 (bytes.length)。
+ * 不正な形式 / 非許可 MIME / マジックバイト不一致は null。サイズ上限チェックは呼び出し側 (bytes.length)。
  */
 export function parseImageDataUrl(s: string): { contentType: string; bytes: Buffer; ext: string } | null {
   const m = /^data:([a-zA-Z/+.-]+);base64,(.+)$/.exec(s);
@@ -37,6 +57,7 @@ export function parseImageDataUrl(s: string): { contentType: string; bytes: Buff
     return null;
   }
   if (bytes.length === 0) return null;
+  if (!matchesMagic(contentType, bytes)) return null;
   const ext = contentType === 'image/jpeg' ? 'jpg' : contentType.split('/')[1]!;
   return { contentType, bytes, ext };
 }
