@@ -109,6 +109,12 @@ export async function changeMemberRole(
   if (paramUserId === ctx.user.userId) {
     return { ok: false, status: 400, body: { error: 'cannot_change_own_role' } };
   }
+  // 現 role が admin のメンバーは role 変更不可 (admin は workspace 作成者/allowlist のみが持つ不変ロール)。
+  // これが無いと、別の admin (例: 審査員 demo アカウント) が owner を po/sm/dev に永続降格でき、
+  // admin 復帰は API 経路に無いため owner ロックアウトになる (security review HIGH / 2026-07-09)。
+  if (existing.role === 'admin') {
+    return { ok: false, status: 400, body: { error: 'cannot_change_admin_role' } };
+  }
   const parsed = MemberRoleBodySchema.safeParse(body);
   if (!parsed.success) {
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };

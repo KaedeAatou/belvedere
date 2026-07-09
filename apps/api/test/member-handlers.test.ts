@@ -74,6 +74,21 @@ describe('changeMemberRole (WC-600736ff)', () => {
     const res = await changeMemberRole(repo, ADMIN_CTX, 'ghost', { role: 'sm' });
     expect(res.status).toBe(404);
   });
+  // security review HIGH (2026-07-09): 別の admin (例: 審査員 demo) が owner を降格して
+  // 締め出す事故を防ぐ。admin は付与不可 = API で admin 復帰できないため、降格は不可逆。
+  it('現 role が admin のメンバーは降格できない (owner ロックアウト防止 → 400)', async () => {
+    const repo = createMemoryRepoContainer();
+    await seed(repo);
+    // 別の admin を投入し、acting admin (MY_USERID) がそれを降格しようとする
+    const otherAdmin: Member = {
+      userId: 'firebase-uid-owner', workspaceId: WS, email: 'owner@example.com', displayName: 'Owner', role: 'admin',
+    };
+    await repo.members.upsert(otherAdmin);
+    const res = await changeMemberRole(repo, ADMIN_CTX, 'firebase-uid-owner', { role: 'dev' });
+    expect(res.status).toBe(400);
+    // 降格されていない (admin のまま)
+    expect((await repo.members.get(WS, 'firebase-uid-owner'))!.role).toBe('admin');
+  });
 });
 
 describe('getMe', () => {
