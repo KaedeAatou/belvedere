@@ -222,6 +222,30 @@ export async function patchTicket(
   // BACKLOG (未割当) へ戻す経路で使う。merge から外して別途 delete する
   // (Ticket.sprintId は optional の string なので null を残すと exactOptionalPropertyTypes 違反)。
   const { sprintId: patchSprintId, ...restPatch } = parsed.data;
+  // PATCH の参照フィールド実在検証 (security review LOW / 2026-07-09): create 側は
+  // story→epicId / task→parentTicketId を同 ws 実在検証するが、PATCH は無検証で他 ws / 架空の
+  // id を指す宙吊り参照を作れた (漏洩はしないが整合性が崩れる)。非空文字へ「変更」される参照だけを
+  // 同 workspace 実在で検証する (undefined=変更なし / null・空=解除 は対象外)。IDOR と同じく他 ws は 400。
+  if (typeof parsed.data.epicId === 'string' && parsed.data.epicId !== '') {
+    const epic = await repo.epics.get(parsed.data.epicId);
+    if (!epic || epic.workspaceId !== ctx.workspaceId) {
+      return { ok: false, status: 400, body: { error: 'epic_not_found' } };
+    }
+  }
+  if (typeof parsed.data.parentTicketId === 'string' && parsed.data.parentTicketId !== '') {
+    const parent = await repo.tickets.get(parsed.data.parentTicketId);
+    if (!parent || parent.workspaceId !== ctx.workspaceId) {
+      return { ok: false, status: 400, body: { error: 'parent_not_found' } };
+    }
+  }
+  if (typeof patchSprintId === 'string' && patchSprintId !== '') {
+    const sprint = await repo.sprints.get(patchSprintId);
+    if (!sprint || sprint.workspaceId !== ctx.workspaceId) {
+      return { ok: false, status: 400, body: { error: 'sprint_not_found' } };
+    }
+  }
+  // 注: assigneeId / relatedIncidentId は create 側も未検証 (loose 契約) のため PATCH でも検証しない
+  //     (非対称を持ち込まない)。越境参照の主要リスクは epic/parent/sprint の3つで捕捉する。
   const clearSprint = patchSprintId === null || patchSprintId === '';
   let updated: Ticket = {
     ...existing,

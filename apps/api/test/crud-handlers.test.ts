@@ -318,6 +318,18 @@ describe('patchTicket', () => {
     expect(res.status).toBe(404);
   });
 
+  // security review LOW (2026-07-09): PATCH の参照フィールド越境/架空を弾く (整合性)。
+  it('架空の epicId / sprintId への PATCH は 400 (宙吊り参照防止)', async () => {
+    const created = await createTicket(repo, CTX, { title: 'ref target' });
+    if (!created.ok) throw new Error('setup failed');
+    const badEpic = await patchTicket(repo, CTX, created.body.id, { epicId: 'EP-GHOST' });
+    expect(badEpic.ok).toBe(false);
+    if (!badEpic.ok) expect(badEpic.body.error).toBe('epic_not_found');
+    const badSprint = await patchTicket(repo, CTX, created.body.id, { sprintId: 'sprint-ghost' });
+    expect(badSprint.ok).toBe(false);
+    if (!badSprint.ok) expect(badSprint.body.error).toBe('sprint_not_found');
+  });
+
   it('セキュリティ: body で workspaceId / id / createdAt / createdBy を変えようとしても無視される', async () => {
     const created = await createTicket(repo, CTX, { title: 'orig' });
     if (!created.ok) throw new Error('setup failed');
