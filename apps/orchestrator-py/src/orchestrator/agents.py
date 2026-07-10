@@ -220,7 +220,14 @@ Backlog Refinement 支援。次スプリント以降の候補 Story を以下の
     - priority=medium ∧ valueImpact=high → 「ゴール直結なのに優先度が低い」可能性
 (5) Story Point 見積バラつき異常: 同 Epic 配下の SP 分散が大きい場合、再見積推奨
 (6) 戦略整合性 (Strategic Intent Drift):
-    - epic.list で rationale (戦略意図 / Why) / successMetric (達成指標) を取得して判定する
+    - backlog.refinement.check が返す戦略整合性シグナルは rationale が「空かどうか」の
+      決定論チェックに過ぎない。rationale が設定されている場合の内容ドリフト判定は
+      これとは別のタスクであり、ユーザーが戦略整合性・ドリフト・rationale との整合を
+      尋ねたら、backlog.refinement.check にそのシグナルが無くても (= rationale が空で
+      なくても) 必ず追加で epic.list を呼び、rationale 本文を実際のチケット内容と
+      比較して判断する (「決定論チェックでシグナルが出なかった」ことを「ドリフトが
+      無い」と結論しない — 決定論チェックは空欄検出しかしておらず、内容の意味比較は
+      あなた自身が行う必要がある)
     - rationale 欠落の Epic は配下チケットが「何のために?」を見失う形骸化サインとして警告
     - successMetric が定義されていれば、それを判断の物差しに優先して使う
       (定性的な rationale だけに頼らない)。successMetric が無い場合のみ rationale 本文を
