@@ -120,7 +120,10 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(asst).toContain('前回の回答Y');
   });
 
-  it('③ context は今回の user メッセージ先頭に prefix される', async () => {
+  it('③ context は今回の user メッセージに (プロダクトゴールヘッダーの後に) prefix される', async () => {
+    // 2026-07-10: agent が productGoal を知らず「不明」と回答した実機バグの修正で、
+    // user メッセージ先頭に [プロダクトゴールとスプリントゴール] ヘッダーが必ず乗るようになった
+    // (client context はその後ろに連結される)。
     const { provider, calls } = spyLLM(createLLMProvider('mock'));
     const { app } = makeApp(provider);
     const ctx = '[現在のスプリント状況]\nid=sprint-13';
@@ -134,7 +137,8 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(res.status).toBe(200);
     const first = calls[0]!;
     const lastUser = first.messages.filter((m) => m.role === 'user').at(-1)!;
-    expect(lastUser.content.startsWith(ctx)).toBe(true);
+    expect(lastUser.content.startsWith('[プロダクトゴールとスプリントゴール]')).toBe(true);
+    expect(lastUser.content).toContain(ctx);
     expect(lastUser.content).toContain('今の進捗は?');
   });
 
@@ -221,8 +225,48 @@ describe('POST /api/agents/:name — HTTP 契約 (characterization / P0)', () =>
     expect(childCalls.length).toBeGreaterThanOrEqual(1);
     for (const c of childCalls) {
       const lastUser = c.messages.filter((m) => m.role === 'user').at(-1)!;
-      expect(lastUser.content.startsWith(ctx)).toBe(true);
+      // 2026-07-10: 子にも [プロダクトゴールとスプリントゴール] ヘッダーが乗るため startsWith ではなく
+      // 「client context を含む」で固定する (根本 B の意図=画面文脈の伝播 は不変)。
+      expect(lastUser.content).toContain(ctx);
     }
+  });
+
+  it('⑫ workspace.productGoal + active sprint.goal が LLM への user メッセージに注入される (2026-07-10)', async () => {
+    // 実機検証 (2026-07-10): agent が productGoal を知らず「不明なため判断できません」と回答した
+    // バグの根治。context を client が送らない (MCP 経路等) 場合でも productGoal は必ず乗ることを固定する。
+    const { provider, calls } = spyLLM(createLLMProvider('mock'));
+    const { app, repo } = makeApp(provider);
+    await repo.workspaces.upsert({
+      id: WS,
+      name: 'Belvedere',
+      slug: 'belvedere',
+      productGoal: '決済基盤を本番リリースする',
+      ownerId: 'u1',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    await repo.sprints.upsert({
+      id: 'sprint-active-1',
+      workspaceId: WS,
+      number: 13,
+      startsAt: '2026-07-01T00:00:00Z',
+      endsAt: '2026-07-14T23:59:59Z',
+      goal: '儀式健全性ダッシュボードのMVPを公開',
+      capacity: 0,
+      status: 'active',
+    });
+    const res = await app.fetch(
+      // context を送らない (MCP 経路を模す) — それでも productGoal/Sprint Goal は注入される。
+      req('/api/agents/daily', { token: TOKEN, method: 'POST', body: { prompt: '今の進捗は?' } }),
+    );
+    expect(res.status).toBe(200);
+    const lastUser = calls[0]!.messages.filter((m) => m.role === 'user').at(-1)!;
+    expect(lastUser.content).toContain('プロダクトゴール: 決済基盤を本番リリースする');
+    expect(lastUser.content).toContain(
+      'アクティブスプリント (Sprint 13) のゴール: 儀式健全性ダッシュボードのMVPを公開',
+    );
+    // end-to-end: 注入が Mock の最終応答テキストにも反映される (composeFinalAnswer の goalNote)。
+    const run = (await res.json()) as { outputArtifacts?: { summary?: string } };
+    expect(run.outputArtifacts?.summary).toContain('プロダクトゴール「決済基盤を本番リリースする」');
   });
 
   it('⑧ /stream は SSE (text/event-stream) で step/delta/run/done を流す (P6)', async () => {

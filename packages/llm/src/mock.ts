@@ -177,8 +177,12 @@ export class MockLLMProvider implements LLMProvider {
     }
     // P3: user 発話を短く引用する前置きを付ける (Mock でも「会話に見える」ように)。
     const preamble = conversationPreamble(req);
+    // 2026-07-10: composeServerContext が注入した productGoal を Mock でも「見た」ことが
+    // 分かるようにする (ローカル/CI デモで注入が効いていることを目視・機械検証できるようにする additive 対応)。
+    const productGoal = extractProductGoal(req);
+    const goalNote = productGoal ? `(プロダクトゴール「${productGoal}」を踏まえて回答)` : '';
     const body = getNaturalOutput(role);
-    return preamble ? `${preamble}\n\n${body}` : body;
+    return [preamble, goalNote, body].filter((s) => s.length > 0).join('\n\n');
   }
 
   // ========== ヘルパー ==========
@@ -276,6 +280,21 @@ function parseSprintHints(messages: LLMMessage[]): SprintHints {
   const active = text.match(/アクティブスプリント: id=([\w-]+)/)?.[1];
   const next = text.match(/次の計画中スプリント: id=([\w-]+)/)?.[1];
   return { ...(active && { active }), ...(next && { next }) };
+}
+
+/**
+ * user メッセージから composeServerContext (apps/api/src/handlers/agent-context.ts) が
+ * 注入した `プロダクトゴール: ...` 行を拾う (2026-07-10)。「(未設定...)」のプレースホルダは
+ * 未設定を意味するため null を返す (goalNote を出さない = 空欄チェックはピルの役目)。
+ */
+function extractProductGoal(req: LLMRequest): string | null {
+  const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
+  const text = lastUser?.content ?? '';
+  const m = text.match(/^プロダクトゴール:[^\S\n]*(.*)$/m);
+  if (!m) return null;
+  const value = m[1]!.trim();
+  if (!value || value.startsWith('(未設定')) return null;
+  return value;
 }
 
 /**

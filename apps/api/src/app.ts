@@ -49,6 +49,7 @@ import {
 import { getFindings } from './handlers/finding-handlers';
 import { checkStoryQuality } from './handlers/story-quality-handlers';
 import { trimRunForPersist } from './handlers/agent-run-persist';
+import { composeServerContext } from './handlers/agent-context';
 import { evaluateSprintSmart } from './handlers/smart-eval-handlers';
 import {
   startEstimation,
@@ -525,6 +526,19 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     workspaceId: string,
     hooks: { onStep?: (s: AgentStep) => void; onDelta?: (t: string) => void } = {},
   ): Promise<AgentRun> {
+    // 価値連鎖 (Product Goal → Sprint Goal → Story) の上位 2 段を、経路 (web / MCP) に依らず
+    // 必ず agent へ渡す (2026-07-10 実機検証: 未注入だと実 Gemini が「プロダクトゴールが不明」と
+    // 回答する)。productGoal / active sprint 未設定でも「未設定」と明示し、agent が空欄チェック
+    // ではなく意味判断 (直結しているか) に集中できるようにする。
+    const ws = await repo.workspaces.get(workspaceId);
+    const sprints = await repo.sprints.list({ workspaceId });
+    const active = sprints.find((s) => s.status === 'active');
+    const serverContext = composeServerContext(
+      ws?.productGoal ?? null,
+      active ? { number: active.number, goal: active.goal } : null,
+      body.context,
+    );
+
     // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
     // childRuns / costCap は 1 リクエスト境界で持つ (module singleton だと複数 workspace でクロス汚染)。
     const knowledgeDeps = knowledge ? { knowledge } : undefined;
@@ -537,9 +551,9 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
               childRuns,
               costCapUsd: AGENT_INVOKE_COST_CAP_USD,
               ...(knowledge && { knowledge }),
-              // 画面文脈を agent.invoke の子にも伝播 (根本 B / F-33): 単一窓口 ON で
-              // 実際にツールを叩く子が「今のスプリント」を見失わないようにする。
-              ...(body.context && { contextText: body.context }),
+              // 画面文脈 (+ 上記の価値連鎖) を agent.invoke の子にも伝播 (根本 B / F-33): 単一窓口
+              // ON で実際にツールを叩く子が「今のスプリント」やゴールを見失わないようにする。
+              contextText: serverContext,
             }),
           )
         : buildRegistry(buildTools(repo, workspaceId, knowledgeDeps));
@@ -553,7 +567,7 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
         systemPrompt: buildSystemPrompt(name),
         tools,
         trigger: 'human',
-        ...(body.context && { contextText: body.context }),
+        contextText: serverContext,
         ...(body.history && { history: body.history }),
         ...(hooks.onStep && { onStep: hooks.onStep }),
         ...(hooks.onDelta && { onDelta: hooks.onDelta }),

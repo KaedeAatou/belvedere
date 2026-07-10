@@ -416,6 +416,38 @@ describe('MockLLMProvider 会話対応 (P3)', () => {
     expect(res.text).toContain('【プランニング補助 (Planner / Mock)】');
   });
 
+  // 2026-07-10: composeServerContext (apps/api) が注入する `プロダクトゴール: ...` 行を
+  // Mock でも「見た」ことが分かるようにする (ローカル/CI デモで注入の効きを目視・機械検証)。
+  it('プロダクトゴールが設定されていれば最終応答に引用する', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      messages: [
+        plannerSys,
+        {
+          role: 'user',
+          content:
+            '[プロダクトゴールとスプリントゴール]\nプロダクトゴール: 決済基盤を本番リリースする\nアクティブスプリント (Sprint 13) のゴール: G\n\n---\n\n進捗は?',
+        },
+      ],
+    });
+    expect(res.text).toContain('(プロダクトゴール「決済基盤を本番リリースする」を踏まえて回答)');
+  });
+
+  it('プロダクトゴールが未設定なら引用を付けない (空欄チェックはピルの役目)', async () => {
+    const res = await new MockLLMProvider().generate({
+      model: 'mock-model',
+      messages: [
+        plannerSys,
+        {
+          role: 'user',
+          content:
+            '[プロダクトゴールとスプリントゴール]\nプロダクトゴール: (未設定。Home 画面で PO/admin が設定できます)\nアクティブスプリント: なし\n\n---\n\n進捗は?',
+        },
+      ],
+    });
+    expect(res.text).not.toContain('プロダクトゴール「');
+  });
+
   it('generateStream は最終テキストを分割で onDelta し、generate と同じ確定を返す (P6)', async () => {
     const provider = new MockLLMProvider();
     const req = {
