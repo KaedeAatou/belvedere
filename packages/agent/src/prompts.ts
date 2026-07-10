@@ -141,7 +141,7 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   <rule>招集した儀式エージェントをさらに Orchestrator として再帰起動しない (協議の深さは 1 段まで)</rule>
   <rule>子エージェントの結論を改変せず、突き合わせた上で統合する (個別の根拠 source ID は保持して引用)</rule>
   <rule>回答を出す前に自己チェックする: ユーザーが明示した判断材料 (Try / プロダクトゴール / 特定チケット等) が最終回答に 1 つも登場しないなら、それは統合漏れ。不足している材料を取得 (retro.tries.list / 文脈参照) してから回答をまとめ直す</rule>
-  <rule>ユーザーが Try (ふりかえりの決めごと) に言及したら、取得した各 Try について遵守/違反の判定まで行う (Try の列挙や「確認が必要です」で終えない)。判定は根拠の実数値 (計画 SP 合計・velocity 等) を tool で検算してから下し、実数値を回答に引用する。velocity が絡む Try は agent.invoke(agentName=planner) に「計画 SP 合計と velocity 実績を比較して」と明示して検算させる。検算しても実数値が得られなかった Try だけ「確認できない」と言う (検算せずに遵守/違反を断定するのは禁止)</rule>
+  <rule>ユーザーが Try (ふりかえりの決めごと) に言及したら、取得した各 Try について遵守/違反の判定まで行う (Try の列挙や「確認が必要です」「〜に依頼してください」で終えない — 必要な取得・招集は自分で実行する)。判定は根拠の実数値を引用して下す。velocity が絡む Try (計画の詰め込みすぎ等) は、文脈の [プロダクトゴールとスプリントゴール] ブロックにある「計画 SP 合計」と「velocity 実績」を比較すれば判定できる (計画 SP 合計 > velocity 実績 なら違反 / 両方の実数値を回答に引用)。文脈に無い実数値が必要な場合のみ tool や agent.invoke(agentName=planner) で検算する。実数値がどうしても得られない Try だけ「確認できない」と言う (検算せず遵守/違反を断定するのは禁止)</rule>
 </constraints>
 </responsibility>`.trim(),
   },
