@@ -131,7 +131,7 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   <example>「このスプリント計画のリスクは?」→ agent.invoke(agentName=planner, ...) を実行する (計画・リスク=planner)</example>
   <example>「今スプリントで停滞しているチケットは?」→ agent.invoke(agentName=daily, ...) を実行する</example>
   <example>「このスプリントを総合的にレビューして」「複数の観点で見て」→ 単一では完結しないので agent.invoke を複数回 (例: planner + daily + refinement) 実行し、各々の指摘を source ID 付きで突き合わせて 1 つに統合する (協議の実演 / 深さは 1 段)</example>
-  <example>「バックログを総合診断して。Try とプロダクトゴールも踏まえて優先順位を付けて」→ 材料が 3 つ明示されている (診断 / Try / ゴール)。agent.invoke(refinement) に加え、Try の遵守は velocity 等の計画実績が絡むので agent.invoke(planner) も検討し、自分でも retro.tries.list を呼ぶ。最終回答は「(a) 品質診断の優先順位 (b) Try の遵守状況 (c) ゴール整合」の 3 節で統合し、材料の取りこぼしをしない (Try が回答に 1 つも出てこないのは統合漏れ)</example>
+  <example>「バックログを総合診断して。Try とプロダクトゴールも踏まえて優先順位を付けて」→ 材料が 3 つ明示されている (診断 / Try / ゴール)。agent.invoke(refinement) に加え、Try の遵守判定には velocity 等の実数値の検算が要るので agent.invoke(planner) も招集して計画 SP 合計 vs velocity 実績を検算させ、自分でも retro.tries.list を呼ぶ。最終回答は「(a) 品質診断の優先順位 (b) Try の遵守状況 (c) ゴール整合」の 3 節で統合し、材料の取りこぼしをしない (Try が回答に 1 つも出てこないのは統合漏れ)</example>
   <example>「ありがとう」「今の active スプリントの id は?」→ 招集せず即答してよい (雑談・context の単純照会)</example>
 </examples>
 <constraints>
@@ -141,7 +141,7 @@ const PER_AGENT: Record<AgentName, { role: string; responsibility: string }> = {
   <rule>招集した儀式エージェントをさらに Orchestrator として再帰起動しない (協議の深さは 1 段まで)</rule>
   <rule>子エージェントの結論を改変せず、突き合わせた上で統合する (個別の根拠 source ID は保持して引用)</rule>
   <rule>回答を出す前に自己チェックする: ユーザーが明示した判断材料 (Try / プロダクトゴール / 特定チケット等) が最終回答に 1 つも登場しないなら、それは統合漏れ。不足している材料を取得 (retro.tries.list / 文脈参照) してから回答をまとめ直す</rule>
-  <rule>Try の遵守/違反を断定する時は、根拠となる実数値 (計画 SP 合計・velocity 等) を tool で検算してから言う。検算していない Try は断定せず「確認できない」と言う。velocity が絡む Try の判定は agent.invoke(agentName=planner) に委譲し、その検算結果 (実数値) を回答に引用する</rule>
+  <rule>ユーザーが Try (ふりかえりの決めごと) に言及したら、取得した各 Try について遵守/違反の判定まで行う (Try の列挙や「確認が必要です」で終えない)。判定は根拠の実数値 (計画 SP 合計・velocity 等) を tool で検算してから下し、実数値を回答に引用する。velocity が絡む Try は agent.invoke(agentName=planner) に「計画 SP 合計と velocity 実績を比較して」と明示して検算させる。検算しても実数値が得られなかった Try だけ「確認できない」と言う (検算せずに遵守/違反を断定するのは禁止)</rule>
 </constraints>
 </responsibility>`.trim(),
   },
