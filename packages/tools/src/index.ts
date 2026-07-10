@@ -188,7 +188,10 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
   const epicListTool: AgentTool<{ projectId?: string }, unknown> = {
     spec: {
       name: 'epic.list',
-      description: 'Epic 一覧を取得する (戦略単位、複数のUser Storyを束ねる)。projectId で絞り込み可。',
+      description:
+        'Epic 一覧を取得する (戦略単位、複数のUser Storyを束ねる)。projectId で絞り込み可。' +
+        'rationale (戦略意図/Why) / successMetric (達成指標) / strategicTheme (上位戦略テーマ) も含む ' +
+        '(2026-07-10: 配下チケットが Product Goal → Epic → Story の連鎖に直結しているか判定する材料)。',
       parameters: {
         type: 'object',
         properties: { projectId: { type: 'string' } },
@@ -205,6 +208,9 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
         status: e.status,
         ownerId: e.ownerId,
         valueImpact: e.valueImpact,
+        ...(e.rationale !== undefined && { rationale: e.rationale }),
+        ...(e.successMetric !== undefined && { successMetric: e.successMetric }),
+        ...(e.strategicTheme !== undefined && { strategicTheme: e.strategicTheme }),
       }));
     },
   };
