@@ -243,10 +243,19 @@ export async function patchWorkspace(
     return { ok: false, status: 400, body: { error: 'invalid_body', details: parsed.error.issues } };
   }
   const existing = await repo.workspaces.get(id);
-  if (!existing) {
-    return { ok: false, status: 404, body: { error: 'not_found' } };
-  }
-  const updated: Workspace = { ...existing, productGoal: parsed.data.productGoal };
+  // seed 由来の legacy workspace (ws-belvedere 等) は Workspace doc を持たないことがある
+  // (listMyWorkspaces は id フォールバックで表示するが、PATCH は doc が無いと 404 で保存できず、
+  // Product Goal を永続に設定する手段が無かった / 2026-07-10 実機検証で発見)。
+  // 初回の Product Goal 編集時に doc を lazy bootstrap する (ensureSprintCadence と同型の方針)。
+  const base: Workspace = existing ?? {
+    id,
+    name: id,
+    slug: id,
+    productGoal: '',
+    ownerId: ctx.user.userId,
+    createdAt: new Date().toISOString(),
+  };
+  const updated: Workspace = { ...base, productGoal: parsed.data.productGoal };
   await repo.workspaces.upsert(updated);
   return { ok: true, status: 200, body: updated };
 }

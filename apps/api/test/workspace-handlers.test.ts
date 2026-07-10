@@ -276,4 +276,26 @@ describe('patchWorkspace (Product Goal 編集 / WC-23)', () => {
     const mine = res.body.find((w) => w.id === wsId);
     expect(mine?.productGoal).toBe('一覧に出るゴール');
   });
+
+  // 2026-07-10 実機検証: dev の ws-belvedere (seed 由来の legacy workspace) は Workspace doc を
+  // 持たず、Product Goal 編集が 404 (not_found) で保存できなかった。IDOR ガード (別 ws の id) と
+  // 区別できるよう、doc が無い場合は lazy bootstrap して保存できることを固定する。
+  it('Workspace doc が無い legacy workspace id (認証 ws と一致) は 404 にせず lazy bootstrap して保存する', async () => {
+    const bareRepo = createMemoryRepoContainer();
+    const legacyId = 'ws-legacy-no-doc';
+    // createWorkspace を経由せず、doc が存在しない状態を直接再現する。
+    const res = await patchWorkspace(
+      bareRepo,
+      { user: ME.user, workspaceId: legacyId, role: 'admin' },
+      legacyId,
+      { productGoal: '決済MVPを本番リリース' },
+    );
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.body.id).toBe(legacyId);
+    expect(res.body.productGoal).toBe('決済MVPを本番リリース');
+    const stored = await bareRepo.workspaces.get(legacyId);
+    expect(stored?.productGoal).toBe('決済MVPを本番リリース');
+    expect(stored?.ownerId).toBe(ME.user.userId);
+  });
 });
