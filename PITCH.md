@@ -8,6 +8,7 @@
 > 2026-05-05 (夜) 改訂: **MCP server 追加** — Claude Code / Cursor から Belvedere の Agent を直接呼べる。§5 差別化表に「MCP で AI Agent エコシステムに統合」軸追加、§6 stack に MCP server (stdio + HTTP)、デモ #7 を「Claude Code から Belvedere を呼んで Belvedere を開発している」シーンに差し替え可能。
 > 2026-06-11 改訂: **Reviewer Multimodal (録画動画→指摘抽出) を縮退** (ROADMAP 縮退 2026-06-10)。キラーシーンを **Orchestrator マルチエージェント + チケット種別ルールエンジン (17 観点) + 見積もりポーカー** に置換。「なぜ Gemini か」を **ADK で Orchestrator + 5 Agent を宣言的に編成** に統一。録画関連の記述を全削除。
 > 2026-06-13 改訂: **儀式モデル確定**。チケットフローを **Backlog (US 起票) → Refinement (最小価値 Story に分割) → Planning (Task/Spike 分割で CURRENT 確定)** に整理。Backlog / Refinement / Planning は **CURRENT / NEXT / BACKLOG の 3 区画ビュー** に統一 (画面差は起票種別と目的のみ)。デモ #4 を「Refinement で 1 つの大きな Story を最小価値ストーリーに分割しつつ、行内 finding ピルで 6観点の指摘が見える」流れに調整。「ルール別ワークキュー」表現は削除。
+> 2026-07-10 改訂: **Proto Pedia 提出ドラフトを新軸「スクラムの運営はAIに、開発は人間に。」(運営コストの肩代わり = 本末転倒の解消) で書き直し**。3 本柱 = (a) 反復をまたぐ記憶 (Try 意味検索 + 遵守検証) (b) ビジネス直結の意味判断 (Product Goal→Sprint Goal→Epic.rationale→Story の価値連鎖) (c) 二層設計 (決定論ピル + AI は意味判断)。全て dev 実機実証済み。ADK は「実装済・A2A 委譲可能」の表現に留める (本番稼働とは書かない)。
 
 ---
 
@@ -155,30 +156,39 @@
 
 ---
 
-## Proto Pedia 提出ドラフト (2026-06-20 / 朝コピペ用)
+## Proto Pedia 提出ドラフト (2026-07-10 改訂 / コピペ用)
 
-> 公式の評価コンセプト **「つくる・まわす・とどける」** に沿って書いた下書き。ユーザーはこれをコピペし、動画 URL と図を貼るだけ。出典: Google Cloud 公式ブログ。
+> 公式の評価コンセプト **「つくる・まわす・とどける」** に沿った下書き。ユーザーはこれをコピペし、動画 URL と図を貼るだけ。出典: Google Cloud 公式ブログ。
+> 2026-07-10 改訂: 軸を **「スクラムの運営コストを AI に肩代わり (本末転倒の解消)」** に刷新。3 本柱 = (a) 反復をまたぐ記憶 (b) ビジネス直結の意味判断 (c) 二層設計。全て dev 実機 (実 Gemini) で実証済みの機能だけを書く。
 
 ### 必須メタ
 - **作品ステータス**: 開発中 (ハッカソン提出)
-- **タイトル**: Belvedere — 形骸化したスクラムを AI が底上げするマルチエージェント PM サービス
+- **タイトル**: Belvedere — スクラムの運営はAIに、開発は人間に。
 - **タグ**: `findy_hackathon` を必ず含める (+ `Gemini` `CloudRun` `ADK` `Elasticsearch` `Scrum` 等)
 - **動画 (YouTube/Vimeo URL)**: ⬜ 撮影後に貼る (90 秒デモ / 台本は本ファイル §4)
 - **システムアーキテクチャ図**: ⬜ `docs/submission-diagram.md` の Eraser DSL を貼って PNG 書き出し → アップロード
 
 ### 概要 (2〜3 文)
-「儀式は回っているのに、プロダクトは前進しない」── そんな形骸化したスクラムを、AI が **チケット品質** と **儀式運営** の両面から底上げする Jira 型 PM サービスです。チケットを書くのは人間、Orchestrator (スクラムマスター AI) が単一窓口として 5 つの専門エージェントを協議に招集し、DoD・User Story 紐付け・Story Point・戦略整合性の不足を査読、見積もりポーカーまで運営します。Cloud Run + Gemini + ADK で構築し、使うほどチームに最適化されていきます。
+スプリントを回すほど、儀式の準備・チケットの手入れ・ふりかえりの決めごとの追跡に時間を取られ、肝心の開発が進まない ── スクラムの「本末転倒」を解消する Jira 型 PM サービスです。スクラムマスター AI (Orchestrator) が 5 つの専門エージェントを協議に招集し、前スプリントの Try が守られているかの検証、Product Goal からチケットまでの価値のつながりの判定といった **運営コストを AI が肩代わり** します。Cloud Run + Gemini + ADK で構築し、実データ・実 Gemini での動作まで実機実証済みです。
 
 ### ストーリー① 課題と背景
-Jira を使うチームで広く起きる「なんちゃってアジャイル」── DoD 空・SP 未定・User Story 未紐付けのチケットが溜まり、デイリーは進捗報告会、レビューは社内デモ、ふりかえりの Try は翌スプリントに繋がらない。さらに **開発者が「何のためにこのチケットをやるか」(Epic の Why) を見失う**。チケット管理 SaaS は「データの倉庫」を提供するだけで、書き方の品質や儀式の運営は助けてくれない。
+スクラムを続けるほど「スクラムのための仕事」が増える。DoD 空欄・SP 未定のチケットを誰かが手入れし、ふりかえりで決めた Try は次のスプリントでは忘れられ、開発者は「このチケットは何のビジネス価値につながるのか」を Epic の奥に埋もれた Why から掘り起こせない。既存のチケット管理 SaaS は「データの倉庫」であって、この運営コストは全部人間 (特にスクラムマスター) が払っている。**プロダクトを前進させるためのスクラムが、スクラムを回すための労働になる本末転倒** ── ここを AI に肩代わりさせる。
 
 ### ストーリー② 利用ユーザー
-スクラムで開発する PO / SM / Dev / EM。PO はチケット作成の手間を、SM は儀式運営の疲弊を、Dev はレビュー前の品質バラつきを、EM は「うちのスクラムは健康か」の可視化を求めている。
+スクラムで開発する PO / SM / Dev / EM。SM は儀式運営と決めごと追跡の疲弊を、PO は価値と優先順位の説明コストを、Dev はレビュー前の品質手入れを、EM は「うちのスクラムは健康か」の可視化を AI に肩代わりさせたい。
 
 ### ストーリー③ 特徴 ── つくる・まわす・とどける
-- **つくる (自律的 AI エージェント)**: Orchestrator + Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを **単一窓口で協議編成**。画面操作を受けて Orchestrator が必要なエージェントを `agent.invoke` で招集・統括する (子には invoke を渡さず**深さ1を構造保証** + コストキャップ)。本番の編成は自前 TS runAgent、**Refinement は ADK (google-adk) エージェントに A2A で委譲**もできる (Strangler Fig / 不達時は自動 fallback)。各エージェントはチケット種別ルールエンジン (17 観点) を共有し、DoD/US/SP/停滞/戦略整合性 (Epic.rationale 欠落) を査読。**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の協議編成。
-- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で全テストをゲートしながら本番へ (prod は **dev E2E を通過したテスト済み SHA だけを昇格**する promotion by tested SHA + 承認ゲート)。AI は **ふりかえりの Try が次の儀式の検出基準に積み上がり、使うほどチームに最適化** (Firestore Vector RAG で意味検索 / Elastic にも env 1 つで切替可)。プロンプト改善は **agent eval (golden) を CI ゲート**にして後退を防ぐ (実装済)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード — 別プロジェクト (家計簿アプリ) のスクラム運営を Belvedere で 6 スプリント分回し、実操作で 36 件のバグ/UX/AI品質フィードバックを検出し 34 件 (94%) を修正・実機確認した。
-- **とどける (本番品質を Cloud Run で)**: フロント (Nuxt 3 SSR) と API (Hono) を Cloud Run に、Firestore + Firebase Auth + マルチテナント (Workspace) で本番稼働。儀式ごとに専用画面 (Jira の 1 ボードに対し Backlog + 5 儀式の 6 画面) で形骸化を可視化。
+3 本柱は全て dev 実機 (実 Gemini + 実データ) で動作を実証済み:
+
+- **(a) 反復をまたぐ記憶** ── ふりかえりで決めた Try を Firestore Vector RAG (Gemini 埋め込み 768 次元) の意味検索で引き、**「前回の Try は今のスプリントで守られているか」を実数値で検証する**。実証例: Try「velocity を超えて計画しない」に対し、計画 68SP vs velocity 実績 27 の違反を sourceId 付きで毎回検出。人間なら議事録を掘り返す仕事が、質問 1 つで返る。
+- **(b) ビジネス直結の意味判断** ── Product Goal → Sprint Goal → Epic.rationale (戦略意図) → Story の **価値の連鎖を意味レベルで判定** する。字面の一致ではなく「このチケットはゴールに寄与するか」「親 Epic の戦略意図からドリフトしていないか」を Gemini が判断し、ドリフトしたチケットを名指しで指摘する (実証済)。
+- **(c) 二層設計** ── DoD 空欄・SP 未定・親 Story なし等の **決定論的に判定できる欠落はルールエンジン (17 観点) が即時ピル表示** し、AI は上記 (a)(b) のような **意味判断だけに集中** する。「AI に何でもやらせる」のではなく、確実に取れるものは決定論で取り、AI の推論は意味が問われる場面に投資する設計。
+
+これを束ねるのが **Orchestrator (スクラムマスター AI) の単一窓口**: 画面操作を受けて Planning / Daily / Refinement / Review / Retrospective の 5 専門エージェントを `agent.invoke` で協議に招集・統括する (子には invoke を渡さず**深さ 1 を構造保証** + コストキャップ)。複数エージェント招集 (invoke×2) と、Try・Product Goal・品質診断の 3 材料を 1 つの回答に統合するところまで実機実証済み。編成は自前 TS runAgent が本体で、**Refinement は ADK (google-adk) エージェント実装済み・A2A で委譲可能** (Strangler Fig)。
+
+- **つくる (自律的 AI エージェント)**: 上記 3 本柱 + Orchestrator 協議編成。各エージェントはチケット種別ルールエンジン (17 観点) を共有し、**見積もりポーカー**も AI が運営する。Gemini である必然性 = 複数 AI の協議編成 (ADK) と意味判断の両輪。
+- **まわす (CI/CD + AI を継続的に改善)**: WIF 鍵レスの CI/CD (GitHub Actions → Cloud Build → Cloud Run) で全テストをゲートしながら本番へ (prod は **dev E2E を通過したテスト済み SHA だけを昇格**する promotion by tested SHA + 承認ゲート)。AI は柱 (a) の通り **ふりかえりの Try が次の儀式の判断材料に積み上がり、使うほどチームに最適化** (Firestore Vector RAG / Elastic にも env 1 つで切替可)。プロンプト改善は **agent eval (golden) を CI ゲート**にして後退を防ぐ (実装済)。さらに **MCP** で Claude Code / Cursor から Belvedere 自身を呼び、開発を Belvedere で管理する究極のドッグフード — 別プロジェクト (家計簿アプリ) のスクラム運営を Belvedere で 6 スプリント分回し、実操作で 36 件のバグ/UX/AI品質フィードバックを検出し 34 件 (94%) を修正・実機確認した。
+- **とどける (本番品質を Cloud Run で)**: フロント (Nuxt 3 SSR) と API (Hono) を Cloud Run に、Firestore + Firebase Auth + マルチテナント (Workspace) で本番稼働。儀式ごとに専用画面 (Jira の 1 ボードに対し Backlog + 5 儀式の 6 画面) で運営コストの所在を可視化。
 
 ### 提出フォーム (Google Form) 必須 3 URL
 1. 公開 GitHub: `https://github.com/KaedeAatou/belvedere`
