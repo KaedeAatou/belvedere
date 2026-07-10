@@ -61,4 +61,32 @@ describe('epic.list の返却フィールド (2026-07-10)', () => {
     expect('successMetric' in row).toBe(false);
     expect('strategicTheme' in row).toBe(false);
   });
+
+  it('存在しない projectId (LLM が idPrefix を誤指定) は無視して workspace 全体を返し note で知らせる', async () => {
+    // 実機 2026-07-11: 子 refinement が epic.list に projectId="BV" (idPrefix の誤指定) を渡して
+    // 空配列を受け取り「EP-1 が見つからない」と誤答した。存在しない projectId は決定論で無視する。
+    const repo = createMemoryRepoContainer();
+    await repo.epics.upsert(epic({ id: 'EP-a', rationale: 'r' }));
+    const tool = toolOf(repo, 'ws-belvedere', 'epic.list');
+    const res = (await tool.invoke({ projectId: 'BV' })) as {
+      note: string;
+      epics: Array<Record<string, unknown>>;
+    };
+    expect(res.note).toContain('BV');
+    expect(res.epics.some((r) => r.id === 'EP-a')).toBe(true);
+  });
+
+  it('実在する projectId の絞り込みは従来どおり効く (配列で返す)', async () => {
+    const repo = createMemoryRepoContainer();
+    const projects = await repo.projects.list({ workspaceId: 'ws-belvedere' });
+    const realProject = projects[0];
+    if (!realProject) throw new Error('memory seed に project が無い');
+    await repo.epics.upsert(epic({ id: 'EP-a', projectId: realProject.id }));
+    const tool = toolOf(repo, 'ws-belvedere', 'epic.list');
+    const res = (await tool.invoke({ projectId: realProject.id })) as Array<
+      Record<string, unknown>
+    >;
+    expect(Array.isArray(res)).toBe(true);
+    expect(res.some((r) => r.id === 'EP-a')).toBe(true);
+  });
 });

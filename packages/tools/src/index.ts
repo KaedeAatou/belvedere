@@ -189,7 +189,8 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
     spec: {
       name: 'epic.list',
       description:
-        'Epic 一覧を取得する (戦略単位、複数のUser Storyを束ねる)。projectId で絞り込み可。' +
+        'Epic 一覧を取得する (戦略単位、複数のUser Storyを束ねる)。通常は引数なしで呼ぶ ' +
+        '(projectId は実在するプロジェクト id での絞り込み専用 — idPrefix (BV/WC 等) は projectId ではない。不明なら省略する)。' +
         'rationale (戦略意図/Why) / successMetric (達成指標) / strategicTheme (上位戦略テーマ) も含む ' +
         '(2026-07-10: 配下チケットが Product Goal → Epic → Story の連鎖に直結しているか判定する材料)。',
       parameters: {
@@ -198,11 +199,23 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
       },
     },
     async invoke(args) {
+      // LLM が idPrefix 等の存在しない projectId を推測で渡すと空配列になり「Epic が無い」と
+      // 誤答する (実機 2026-07-11: projectId="BV" で EP-1 不在と回答)。存在しない projectId は
+      // 決定論で無視して workspace 全体を返し、note で無視した事実を LLM に知らせる。
+      let projectId = args.projectId;
+      let note: string | undefined;
+      if (projectId !== undefined) {
+        const projects = await repo.projects.list({ workspaceId });
+        if (!projects.some((p) => p.id === projectId)) {
+          note = `projectId "${projectId}" は当 workspace に存在しないため無視した (idPrefix は projectId ではない)。workspace 全体の Epic を返す。`;
+          projectId = undefined;
+        }
+      }
       const xs = await repo.epics.list({
         workspaceId,
-        ...(args.projectId !== undefined && { projectId: args.projectId }),
+        ...(projectId !== undefined && { projectId }),
       });
-      return xs.map((e) => ({
+      const epics = xs.map((e) => ({
         id: e.id,
         name: e.name,
         status: e.status,
@@ -212,6 +225,7 @@ export function buildTools(repo: RepoContainer, workspaceId: string, deps: Build
         ...(e.successMetric !== undefined && { successMetric: e.successMetric }),
         ...(e.strategicTheme !== undefined && { strategicTheme: e.strategicTheme }),
       }));
+      return note !== undefined ? { note, epics } : epics;
     },
   };
 
