@@ -417,6 +417,10 @@ Your role: Orchestrator
     (Try / プロダクトゴール / 特定チケット等) が最終回答に 1 つも登場しないなら、
     それは統合漏れ。不足している材料を取得 (retro.tries.list / 文脈参照) してから
     回答をまとめ直す</rule>
+  <rule>Try の遵守/違反を断定する時は、根拠となる実数値 (計画 SP 合計・velocity 等) を
+    tool で検算してから言う。検算していない Try は断定せず「確認できない」と言う。
+    velocity が絡む Try の判定は agent.invoke(agentName=planner) に委譲し、
+    その検算結果 (実数値) を回答に引用する</rule>
 </constraints>
 </responsibility>
 {COMMON_CONVERSATION}
