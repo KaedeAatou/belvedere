@@ -92,10 +92,15 @@ export async function checkStoryQuality(
   const active = sprints.find((s) => s.status === 'active');
   const sprintGoal = active?.goal && active.goal.trim().length > 0 ? active.goal.trim() : null;
 
+  // 2026-07-10: goal_fit を Sprint Goal だけでなく Product Goal との整合でも判定できるように
+  // Workspace.productGoal を取得する (実機検証: 未供給だと agent が「不明」としか言えなかった)。
+  const ws = await repo.workspaces.get(ctx.workspaceId);
+  const productGoal = ws?.productGoal && ws.productGoal.trim().length > 0 ? ws.productGoal.trim() : null;
+
   const req: LLMRequest = {
     model: modelForAgent('refinement'),
     messages: [
-      { role: 'system', content: buildStoryQualityPrompt(sprintGoal) },
+      { role: 'system', content: buildStoryQualityPrompt(sprintGoal, productGoal) },
       {
         role: 'user',
         content: [
@@ -104,6 +109,7 @@ export async function checkStoryQuality(
           `iWant: ${iWant}`,
           `soThat: ${soThat}`,
           `sprintGoal: ${sprintGoal ?? ''}`,
+          `productGoal: ${productGoal ?? ''}`,
         ].join('\n'),
       },
     ],
@@ -112,13 +118,17 @@ export async function checkStoryQuality(
   };
 
   const res = await llm.generate(req);
-  const verdict = normalizeVerdict(res.text, sprintGoal);
+  const verdict = normalizeVerdict(res.text, sprintGoal, productGoal);
   return { ok: true, status: 200, body: verdict };
 }
 
 // LLM の生テキスト (JSON 文字列想定) を契約形に整形する。
 // gemini が契約から逸脱した JSON を返しても落ちないよう防御的に正規化する。
-function normalizeVerdict(rawText: string, sprintGoal: string | null): StoryQualityVerdict {
+function normalizeVerdict(
+  rawText: string,
+  sprintGoal: string | null,
+  productGoal: string | null,
+): StoryQualityVerdict {
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawText);
@@ -138,9 +148,10 @@ function normalizeVerdict(rawText: string, sprintGoal: string | null): StoryQual
       return { kind, severity, message };
     })
     .filter((x): x is StoryQualityIssue => x !== null)
-    // active スプリント (= ゴール) が無いとき goal_fit は判定不能。prompt でもスキップを
-    // 指示しているが、将来の gemini が誤って goal_fit を返しても server 側で確実に落とす。
-    .filter((x) => sprintGoal !== null || x.kind !== 'goal_fit');
+    // 判定材料 (Sprint Goal または Product Goal) が両方とも無いとき goal_fit は判定不能。
+    // prompt でもスキップを指示しているが、将来の gemini が誤って goal_fit を返しても
+    // server 側で確実に落とす (2026-07-10: productGoal フォールバックを許容するよう更新)。
+    .filter((x) => sprintGoal !== null || productGoal !== null || x.kind !== 'goal_fit');
 
   // ok は契約定義 (warn が無ければ true) を server 側でも確定させる
   // (LLM 出力の ok を盲信せず issues から再計算し、契約不変条件を保証)。

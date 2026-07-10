@@ -318,10 +318,19 @@ export function buildSystemPrompt(name: AgentName): string {
 //
 // 注: これは 6 ロール agent の system prompt とは独立。`Your role:` anchor は持たない
 // (detectRole 経由ではなく responseSchema.title='story_quality' で mock が分岐するため)。
-export function buildStoryQualityPrompt(sprintGoal: string | null): string {
+//
+// 2026-07-10: goal_fit は「Sprint Goal と字面が近いか」だけでなく、Product Goal → Sprint Goal →
+// Story の価値連鎖に本当に直結しているかという意味判断まで踏み込む (実機検証で productGoal 未供給の
+// ため agent が判断できていなかった穴を塞ぐ / ユーザーの根本思想: TODO 消化ではなくビジネス直結の判断)。
+export function buildStoryQualityPrompt(sprintGoal: string | null, productGoal: string | null): string {
   const goalLine = sprintGoal
     ? `現在 active なスプリントゴール: 「${sprintGoal}」`
-    : '現在 active なスプリントは無い (goal_fit 判定はスキップしてよい)。';
+    : productGoal
+      ? '現在 active なスプリントは無い (Product Goal との整合で goal_fit を判定すること)。'
+      : '現在 active なスプリントも Product Goal も無い (goal_fit 判定はスキップしてよい)。';
+  const productGoalLine = productGoal
+    ? `プロダクトゴール: 「${productGoal}」`
+    : 'プロダクトゴールは未設定。';
   return [
     'あなたは Planner Agent のチケット品質補助機能です。',
     'Backlog で起票される User Story の draft (As a / I want / So that の 3 文) を受け取り、',
@@ -336,12 +345,16 @@ export function buildStoryQualityPrompt(sprintGoal: string | null): string {
     '    - iWant (何を): 空 / 漠然 (具体的な振る舞いが書かれていない)',
     '  </axis>',
     '  <axis kind="goal_fit">',
-    `    draft の内容が現在 active なスプリントゴールに適合しているかを判定する。`,
+    '    draft の内容が Product Goal → Sprint Goal → この Story の価値連鎖に本当に直結しているかを',
+    '    判定する (単なる字面の一致ではなく、達成した時にゴールへ実際に効くかという意味判断)。',
+    '    Sprint Goal が未設定でも Product Goal が設定されていれば、それとの整合を判定する。',
+    '    両方未設定なら goal_fit 判定はスキップする。',
     '    ゴール外なら「次スプリント候補」として info / warn で示す (起票はブロックしない)。',
     '  </axis>',
     '</diagnosis_axes>',
     '',
     `<sprint_goal>${goalLine}</sprint_goal>`,
+    `<product_goal>${productGoalLine}</product_goal>`,
     '',
     '<output_format>',
     'responseSchema (story_quality) に従い JSON で返す。',

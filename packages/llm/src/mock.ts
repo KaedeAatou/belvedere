@@ -549,6 +549,8 @@ interface StoryDraft {
   iWant: string;
   soThat: string;
   goal: string;
+  /** Workspace.productGoal (2026-07-10 / sprintGoal 未設定時の goal_fit フォールバック判定材料) */
+  productGoal: string;
 }
 
 /** responseSchema が story_quality 用かどうか (title または name で判定) */
@@ -562,7 +564,7 @@ function isStoryQualityRequest(req: LLMRequest): boolean {
 
 // user message に handler が埋め込むラベル付き draft をパースする。
 // 形式 (story-quality-handlers.ts と契約): 各行 `asA: ...` / `iWant: ...` / `soThat: ...` /
-// `sprintGoal: ...`。欠落フィールドは空文字に倒す。
+// `sprintGoal: ...` / `productGoal: ...` (2026-07-10 追加)。欠落フィールドは空文字に倒す。
 // (title は F-13 で診断入力から除外した — LLM が存在しない「タイトル欄」に言及するのを防ぐため。)
 function parseStoryDraft(req: LLMRequest): StoryDraft {
   const userMsg = [...req.messages].reverse().find((m) => m.role === 'user')?.content ?? '';
@@ -579,6 +581,7 @@ function parseStoryDraft(req: LLMRequest): StoryDraft {
     iWant: pick('iWant'),
     soThat: pick('soThat'),
     goal: pick('sprintGoal'),
+    productGoal: pick('productGoal'),
   };
 }
 
@@ -650,8 +653,12 @@ function composeStoryQuality(req: LLMRequest): StoryQualityVerdict {
   }
 
   // --- (b) goal_fit 観点 ---
-  if (draft.goal.length > 0) {
-    const goalTokens = tokenize(draft.goal);
+  // 2026-07-10: Sprint Goal が未設定でも Product Goal との整合を判定できるようフォールバックする
+  // (実機検証で productGoal 未供給のため goal_fit が丸ごとスキップされていた穴を塞ぐ)。
+  const fitGoal = draft.goal.length > 0 ? draft.goal : draft.productGoal;
+  const fitGoalLabel = draft.goal.length > 0 ? 'スプリントゴール' : 'プロダクトゴール';
+  if (fitGoal.length > 0) {
+    const goalTokens = tokenize(fitGoal);
     const draftTokens = tokenize(`${draft.asA} ${draft.iWant} ${draft.soThat}`);
     let overlap = 0;
     for (const t of goalTokens) {
@@ -664,13 +671,13 @@ function composeStoryQuality(req: LLMRequest): StoryQualityVerdict {
       issues.push({
         kind: 'goal_fit',
         severity: 'warn',
-        message: `現在のスプリントゴール「${draft.goal}」との関連が読み取れません。ゴール外なら次スプリント候補です。`,
+        message: `現在の${fitGoalLabel}「${fitGoal}」との関連が読み取れません。ゴール外なら次スプリント候補です。`,
       });
     } else {
       issues.push({
         kind: 'goal_fit',
         severity: 'info',
-        message: 'スプリントゴールに整合しています。',
+        message: `${fitGoalLabel}に整合しています。`,
       });
     }
   }

@@ -87,6 +87,44 @@ describe('checkStoryQuality', () => {
     expect(goalFit[0]?.severity).toBe('info');
   });
 
+  // 2026-07-10: Sprint Goal が未設定でも Product Goal との整合で goal_fit を判定できる
+  // フォールバック (実機検証で productGoal 未供給のため goal_fit が丸ごとスキップされていた穴を塞ぐ)。
+  it('(3c) active スプリント無し + productGoal ありなら productGoal で goal_fit を判定する', async () => {
+    const WS = 'ws-product-goal-only';
+    await repo.workspaces.upsert({
+      id: WS,
+      name: 'ProductGoalOnly',
+      slug: 'pg-only',
+      productGoal: '決済基盤を本番リリースする',
+      ownerId: 'u1',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    const unrelated = await checkStoryQuality(repo, llm, { ...CTX, workspaceId: WS }, {
+      asA: 'マーケティング担当',
+      iWant: 'ニュースレターの開封率レポートを毎週メールで受け取りたい',
+      soThat: '配信文面の改善判断を素早くおこなえる',
+      title: 'ニュースレター開封率レポート',
+    });
+    expect(unrelated.ok).toBe(true);
+    if (!unrelated.ok) return;
+    const goalFit = unrelated.body.issues.filter((i) => i.kind === 'goal_fit');
+    expect(goalFit.length).toBe(1);
+    expect(goalFit[0]?.severity).toBe('warn');
+    expect(goalFit[0]?.message).toContain('プロダクトゴール');
+
+    const related = await checkStoryQuality(repo, llm, { ...CTX, workspaceId: WS }, {
+      asA: '決済チームの開発者',
+      iWant: '決済基盤の本番リリース手順を自動化したい',
+      soThat: '決済基盤の本番リリースを安全かつ迅速に進められる',
+      title: '決済基盤リリース自動化',
+    });
+    expect(related.ok).toBe(true);
+    if (!related.ok) return;
+    const goalFit2 = related.body.issues.filter((i) => i.kind === 'goal_fit');
+    expect(goalFit2.length).toBe(1);
+    expect(goalFit2[0]?.severity).toBe('info');
+  });
+
   it('(4) body 不正 (asA 欠落) → 400', async () => {
     const res = await checkStoryQuality(repo, llm, CTX, { iWant: 'x', soThat: 'y' });
     expect(res.ok).toBe(false);
