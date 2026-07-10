@@ -25,12 +25,37 @@ describe('composeServerContext', () => {
   });
 
   it('sprint goal が空文字は「未設定」と明示する (goal 未入力でも sprint 番号は出す)', () => {
-    const ctx = composeServerContext('決済基盤を本番リリースする', { number: 13, goal: '  ' }, undefined);
+    const ctx = composeServerContext(
+      '決済基盤を本番リリースする',
+      { number: 13, goal: '  ', plannedSp: 0, velocity: null },
+      undefined,
+    );
     expect(ctx).toContain('アクティブスプリント (Sprint 13) のゴール: (未設定)');
   });
 
+  it('active sprint の計画 SP 合計と velocity 実績を実数値で注入する (Try 遵守判定の決定論材料)', () => {
+    const ctx = composeServerContext(
+      'ゴール',
+      { number: 13, goal: 'G', plannedSp: 68, velocity: 27 },
+      undefined,
+    );
+    expect(ctx).toContain('計画 SP 合計: 68 SP');
+    expect(ctx).toContain('velocity 実績 (完了スプリント平均): 27 SP');
+  });
+
+  it('velocity 実績なし (完了スプリント未登録) は「なし」と明示し、数値と誤認させない', () => {
+    const ctx = composeServerContext(
+      'ゴール',
+      { number: 1, goal: 'G', plannedSp: 0, velocity: null },
+      undefined,
+    );
+    expect(ctx).toContain('計画 SP 合計: 0 SP');
+    expect(ctx).toContain('velocity 実績: なし');
+    expect(ctx).not.toContain('null');
+  });
+
   it('clientContext なしはヘッダーのみを返す (末尾に余分な区切りを付けない)', () => {
-    const ctx = composeServerContext('ゴール', { number: 1, goal: 'G' }, undefined);
+    const ctx = composeServerContext('ゴール', { number: 1, goal: 'G', plannedSp: 5, velocity: null }, undefined);
     expect(ctx.startsWith('[プロダクトゴールとスプリントゴール]')).toBe(true);
     expect(ctx).not.toContain('undefined');
   });
@@ -38,7 +63,7 @@ describe('composeServerContext', () => {
   it('全部揃っている場合は clientContext をヘッダーの後ろに連結する', () => {
     const ctx = composeServerContext(
       '決済基盤を本番リリースする',
-      { number: 13, goal: '儀式健全性ダッシュボードのMVPを公開' },
+      { number: 13, goal: '儀式健全性ダッシュボードのMVPを公開', plannedSp: 68, velocity: 27 },
       '[現在の画面とスプリント状況]\n現在の画面: Backlog',
     );
     expect(ctx).toBe(
@@ -46,6 +71,7 @@ describe('composeServerContext', () => {
         '[プロダクトゴールとスプリントゴール]',
         'プロダクトゴール: 決済基盤を本番リリースする',
         'アクティブスプリント (Sprint 13) のゴール: 儀式健全性ダッシュボードのMVPを公開',
+        '計画 SP 合計: 68 SP / velocity 実績 (完了スプリント平均): 27 SP',
         '',
         '[現在の画面とスプリント状況]',
         '現在の画面: Backlog',

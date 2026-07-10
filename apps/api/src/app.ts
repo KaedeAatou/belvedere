@@ -19,7 +19,13 @@ import {
 import type { LLMProvider } from '@belvedere/llm';
 import type { RepoContainer, TicketQuery } from '@belvedere/repo';
 import type { AgentName, AgentRun, AgentStep } from '@belvedere/shared';
-import { StatusSchema, RitualSchema, TicketTypeSchema, modelForAgent } from '@belvedere/shared';
+import {
+  StatusSchema,
+  RitualSchema,
+  TicketTypeSchema,
+  modelForAgent,
+  averageVelocity,
+} from '@belvedere/shared';
 import { authMiddleware, type AuthenticatedUser } from './middleware/auth';
 import { workspaceMiddleware, type WorkspaceContext } from './middleware/workspace';
 import {
@@ -50,6 +56,7 @@ import { getFindings } from './handlers/finding-handlers';
 import { checkStoryQuality } from './handlers/story-quality-handlers';
 import { trimRunForPersist } from './handlers/agent-run-persist';
 import { composeServerContext } from './handlers/agent-context';
+import type { ActiveSprintGoalInfo } from './handlers/agent-context';
 import { evaluateSprintSmart } from './handlers/smart-eval-handlers';
 import {
   startEstimation,
@@ -533,11 +540,20 @@ export function createApp(deps: { repo: RepoContainer; llm: LLMProvider; knowled
     const ws = await repo.workspaces.get(workspaceId);
     const sprints = await repo.sprints.list({ workspaceId });
     const active = sprints.find((s) => s.status === 'active');
-    const serverContext = composeServerContext(
-      ws?.productGoal ?? null,
-      active ? { number: active.number, goal: active.goal } : null,
-      body.context,
-    );
+    // 計画 SP 合計 (Σ estimatePt) と velocity 実績 (averageVelocity) も決定論の実数値として
+    // push する — Try 遵守判定を LLM の多段 tool 呼び出しに依存させない (SPRINT_OVER_VELOCITY
+    // ルールと同じ正準計算)。
+    let activeInfo: ActiveSprintGoalInfo | null = null;
+    if (active) {
+      const sprintTickets = await repo.tickets.list({ workspaceId, sprintId: active.id });
+      activeInfo = {
+        number: active.number,
+        goal: active.goal,
+        plannedSp: sprintTickets.reduce((acc, t) => acc + (t.estimatePt ?? 0), 0),
+        velocity: averageVelocity(sprints),
+      };
+    }
+    const serverContext = composeServerContext(ws?.productGoal ?? null, activeInfo, body.context);
 
     // Orchestrator は単一窓口 = agent.invoke で 5 儀式 agent を子として協議統括する。
     // childRuns / costCap は 1 リクエスト境界で持つ (module singleton だと複数 workspace でクロス汚染)。

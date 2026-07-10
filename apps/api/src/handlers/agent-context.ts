@@ -12,6 +12,10 @@
 export interface ActiveSprintGoalInfo {
   number: number;
   goal: string;
+  /** アクティブスプリントの計画 SP 合計 (Σ estimatePt)。Try 遵守判定等の決定論材料として push する */
+  plannedSp: number;
+  /** velocity 実績 (完了スプリント平均 / averageVelocity)。実績が無ければ null */
+  velocity: number | null;
 }
 
 /**
@@ -34,6 +38,14 @@ export function composeServerContext(
     const sprintGoalLine =
       activeSprint.goal.trim().length > 0 ? activeSprint.goal.trim() : '(未設定)';
     lines.push(`アクティブスプリント (Sprint ${activeSprint.number}) のゴール: ${sprintGoalLine}`);
+    // 計画 SP 合計 / velocity 実績は決定論で取れる実数値なので push する。Try 遵守判定
+    // (計画の詰め込みすぎ等) を LLM の多段 tool 呼び出しに依存させない (2026-07-10 実機:
+    // flash が planner 委譲を実行せず「確認できない」で止まる)。
+    const velocityLine =
+      activeSprint.velocity !== null
+        ? `velocity 実績 (完了スプリント平均): ${activeSprint.velocity} SP`
+        : 'velocity 実績: なし (完了スプリントの実績が未登録)';
+    lines.push(`計画 SP 合計: ${activeSprint.plannedSp} SP / ${velocityLine}`);
   } else {
     lines.push('アクティブスプリント: なし');
   }
