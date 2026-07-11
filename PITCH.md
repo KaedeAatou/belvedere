@@ -168,7 +168,7 @@
 - **システム構成** (必須 / **アーキテクチャ図のアップロードが必須**): `docs/submission-diagram.md` の図 (CI/CD レーン入り)。補足に Elastic は「検索抽象として実装済・env 切替可能・本番は Firestore Vector」と正確に書く (7/9 決定の方針を維持)
 - **開発素材** (必須 / 使用開発ツールの記入): Gemini API / ADK (google-adk) / Cloud Run / Cloud Build / Firestore (+Vector Search) / Firebase Authentication・Hosting / Cloud Storage / GitHub Actions (WIF) / Nuxt 3 / Vue 3 / Hono / TypeScript / Python (FastAPI) / MCP / Claude Code
 - **プロジェクト URL**: https://belvedere-scrum.web.app
-- **審査員の動作確認手段** (提出要件「動作確認できる状態にしておくこと」): デモアカウント (demo@belvedere.demo) の案内が必要。**認証情報は公開ページより Google Form の備考欄を優先** (公開すると第三者がデモデータを荒らせるため)。Form に欄が無ければ ProtoPedia に記載
+- **審査員の動作確認手段** (提出要件「動作確認できる状態にしておくこと」): **ログイン画面にデモアカウントが email/password とも入力済み** (`apps/web/pages/login.vue` / 画面に審査員向け案内文あり) のため認証情報の記載は不要。ProtoPedia のシステム構成補足かストーリー末尾に 1 行だけ添える: 「審査員の方へ: デモ用アカウントをログイン画面に入力済みです。URL を開いてそのままログインするだけで実データ入りワークスペースを操作できます。」
 
 ### 概要 (文頭が作品一覧に表示されるため、最初の一文で言い切る)
 スクラムの運営はAIに、人間は価値の判断に。儀式ごとに常駐するAIスクラムマスターが、前回のふりかえりで決めたTryが守られているかを実数値で検証し、プロダクトゴールからチケットまでの価値のつながりを意味判断するJira型PMサービスです。
